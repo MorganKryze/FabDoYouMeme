@@ -379,7 +379,7 @@ Solo mode is gated by `game_types.supports_solo`. Game types where solo play mak
 All REST errors return JSON with this shape:
 
 ```json
-{"error": "human-readable message", "code": "snake_case_code"}
+{ "error": "human-readable message", "code": "snake_case_code" }
 ```
 
 HTTP status codes used:
@@ -397,7 +397,7 @@ HTTP status codes used:
 WebSocket errors are sent as a server→client message:
 
 ```json
-{"type": "error", "data": {"code": "snake_case_code", "message": "..."}}
+{ "type": "error", "data": { "code": "snake_case_code", "message": "..." } }
 ```
 
 ---
@@ -465,6 +465,48 @@ The hub distinguishes a reconnect from a fresh join by checking whether the user
 
 ## 7. File Storage (Rustfs)
 
+> **External dependency**: RustFS is deployed in a separate Docker Compose stack and is not managed by this project. This project's backend connects to it over the shared `pangolin` network.
+
+### RustFS Setup
+
+Before starting this stack, deploy RustFS in its own compose file and attach it to the `pangolin` external network. Recommended standalone stack:
+
+```yaml
+# rustfs/docker-compose.yml (separate stack — not in this repo)
+services:
+  rustfs:
+    image: rustfs/rustfs:latest
+    restart: unless-stopped
+    environment:
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
+    volumes:
+      - rustfs_data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:9000/health || exit 1']
+      interval: 5s
+      retries: 5
+    expose:
+      - 9000
+    networks:
+      - pangolin
+
+volumes:
+  rustfs_data:
+networks:
+  pangolin:
+    external: true
+```
+
+Before starting this stack:
+
+1. Create the `fabyoumeme-assets` bucket
+2. Create credentials (`RUSTFS_ACCESS_KEY` / `RUSTFS_SECRET_KEY`) and note them for this project's `.env`
+
+Once RustFS is running on `pangolin`, the backend in this stack can reach it by the container name `rustfs` on that network.
+
+---
+
 The storage layer is wrapped behind a `Storage` interface in `internal/storage/`. The concrete implementation uses `aws-sdk-go-v2/s3` pointed at Rustfs. Swapping to MinIO or any other S3-compatible store requires changing only the concrete implementation, not call sites.
 
 ### Access model
@@ -515,20 +557,10 @@ services:
       test: ['CMD-SHELL', 'pg_isready -U fabyoumeme']
       interval: 5s
       retries: 5
-
-  rustfs:
-    image: rustfs/rustfs:latest
-    restart: unless-stopped
-    environment:
-      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
-      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
-    volumes:
-      - rustfs_data:/data
-    healthcheck:
-      test: ['CMD-SHELL', 'wget -qO- http://localhost:9000/health || exit 1']
-      interval: 5s
-      retries: 5
-    # Not exposed externally — backend connects on internal Docker network
+    expose:
+      - 5432
+    networks:
+      - project_network
 
   backend:
     build: ./backend
@@ -536,11 +568,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      rustfs:
-        condition: service_healthy
     environment:
       DATABASE_URL: postgres://fabyoumeme:${POSTGRES_PASSWORD}@postgres:5432/fabyoumeme
-      RUSTFS_ENDPOINT: http://rustfs:9000
+      RUSTFS_ENDPOINT: http://rustfs:9000 # rustfs runs on the pangolin network (external stack)
       RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
       RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
       RUSTFS_BUCKET: fabyoumeme-assets
@@ -552,9 +582,11 @@ services:
       SMTP_FROM: ${SMTP_FROM}
       MAGIC_LINK_BASE_URL: ${FRONTEND_URL}
       MAGIC_LINK_TTL: 15m
-      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}   # set once on first boot; ignored once an admin exists
-    ports:
-      - '127.0.0.1:8080:8080' # exposed only to reverse proxy
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL} # set once on first boot; ignored once an admin exists
+    expose:
+      - 8080
+    networks:
+      - project_network
 
   frontend:
     build: ./frontend
@@ -563,13 +595,30 @@ services:
       - backend
     environment:
       PUBLIC_API_URL: ${BACKEND_URL}
-    ports:
-      - '127.0.0.1:3000:3000' # exposed only to reverse proxy
+    expose:
+      - 3000
+    networks:
+      - pangolin # shared with reverse proxy for internal communication
+      - project_network
 
 volumes:
   postgres_data:
-  rustfs_data:
+networks:
+  project_network:
+    driver: bridge
+  pangolin:
+    external: true
 ```
+
+**Network topology:**
+
+| Service  | project_network | pangolin |
+| -------- | --------------- | -------- |
+| postgres | ✓               |          |
+| backend  | ✓               |          |
+| frontend | ✓               | ✓        |
+
+Backend and ord frontend will access RustFS over https outside the pangolin network after its redirection like any other service. That way, we can deploy RustFS separately and treat it as a black box with an S3-compatible API.
 
 `docker-compose.override.yml` adds **Mailpit** for local email catching and mounts source volumes for live reload:
 
@@ -578,9 +627,11 @@ volumes:
 services:
   mailpit:
     image: axllent/mailpit:latest
-    ports:
-      - '127.0.0.1:8025:8025' # web UI
-      - '127.0.0.1:1025:1025' # SMTP
+    expose:
+      - 8025 # web UI
+      - 1025 # SMTP
+    networks:
+      - project_network # backend resolves hostname 'mailpit' on this network
 
   backend:
     environment:
@@ -591,17 +642,22 @@ services:
       SMTP_FROM: noreply@fabyoumeme.local
     volumes:
       - ./backend:/app
+
+networks:
+  project_network:
+    external: true # defined in docker-compose.yml
 ```
 
 Environment variables are loaded from a `.env` file (never committed).
 
 ### Backup Strategy
 
-Both data volumes (`postgres_data`, `rustfs_data`) live on the host machine. Recommended minimum backup approach:
+The `postgres_data` volume lives on the host machine. Recommended minimum backup approach:
 
 - **PostgreSQL**: nightly `pg_dump` via a cron job on the host, compressed and written to a separate directory (ideally a different physical drive or remote mount)
-- **Rustfs assets**: periodic `rclone sync` of the volume mount path to an off-host location
 - Retention: keep 7 daily backups; test restore procedure before first public use
+
+RustFS asset backup is the responsibility of the external RustFS stack, not this project.
 
 This is not in scope for the Docker Compose definition but must be in place before inviting users.
 
