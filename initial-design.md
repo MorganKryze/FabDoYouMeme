@@ -124,6 +124,16 @@ POST /api/auth/logout        session cookie                     → deletes sess
 GET  /api/auth/me            session cookie                     → current user info
 ```
 
+### Bootstrap (First Admin)
+
+On first boot, if `SEED_ADMIN_EMAIL` is set and no admin user exists, the backend:
+
+1. Creates a user row with that email, `role = 'admin'`, `username = 'admin'`, and `is_active = true` (no `invited_by`).
+2. Immediately sends a magic link to that address.
+3. The admin clicks the link, is logged in, and can begin creating invites.
+
+Subsequent restarts with the same env var are no-ops (idempotent check: admin exists → skip). This avoids a chicken-and-egg problem where no admin can create the first invite.
+
 **Why `POST /api/auth/verify` instead of `GET`**: magic link emails are scanned by security tools and email clients that pre-fetch URLs. A `GET` would consume the one-time token before the user clicks. Instead, the email link targets a frontend route (`/auth/verify?token=xxx`) which renders an intermediate "Log in" button. That button `POST`s the token to the backend. One extra user click eliminates the pre-fetch risk entirely.
 
 ### Email Change Flow
@@ -159,7 +169,7 @@ CREATE TABLE users (
   username      TEXT NOT NULL UNIQUE,
   email         TEXT NOT NULL UNIQUE,
   pending_email TEXT,                            -- set when user requests email change; cleared on confirm
-  role          TEXT NOT NULL DEFAULT 'player',  -- 'player' | 'admin'
+  role          TEXT NOT NULL DEFAULT 'player' CHECK (role IN ('player', 'admin')),
   is_active     BOOLEAN NOT NULL DEFAULT true,   -- false = deactivated by admin; cannot log in
   invited_by    UUID REFERENCES users(id),
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -179,7 +189,7 @@ CREATE TABLE magic_link_tokens (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   token_hash  TEXT NOT NULL UNIQUE,   -- SHA-256 of the raw token sent by email
-  purpose     TEXT NOT NULL DEFAULT 'login',  -- 'login' | 'email_change'
+  purpose     TEXT NOT NULL DEFAULT 'login' CHECK (purpose IN ('login', 'email_change')),
   expires_at  TIMESTAMPTZ NOT NULL,   -- short TTL: 15 minutes
   used_at     TIMESTAMPTZ,            -- null = not yet used
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -202,12 +212,13 @@ CREATE TABLE invites (
 -- Each game type defines a discrete set of mechanics (e.g. meme-caption, trivia).
 -- Seeded via migration; new game types added by new migrations.
 CREATE TABLE game_types (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  slug        TEXT NOT NULL UNIQUE,   -- e.g. 'meme-caption', 'trivia', 'drawing'
-  name        TEXT NOT NULL,
-  description TEXT,
-  version     TEXT NOT NULL DEFAULT '1.0.0',
-  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug          TEXT NOT NULL UNIQUE,          -- e.g. 'meme-caption', 'trivia', 'drawing'
+  name          TEXT NOT NULL,
+  description   TEXT,
+  version       TEXT NOT NULL DEFAULT '1.0.0',
+  supports_solo BOOLEAN NOT NULL DEFAULT false, -- false = multiplayer only (e.g. pure voting games)
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Game packs (portable content libraries; not tied to a specific game type)
@@ -220,32 +231,44 @@ CREATE TABLE game_packs (
   description TEXT,
   created_by  UUID NOT NULL REFERENCES users(id),
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  deleted_at  TIMESTAMPTZ                        -- null = active; set to soft-delete
+  deleted_at  TIMESTAMPTZ                        -- null = active; set to soft-delete. ALL queries must filter WHERE deleted_at IS NULL
 );
 
 -- Game items (generic content units)
 -- payload JSONB holds all item data. Game type handlers read the fields they need;
 -- unknown fields are ignored. A single item can be valid for multiple game types.
+-- payload_version tracks the schema revision of the payload; handlers declare supported versions.
 CREATE TABLE game_items (
-  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  pack_id    UUID NOT NULL REFERENCES game_packs(id) ON DELETE CASCADE,
-  position   INT NOT NULL DEFAULT 0,         -- ordering within pack
-  media_key  TEXT,                           -- Rustfs object key, nullable if text-only
-  payload    JSONB NOT NULL DEFAULT '{}',    -- open content bag; see payload convention below
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  pack_id         UUID NOT NULL REFERENCES game_packs(id) ON DELETE CASCADE,
+  position        INT NOT NULL DEFAULT 0,         -- ordering within pack; stable and unambiguous per UNIQUE constraint below
+  media_key       TEXT,                           -- Rustfs object key, nullable if text-only
+  payload         JSONB NOT NULL DEFAULT '{}',    -- open content bag; see payload convention below
+  payload_version INT NOT NULL DEFAULT 1,         -- incremented when the payload schema changes
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (pack_id, position)                      -- enforces stable, unambiguous ordering within a pack
 );
 
 -- Rooms (live game sessions; supports multiplayer and solo)
+-- code: 4 uppercase letters (e.g. "WXYZ").
+--   Code reuse is enforced at allocation time: when creating a new room, the backend picks a random
+--   4-letter code and checks WHERE code = ? AND (state != 'finished' OR finished_at > now() - interval '24 hours').
+--   If any row matches, retry with a new code. No background job needed; code stays NOT NULL UNIQUE.
+-- config shape: {"round_duration_seconds": 60, "voting_duration_seconds": 30, "round_count": 10}
+--   round_duration_seconds: 15–300 (default 60)
+--   voting_duration_seconds: 10–120 (default 30)
+--   round_count: number of rounds per game (default 10)
 CREATE TABLE rooms (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code         TEXT NOT NULL UNIQUE,   -- human-readable join code e.g. "MEME-4829"
+  code         TEXT NOT NULL UNIQUE,   -- 4 uppercase letters, e.g. "WXYZ"
   game_type_id UUID NOT NULL REFERENCES game_types(id),
   pack_id      UUID NOT NULL REFERENCES game_packs(id),
   host_id      UUID NOT NULL REFERENCES users(id),
-  mode         TEXT NOT NULL DEFAULT 'multiplayer',  -- 'multiplayer' | 'solo'
-  state        TEXT NOT NULL DEFAULT 'lobby',        -- 'lobby' | 'playing' | 'finished'
-  config       JSONB NOT NULL DEFAULT '{}',          -- round count, time limits, etc.
-  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+  mode         TEXT NOT NULL DEFAULT 'multiplayer' CHECK (mode IN ('multiplayer', 'solo')),
+  state        TEXT NOT NULL DEFAULT 'lobby' CHECK (state IN ('lobby', 'playing', 'finished')),
+  config       JSONB NOT NULL DEFAULT '{"round_duration_seconds": 60, "voting_duration_seconds": 30, "round_count": 10}',
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  finished_at  TIMESTAMPTZ                           -- set when state → 'finished'; code released 24h after
 );
 
 CREATE TABLE room_players (
@@ -287,6 +310,15 @@ CREATE TABLE votes (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (submission_id, voter_id)
 );
+
+-- Performance indexes (PostgreSQL does not auto-index foreign keys)
+CREATE INDEX ON sessions(user_id);
+CREATE INDEX ON magic_link_tokens(user_id);
+CREATE INDEX ON room_players(user_id);
+CREATE INDEX ON rounds(room_id);
+CREATE INDEX ON game_items(pack_id);
+-- Partial index to speed up active-pack list queries (ORDER BY created_at DESC WHERE deleted_at IS NULL)
+CREATE INDEX ON game_packs(created_at) WHERE deleted_at IS NULL;
 ```
 
 ### Game item payload convention
@@ -305,34 +337,70 @@ Each game type's backend handler reads the `payload` fields it needs and ignores
 
 Adding a new game type requires: a new migration seeding `game_types`, a new backend handler package under `internal/game/`, and new frontend route components. No schema changes needed.
 
+When a game type's payload schema evolves, increment `payload_version` on new items. Handlers declare the versions they support and branch on `payload_version` to parse old and new items correctly. Old items keep their version and remain fully readable — no migrations, no data loss.
+
+Solo mode is gated by `game_types.supports_solo`. Game types where solo play makes no sense (e.g. pure peer-voting) set `supports_solo = false`; the UI hides the solo option for those types.
+
 ---
 
 ## 6. API Surface (REST + WebSocket)
 
 ### REST (Go + chi)
 
-| Method | Path                       | Auth    | Description                                      |
-| ------ | -------------------------- | ------- | ------------------------------------------------ |
-| POST   | `/api/auth/register`       | —       | Register with invite token                       |
-| POST   | `/api/auth/magic-link`     | —       | Request magic link (always 200)                  |
-| POST   | `/api/auth/verify`         | —       | Verify magic link token, create session          |
-| POST   | `/api/auth/logout`         | session | Logout                                           |
-| GET    | `/api/auth/me`             | session | Current user                                     |
-| PATCH  | `/api/users/me`            | session | Update own username or request email change      |
-| GET    | `/api/admin/invites`       | admin   | List invites                                     |
-| POST   | `/api/admin/invites`       | admin   | Create invite                                    |
-| DELETE | `/api/admin/invites/:id`   | admin   | Revoke invite                                    |
-| GET    | `/api/admin/users`         | admin   | List users                                       |
-| PATCH  | `/api/admin/users/:id`     | admin   | Update role or is_active (deactivate/reactivate) |
-| GET    | `/api/game-types`          | session | List available game types                        |
-| GET    | `/api/packs`               | session | List game packs                                  |
-| POST   | `/api/packs`               | admin   | Create pack                                      |
-| POST   | `/api/packs/:id/items`     | admin   | Add item (with optional image upload)            |
-| DELETE | `/api/packs/:id`           | admin   | Delete pack                                      |
-| POST   | `/api/rooms`               | session | Create room                                      |
-| GET    | `/api/rooms/:code`         | session | Get room info                                    |
-| POST   | `/api/assets/upload-url`   | admin   | Get pre-signed upload URL                        |
-| POST   | `/api/assets/download-url` | session | Get pre-signed download URL for an item          |
+| Method | Path                            | Auth    | Description                                 |
+| ------ | ------------------------------- | ------- | ------------------------------------------- |
+| POST   | `/api/auth/register`            | —       | Register with invite token                  |
+| POST   | `/api/auth/magic-link`          | —       | Request magic link (always 200)             |
+| POST   | `/api/auth/verify`              | —       | Verify magic link token, create session     |
+| POST   | `/api/auth/logout`              | session | Logout                                      |
+| GET    | `/api/auth/me`                  | session | Current user                                |
+| PATCH  | `/api/users/me`                 | session | Update own username or request email change |
+| GET    | `/api/admin/invites`            | admin   | List invites                                |
+| POST   | `/api/admin/invites`            | admin   | Create invite                               |
+| DELETE | `/api/admin/invites/:id`        | admin   | Revoke invite                               |
+| GET    | `/api/admin/users`              | admin   | List users                                  |
+| PATCH  | `/api/admin/users/:id`          | admin   | Update role, is_active, email, or username  |
+| GET    | `/api/game-types`               | session | List available game types                   |
+| GET    | `/api/packs`                    | session | List game packs                             |
+| POST   | `/api/packs`                    | admin   | Create pack                                 |
+| GET    | `/api/packs/:id`                | admin   | Get pack details                            |
+| DELETE | `/api/packs/:id`                | admin   | Delete pack                                 |
+| GET    | `/api/packs/:id/items`          | admin   | List items in a pack                        |
+| POST   | `/api/packs/:id/items`          | admin   | Add item (with optional image upload)       |
+| PATCH  | `/api/packs/:id/items/:item_id` | admin   | Edit item metadata or payload               |
+| DELETE | `/api/packs/:id/items/:item_id` | admin   | Remove item from pack                       |
+| POST   | `/api/rooms`                    | session | Create room                                 |
+| GET    | `/api/rooms/:code`              | session | Get room info                               |
+| POST   | `/api/assets/upload-url`        | admin   | Get pre-signed upload URL                   |
+| POST   | `/api/assets/download-url`      | session | Get pre-signed download URL for an item     |
+
+### Error responses
+
+All REST errors return JSON with this shape:
+
+```json
+{"error": "human-readable message", "code": "snake_case_code"}
+```
+
+HTTP status codes used:
+
+| Code | Meaning                                                              |
+| ---- | -------------------------------------------------------------------- |
+| 400  | Bad request (malformed JSON, missing required fields)                |
+| 401  | Unauthenticated (no valid session)                                   |
+| 403  | Forbidden (valid session, insufficient role)                         |
+| 404  | Not found                                                            |
+| 409  | Conflict (duplicate username, invite already used or expired)        |
+| 422  | Validation error (field out of range, invalid enum value)            |
+| 500  | Internal server error (never exposes internal details to the client) |
+
+WebSocket errors are sent as a server→client message:
+
+```json
+{"type": "error", "data": {"code": "snake_case_code", "message": "..."}}
+```
+
+---
 
 ### WebSocket
 
@@ -362,15 +430,23 @@ This allows a single WebSocket hub to serve multiple game types without protocol
 - If the player reconnects within the window, they receive a `room_state` snapshot and resume seamlessly
 - If the grace window expires, `player_left` is broadcast and their turn is skipped
 
+The hub distinguishes a reconnect from a fresh join by checking whether the user already has a `reconnecting` entry in the room. Clients should send `reconnect` (not `join`) after a drop to trigger the `room_state` snapshot rather than a `player_joined` broadcast.
+
+**Host permanent disconnection**: the host controls `start` and `next_round`, so host loss during a game would leave the room stuck. The chosen behaviour is simple over complex:
+
+- **During `lobby`**: if the host's grace window expires, the room moves to `finished` automatically. No game has started; players see "host left" and the room is done.
+- **During `playing`**: if the host's grace window expires, `game_ended` is broadcast to all players with `reason: "host_disconnected"`. The room moves to `finished`. No host transfer — simplicity over completeness.
+
 #### Client → Server
 
-| Type            | When                                    |
-| --------------- | --------------------------------------- |
-| `join`          | Player joins lobby                      |
-| `start`         | Host starts the game                    |
-| `next_round`    | Host advances to next round             |
-| `{slug}:submit` | Player submits answer (game-type event) |
-| `{slug}:vote`   | Player casts vote (game-type event)     |
+| Type            | When                                                 |
+| --------------- | ---------------------------------------------------- |
+| `join`          | Player joins lobby                                   |
+| `reconnect`     | Player re-establishes connection within grace window |
+| `start`         | Host starts the game                                 |
+| `next_round`    | Host advances to next round                          |
+| `{slug}:submit` | Player submits answer (game-type event)              |
+| `{slug}:vote`   | Player casts vote (game-type event)                  |
 
 #### Server → Client (broadcast to room)
 
@@ -406,11 +482,12 @@ packs/{pack_id}/items/{item_id}/{original_filename}
 
 ### Upload flow
 
-1. Admin requests upload URL: `POST /api/assets/upload-url { pack_id, item_id, filename, mime_type, size_bytes }`
-2. Backend validates: MIME type (JPEG, PNG, WebP only) and `size_bytes ≤ 5 MB`; rejects otherwise
-3. Backend generates a pre-signed PUT URL and returns it
-4. Frontend PUTs the file directly to Rustfs
-5. Backend stores the resulting object key in `game_items.media_key`
+1. Admin calls `POST /api/packs/:id/items` (payload only, no image) → backend creates the item record, returns `{ item_id, … }`
+2. Admin calls `POST /api/assets/upload-url { pack_id, item_id, filename, mime_type, size_bytes }` → backend validates MIME type (JPEG, PNG, WebP only) and `size_bytes ≤ 2 MB`; rejects otherwise. Recommended max dimension: 1280px on the longest side (no server-side resize — admins upload web-optimised images). Returns `{ upload_url, media_key }`.
+3. Frontend PUTs the file directly to Rustfs using `upload_url`
+4. Frontend confirms the upload by sending `media_key` to `PATCH /api/packs/:id/items/:item_id { media_key }` → backend stores the key on the item record
+
+The item must exist before the upload URL is requested (step 1 before step 2). The backend has no S3 webhook callback; step 4 is the explicit confirmation from the frontend.
 
 ### Download flow — embedded in WebSocket events
 
@@ -475,6 +552,7 @@ services:
       SMTP_FROM: ${SMTP_FROM}
       MAGIC_LINK_BASE_URL: ${FRONTEND_URL}
       MAGIC_LINK_TTL: 15m
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}   # set once on first boot; ignored once an admin exists
     ports:
       - '127.0.0.1:8080:8080' # exposed only to reverse proxy
 
@@ -531,29 +609,29 @@ This is not in scope for the Docker Compose definition but must be in place befo
 
 ## 9. Security Checklist
 
-| Concern              | Mitigation                                                                                                 |
-| -------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Credential attacks   | No passwords — magic link only; eliminates brute force and credential stuffing                             |
-| Magic link prefetch  | Verify endpoint is `POST`; email link routes through intermediate frontend page before POSTing token       |
-| Magic link replay    | One-time use (`used_at` set on consume); 15-minute TTL                                                     |
-| Magic link leak      | Token stored as SHA-256 hash only; raw token sent exclusively by email                                     |
-| Email enumeration    | Magic link endpoint always returns `200`, never reveals account existence                                  |
-| Silent email change  | Notification sent to old email address on any email change, regardless of who initiated it                 |
-| Session hijacking    | `HttpOnly` + `Secure` + `SameSite=Strict` cookies; 30-day TTL renewed on activity                          |
-| CSRF                 | `SameSite=Strict` + origin check on WS handshake                                                           |
-| WS authentication    | Session cookie validated during HTTP upgrade; unauthenticated upgrades rejected with `401`                 |
-| WS message flooding  | Per-connection rate limit (20 msg/s); connections exceeding limit are dropped                              |
-| WS payload bombs     | `SetReadLimit(4096)` on every connection; oversized frames disconnect the client                           |
-| SQL injection        | `sqlc` parameterised queries — no string concatenation                                                     |
-| File upload abuse    | Server validates MIME type and `size_bytes ≤ 5 MB` before issuing pre-signed upload URL                    |
-| Asset leakage        | No public bucket; signed URLs embedded in WS events (15-min TTL); session required                         |
-| Brute force          | Per-IP rate limiting on `/api/auth/*` endpoints                                                            |
-| Privilege escalation | Role checked server-side in middleware on every admin route; `is_active` checked on every session lookup   |
-| Secrets in repo      | All secrets via `.env`; `.env` in `.gitignore`; no signing keys needed (raw random tokens, SHA-256 stored) |
-| SMTP in transit      | `go-mail` enforces STARTTLS/TLS; plaintext SMTP disallowed in production config                            |
-| Internal services    | Rustfs and Postgres not reachable outside Docker internal network                                          |
-| Dependency drift     | Go module checksums + `govulncheck` in CI                                                                  |
-| CSP headers          | Backend sets `Content-Security-Policy` on all responses                                                    |
+| Concern              | Mitigation                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Credential attacks   | No passwords — magic link only; eliminates brute force and credential stuffing                                                                                                                                                                                                                                                                                                                                                                          |
+| Magic link prefetch  | Verify endpoint is `POST`; email link routes through intermediate frontend page before POSTing token                                                                                                                                                                                                                                                                                                                                                    |
+| Magic link replay    | One-time use (`used_at` set on consume); 15-minute TTL                                                                                                                                                                                                                                                                                                                                                                                                  |
+| Magic link leak      | Token stored as SHA-256 hash only; raw token sent exclusively by email                                                                                                                                                                                                                                                                                                                                                                                  |
+| Email enumeration    | Magic link endpoint always returns `200`, never reveals account existence                                                                                                                                                                                                                                                                                                                                                                               |
+| Silent email change  | Notification sent to old email address on any email change, regardless of who initiated it                                                                                                                                                                                                                                                                                                                                                              |
+| Session hijacking    | `HttpOnly` + `Secure` + `SameSite=Strict` cookies; 30-day TTL renewed on activity                                                                                                                                                                                                                                                                                                                                                                       |
+| CSRF                 | `SameSite=Strict` + origin check on WS handshake                                                                                                                                                                                                                                                                                                                                                                                                        |
+| WS authentication    | Session cookie validated during HTTP upgrade; unauthenticated upgrades rejected with `401`                                                                                                                                                                                                                                                                                                                                                              |
+| WS message flooding  | Per-connection rate limit (20 msg/s); connections exceeding limit are dropped                                                                                                                                                                                                                                                                                                                                                                           |
+| WS payload bombs     | `SetReadLimit(4096)` on every connection; oversized frames disconnect the client                                                                                                                                                                                                                                                                                                                                                                        |
+| SQL injection        | `sqlc` parameterised queries — no string concatenation                                                                                                                                                                                                                                                                                                                                                                                                  |
+| File upload abuse    | Server validates MIME type and `size_bytes ≤ 2 MB` before issuing pre-signed upload URL                                                                                                                                                                                                                                                                                                                                                                 |
+| Asset leakage        | No public bucket; signed URLs embedded in WS events (15-min TTL); session required                                                                                                                                                                                                                                                                                                                                                                      |
+| Brute force          | Per-IP rate limiting on `/api/auth/*` endpoints                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Privilege escalation | Role checked server-side in middleware on every admin route; `is_active` checked on every session lookup                                                                                                                                                                                                                                                                                                                                                |
+| Secrets in repo      | All secrets via `.env`; `.env` in `.gitignore`; no signing keys needed (raw random tokens, SHA-256 stored)                                                                                                                                                                                                                                                                                                                                              |
+| SMTP in transit      | `go-mail` enforces STARTTLS/TLS; plaintext SMTP disallowed in production config                                                                                                                                                                                                                                                                                                                                                                         |
+| Internal services    | Rustfs and Postgres not reachable outside Docker internal network                                                                                                                                                                                                                                                                                                                                                                                       |
+| Dependency drift     | Go module checksums + `govulncheck` in CI                                                                                                                                                                                                                                                                                                                                                                                                               |
+| CSP headers          | Nonce-based CSP via SvelteKit `csp` option (`mode: 'nonce'`) for HTML responses; Go middleware sets `default-src 'none'` on all `/api/*` responses. Baseline policy: `default-src 'self'; script-src 'self' 'nonce-{n}'; style-src 'self' 'nonce-{n}'; img-src 'self' data: blob:; connect-src 'self' wss:; frame-ancestors 'none'`. Nonce generated per request in a SvelteKit `handle` hook (`src/hooks.server.ts`) and passed to `svelte.config.js`. |
 
 ---
 
@@ -578,21 +656,4 @@ open http://localhost:8025   # Mailpit UI
 
 `docker-compose.override.yml` mounts source directories for live reload during development.
 
----
-
-## 11. Open Decisions (resolve before implementing each area)
-
-### Resolved
-
-- [x] **Admin bootstrap**: `./server create-admin --email <addr>` CLI command. Reads `DATABASE_URL` from env, creates the first user with `role = admin`, then immediately sends them a magic link. No env-var secrets or seed migrations needed; the command is idempotent (errors if an admin already exists).
-- [x] **Session TTL**: 30 days, renewed on every authenticated request.
-- [x] **Magic link delivery channel**: email only in production. For local/dev installs without SMTP configured, `MAGIC_LINK_DEV_LOG=true` env var causes the backend to log the raw token to stdout instead of sending email (Mailpit handles this in the override file automatically).
-
-### Pending
-
-- [ ] **Room code format**: `MEME-XXXX` (readable) vs UUID short vs custom? Finished rooms' codes should be reclaimable or the pool must be large enough.
-- [ ] **Round timer**: configurable per-room (default 60s) — stored in `rooms.config` JSONB.
-- [ ] **Image resize/optimisation**: serve raw (simplest) or process on upload (Sharp sidecar)? Raw is fine initially; revisit if storage or bandwidth becomes a concern.
-- [ ] **Solo mode data model**: current design reuses `rooms` with `mode = 'solo'`. Confirm this is sufficient before implementing solo flow.
-- [ ] **Leaderboard scope**: per-room only to start; global leaderboard deferred until there is enough game history to make it meaningful.
-- [ ] **Game type versioning**: when a `payload` schema evolves, how are old items handled? Options: migration script, `payload_version` field on items, or graceful degradation in handlers.
+**Test strategy**: Deferred until the initial implementation is in place. Worth establishing before the first public invite: at minimum, integration tests for the auth flow (register → magic link → session) and round lifecycle (room creation → round start → submit → vote → score). Go's `net/http/httptest` and a test PostgreSQL instance (via Docker) are sufficient; no mocking of the database.
