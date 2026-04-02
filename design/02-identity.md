@@ -15,6 +15,8 @@ Authentication, session management, invite system, rate limits, and security pol
 - **Email enumeration protection**: both the magic-link endpoint AND the registration endpoint always return `200`/`201` regardless of whether the email exists or the account is already registered
 - Session tokens are random 32-byte values from `crypto/rand`, hex-encoded; SHA-256 stored in DB — no HMAC signing key required
 - **Role and `is_active` are re-fetched from the DB on every authenticated request** — never read from the cookie or cached in memory. A deactivated user or demoted admin takes effect immediately with no grace period.
+- **GDPR lawful basis**: processing is based on consent (Art. 6(1)(a)) recorded at registration via `users.consent_at`. For admin-created accounts (`SEED_ADMIN_EMAIL`), the lawful basis is legitimate interest (Art. 6(1)(f)); `consent_at` is set to the bootstrap timestamp.
+- **SMTP data processor**: magic link emails are sent via `SMTP_HOST`. The email provider is a data processor under GDPR Art. 28(3); a Data Processing Agreement (DPA) must be in place before production use. See `ref-gdpr.md` Data Processors section.
 
 See `ref-decisions.md` ADR-001 (magic links) and ADR-002 (DB sessions) for rationale.
 
@@ -43,7 +45,10 @@ Registration validates: token not expired, `uses_count < max_uses` (atomic check
 ## Registration & Login Flow
 
 ```plain
-POST /api/auth/register   { invite_token, username, email }
+POST /api/auth/register   { invite_token, username, email, consent: true, age_affirmation: true }
+  → consent must be explicitly true; returns 400 {"code":"consent_required"} otherwise
+  → age_affirmation must be explicitly true; returns 400 {"code":"age_affirmation_required"} otherwise
+  → stores consent_at = now() on the new user row
   → applies invite-validation rate limit (RATE_LIMIT_INVITE_VALIDATION_RPH)
   → validates invite (generic invalid_invite on any failure)
   → if email already registered: still returns 201 (no enumeration)

@@ -20,6 +20,7 @@
 | [ref-error-codes.md](ref-error-codes.md) | Canonical `snake_case` error code table (REST + WebSocket)                                    |
 | [ref-env-vars.md](ref-env-vars.md)       | All environment variables: name, default, required, description                               |
 | [ref-decisions.md](ref-decisions.md)     | ADR-style decisions: why no JWT, why chi, why sentinel UUID, etc.                             |
+| `design/ref-gdpr.md`                     | Lawful basis, personal data inventory (ROPA-lite), data subject rights, breach procedure      |
 
 ---
 

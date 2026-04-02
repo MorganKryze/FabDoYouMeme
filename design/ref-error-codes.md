@@ -8,28 +8,30 @@ All endpoint-specific codes link back here. Do not define error codes inline in 
 
 ## REST Error Codes
 
-| Code                      | HTTP | Emitted by                                       | Meaning                                                                                                                    |
-| ------------------------- | ---- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| `invalid_invite`          | 400  | `POST /api/auth/register`                        | Token does not exist, is expired, or is exhausted — deliberately generic to prevent enumeration oracle                     |
-| `email_mismatch`          | 400  | `POST /api/auth/register`                        | Invite has `restricted_email` and provided email does not match                                                            |
-| `username_taken`          | 409  | `POST /api/auth/register`, `PATCH /api/users/me` | Username already in use by another account                                                                                 |
-| `token_expired`           | 400  | `POST /api/auth/verify`                          | Magic link token past its TTL                                                                                              |
-| `token_used`              | 400  | `POST /api/auth/verify`                          | Magic link token already consumed                                                                                          |
-| `token_not_found`         | 400  | `POST /api/auth/verify`                          | Token hash not found in DB                                                                                                 |
-| `user_inactive`           | 403  | `POST /api/auth/verify`                          | User account deactivated by admin — valid token, but user may not log in                                                   |
-| `unauthorized`            | 401  | All authenticated routes                         | No valid session cookie present                                                                                            |
-| `forbidden`               | 403  | Admin routes, host-only actions                  | Valid session but insufficient role or ownership                                                                           |
-| `not_found`               | 404  | Any route                                        | Requested resource does not exist                                                                                          |
-| `conflict`                | 409  | Generic                                          | Duplicate key or invalid state transition                                                                                  |
-| `invalid_mime_type`       | 422  | `POST /api/assets/upload-url`                    | MIME type not in the allowlist (JPEG, PNG, WebP)                                                                           |
-| `magic_bytes_mismatch`    | 422  | `POST /api/assets/upload-url`                    | File magic bytes do not match declared MIME type                                                                           |
-| `upload_too_large`        | 422  | `POST /api/assets/upload-url`                    | `size_bytes` exceeds `MAX_UPLOAD_SIZE_BYTES`                                                                               |
-| `pack_insufficient_items` | 422  | `POST /api/rooms`                                | Pack has compatible items but fewer than `config.round_count`                                                              |
-| `pack_no_supported_items` | 422  | `POST /api/rooms`                                | Pack has zero items with a `payload_version` supported by the chosen game type handler                                     |
-| `solo_mode_not_supported` | 422  | `POST /api/rooms`                                | `mode='solo'` requested but `game_types.supports_solo = false`                                                             |
-| `room_not_lobby`          | 409  | `PATCH /api/rooms/:code/config`                  | Room state is not `lobby`; config is locked during play                                                                    |
-| `positions_invalid`       | 422  | `PATCH /api/packs/:id/items/reorder`             | Positions array does not cover all items, contains duplicates, does not start at 1, or contains item IDs from another pack |
-| `rate_limited`            | 429  | Rate-limit middleware                            | Too many requests — see `02-identity.md` for per-route limits                                                              |
+| Code                       | HTTP | Emitted by                                       | Meaning                                                                                                                    |
+| -------------------------- | ---- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `consent_required`         | 400  | `POST /api/auth/register`                        | `consent` field is missing or not `true` — user must explicitly accept the privacy policy                                  |
+| `age_affirmation_required` | 400  | `POST /api/auth/register`                        | `age_affirmation` field is missing or not `true` — user must confirm they are 16+                                          |
+| `invalid_invite`           | 400  | `POST /api/auth/register`                        | Token does not exist, is expired, or is exhausted — deliberately generic to prevent enumeration oracle                     |
+| `email_mismatch`           | 400  | `POST /api/auth/register`                        | Invite has `restricted_email` and provided email does not match                                                            |
+| `username_taken`           | 409  | `POST /api/auth/register`, `PATCH /api/users/me` | Username already in use by another account                                                                                 |
+| `token_expired`            | 400  | `POST /api/auth/verify`                          | Magic link token past its TTL                                                                                              |
+| `token_used`               | 400  | `POST /api/auth/verify`                          | Magic link token already consumed                                                                                          |
+| `token_not_found`          | 400  | `POST /api/auth/verify`                          | Token hash not found in DB                                                                                                 |
+| `user_inactive`            | 403  | `POST /api/auth/verify`                          | User account deactivated by admin — valid token, but user may not log in                                                   |
+| `unauthorized`             | 401  | All authenticated routes                         | No valid session cookie present                                                                                            |
+| `forbidden`                | 403  | Admin routes, host-only actions                  | Valid session but insufficient role or ownership                                                                           |
+| `not_found`                | 404  | Any route                                        | Requested resource does not exist                                                                                          |
+| `conflict`                 | 409  | Generic                                          | Duplicate key or invalid state transition                                                                                  |
+| `invalid_mime_type`        | 422  | `POST /api/assets/upload-url`                    | MIME type not in the allowlist (JPEG, PNG, WebP)                                                                           |
+| `magic_bytes_mismatch`     | 422  | `POST /api/assets/upload-url`                    | File magic bytes do not match declared MIME type                                                                           |
+| `upload_too_large`         | 422  | `POST /api/assets/upload-url`                    | `size_bytes` exceeds `MAX_UPLOAD_SIZE_BYTES`                                                                               |
+| `pack_insufficient_items`  | 422  | `POST /api/rooms`                                | Pack has compatible items but fewer than `config.round_count`                                                              |
+| `pack_no_supported_items`  | 422  | `POST /api/rooms`                                | Pack has zero items with a `payload_version` supported by the chosen game type handler                                     |
+| `solo_mode_not_supported`  | 422  | `POST /api/rooms`                                | `mode='solo'` requested but `game_types.supports_solo = false`                                                             |
+| `room_not_lobby`           | 409  | `PATCH /api/rooms/:code/config`                  | Room state is not `lobby`; config is locked during play                                                                    |
+| `positions_invalid`        | 422  | `PATCH /api/packs/:id/items/reorder`             | Positions array does not cover all items, contains duplicates, does not start at 1, or contains item IDs from another pack |
+| `rate_limited`             | 429  | Rate-limit middleware                            | Too many requests — see `02-identity.md` for per-route limits                                                              |
 
 ### Special: smtp_failure (201 + warning)
 

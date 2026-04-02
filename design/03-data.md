@@ -15,6 +15,8 @@ All migrations live in `backend/db/migrations/` as `golang-migrate` `.sql` files
 -- Users
 -- username: unique human-facing handle, used in-game and as display identity.
 -- email: magic link delivery channel; changeable (see pending_email in 02-identity.md).
+-- consent_at: timestamp when the user accepted the privacy policy at registration.
+--   Required for GDPR Art. 7 consent record. Set once; never updated.
 -- Role and is_active are re-checked on every session lookup — never cached.
 -- ─────────────────────────────────────────────
 CREATE TABLE users (
@@ -25,6 +27,7 @@ CREATE TABLE users (
   role          TEXT NOT NULL DEFAULT 'player' CHECK (role IN ('player', 'admin')),
   is_active     BOOLEAN NOT NULL DEFAULT true,   -- false = deactivated by admin; cannot log in
   invited_by    UUID REFERENCES users(id),
+  consent_at    TIMESTAMPTZ NOT NULL,              -- set at registration; GDPR Art. 7 consent record
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -62,7 +65,7 @@ CREATE TABLE magic_link_tokens (
 CREATE TABLE invites (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   token             TEXT NOT NULL UNIQUE,
-  created_by        UUID NOT NULL REFERENCES users(id),
+  created_by        UUID REFERENCES users(id) ON DELETE SET NULL,  -- null when creator is hard-deleted
   label             TEXT,
   restricted_email  TEXT,              -- null = any email may use this invite
   max_uses          INT NOT NULL DEFAULT 1,   -- 0 = unlimited
@@ -212,7 +215,7 @@ CREATE TABLE rooms (
 
 CREATE TABLE room_players (
   room_id   UUID NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
-  user_id   UUID NOT NULL REFERENCES users(id),
+  user_id   UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   score     INT NOT NULL DEFAULT 0,
   joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (room_id, user_id)
@@ -261,6 +264,8 @@ CREATE TABLE submissions (
 --   ranked choice: {"rank": 2}
 --   star rating:   {"stars": 4}
 -- Self-vote prevention enforced at application layer (see 04-protocol.md).
+-- voter_id: NOT NULL. Hard-deleted users are replaced by the sentinel UUID
+-- '00000000-0000-0000-0000-000000000001' before the user row is deleted (same as submissions).
 -- ─────────────────────────────────────────────
 CREATE TABLE votes (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -275,10 +280,12 @@ CREATE TABLE votes (
 -- Audit log
 -- Tracks admin actions (user changes, invite revocations, pack deletions, user hard-deletes).
 -- resource format: "{table}:{id}", e.g. "user:uuid", "invite:uuid"
+-- admin_id: SET NULL if the admin who performed the action is later hard-deleted.
+--   Use LEFT JOIN when joining to users on admin_id to avoid silently dropping rows.
 -- ─────────────────────────────────────────────
 CREATE TABLE audit_logs (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  admin_id   UUID NOT NULL REFERENCES users(id),
+  admin_id   UUID REFERENCES users(id) ON DELETE SET NULL,  -- null if acting admin is later deleted
   action     TEXT NOT NULL,   -- e.g. 'update_user_role', 'revoke_invite', 'delete_pack', 'hard_delete_user'
   resource   TEXT NOT NULL,   -- e.g. 'user:abc-123'
   changes    JSONB NOT NULL,  -- e.g. {"role": ["player", "admin"]}; for hard_delete_user: {"username": "...", "email": "..."}
@@ -365,6 +372,32 @@ DELETE FROM sessions WHERE expires_at < now();
 -- Delete used magic link tokens older than 7 days (keep recent ones for audit)
 DELETE FROM magic_link_tokens
 WHERE used_at IS NOT NULL AND used_at < now() - interval '7 days';
+```
+
+**Game data retention**: rooms, rounds, submissions, and votes are retained for **2 years** after `rooms.finished_at`. A background job running monthly soft-purges old rooms:
+
+```sql
+-- Rooms finished more than 2 years ago; cascades to room_players, rounds, submissions, votes
+DELETE FROM rooms
+WHERE finished_at < now() - interval '2 years';
+```
+
+Rationale: 2 years balances player interest in historical scores against the storage limitation principle (Art. 5(1)(e) GDPR). Adjust the window via a future env var if needed.
+
+**Audit log anonymization**: a background job running annually anonymizes `hard_delete_user` entries older than 3 years by replacing the PII fields with SHA-256 hashes. This satisfies Art. 5(1)(e) (storage limitation) while preserving audit integrity under Art. 17(3)(b) (legal obligation exception):
+
+```sql
+UPDATE audit_logs
+SET changes = jsonb_set(
+  jsonb_set(
+    changes,
+    '{username}', to_jsonb('hash:' || encode(digest(changes->>'username', 'sha256'), 'hex'))
+  ),
+  '{email}', to_jsonb('hash:' || encode(digest(changes->>'email', 'sha256'), 'hex'))
+)
+WHERE action = 'hard_delete_user'
+  AND created_at < now() - interval '3 years'
+  AND changes ? 'email';   -- skip already-anonymized rows
 ```
 
 **Version bin purge**: a background job hard-purges `game_item_versions` rows where `deleted_at < now() - interval '30 days'`. For each row with a non-null `media_key`, the RustFS object is deleted first (same `asset_purge` / `asset_purge_failed` log pattern as pack purge below). The DB row is deleted after the S3 call regardless of outcome — the structured log enables recovery of any orphaned object references.

@@ -210,6 +210,14 @@ gunzip -c /var/backups/fabyoumeme/postgres_TIMESTAMP.sql.gz \
 
 **Test the restore procedure before inviting the first users.**
 
+### GDPR — Backup Erasure Lag
+
+When a user is hard-deleted (`DELETE /api/admin/users/:id`), the live database is updated immediately. However, daily backups created within the 7-day retention window **still contain that user's data** until the backup ages out.
+
+- **Policy**: this 7-day lag is acceptable under GDPR Art. 17(3)(b) — backups are kept for incident recovery (legitimate interest). The lag must be disclosed in the Privacy Policy at `/privacy`.
+- **No manual backup purge is required** — the 7-day rolling deletion handles it automatically.
+- If an erasure request is time-critical (e.g., immediate legal risk), the operator may manually delete all backup files and create a fresh backup after the hard-delete.
+
 ### RustFS Assets
 
 Asset backup is the responsibility of the external RustFS stack. The `postgres_data` Docker volume must be backed up separately from RustFS objects.
@@ -385,6 +393,7 @@ Before inviting the first users:
 - [ ] `govulncheck ./...` run on backend dependencies
 - [ ] `npm audit` run on frontend dependencies
 - [ ] `GET /api/metrics` is IP-restricted and not publicly reachable
+- [ ] Docker log driver configured with `max-size`/`max-file` (see Log Retention); logs do not include IP addresses at `info` level
 
 ---
 
@@ -582,3 +591,12 @@ Logs are written to stdout/stderr and captured by Docker. Recommended log rotati
 ```
 
 Retains up to 500 MB of compressed logs per container. Adjust based on available disk space.
+
+### GDPR Compliance — Log Retention and IP Addresses
+
+Docker container logs captured by the above `json-file` driver retain at most 10 × 50 MB = 500 MB rolling. With the recommended 30-day rotation, this means:
+
+- **Retention target**: logs are automatically rotated by Docker's `max-file` / `max-size` policy. On typical traffic this keeps approximately 30 days of logs. No additional cron job is needed.
+- **IP addresses in logs**: structured log entries (see Structured Logging) do not include `remote_addr` by default. The rate-limit middleware uses IP as a key but does **not** emit it to the structured log stream. If debugging requires IP logging, set `LOG_LEVEL=debug` temporarily — never leave `debug` on in production.
+- **Responsibility boundary**: the reverse proxy (outside this project's scope) may log IP addresses independently. Its log retention must be configured separately to comply with the same 30-day policy.
+- **Legal basis for logs**: operational logs are kept under legitimate interest (Art. 6(1)(f)) for security monitoring and incident response. The 30-day retention window is proportionate to the purpose.

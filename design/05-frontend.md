@@ -101,6 +101,8 @@ src/routes/
         +page.svelte                ← Request magic link
       verify/
         +page.svelte                ← Intermediate "Log in" button
+    privacy/
+      +page.svelte                ← Privacy policy (static; linked from registration + footer)
 
   (app)/                            ← authenticated layout: top nav + connection indicator
     +layout.svelte
@@ -155,6 +157,8 @@ Mobile: touch targets minimum 44×44px; input auto-focuses on load; input + butt
 Flow: user arrives with `?invite=TOKEN` in URL (pre-filled from invite link).
 
 Fields: invite token (pre-filled, editable), username (3–30 chars, alphanumeric + underscore), email.
+
+**Consent checkbox** (required): "I have read and agree to the [Privacy Policy](/privacy)." The checkbox must be explicitly checked before submit is enabled. The backend receives `{ consent: true }` only when checked; `consent: false` or missing returns `400 consent_required`.
 
 On submit: `POST /api/auth/register`. On success: if `restricted_email` invite was used, show "Check your email for your login link"; otherwise redirect to `/auth/magic-link`. On `smtp_failure` warning: show a warning toast "Account created but login email couldn't be sent. Ask your admin to resend."
 
@@ -321,6 +325,11 @@ Triggered by `game_ended` event.
 
 **Email**: current email displayed → "Change Email" → new email input → "Send Verification". `PATCH /api/users/me { email }` → success toast "Check your new email for a verification link." The old email remains active for login until the user clicks the verification link.
 
+**Data & Privacy** section (below username and email):
+
+- **Download My Data** button → `GET /api/users/me/export` → browser downloads `fabyoumeme-export.json` (triggered via `<a download>` with a blob URL). Success toast: "Your data export is ready."
+- **Delete My Account**: shows the message "To request deletion of your account, contact your admin." with a link to `/privacy` for context. Self-serve deletion is not available to prevent mid-game abuse — admins process erasure requests.
+
 ---
 
 ### Studio `/studio`
@@ -450,6 +459,24 @@ Read-only list: slug, name, description, version, supports_solo, config JSON (mi
 
 ---
 
+### Privacy Policy `/privacy` (public)
+
+Static page. No server-side data fetching. Accessible without authentication.
+
+Content must cover:
+
+- **What data is collected**: email address, username, game history (submissions, votes, scores).
+- **Why it is collected**: email for authentication (magic links); username for in-game display; game history for leaderboards and personal history.
+- **Lawful basis**: consent (collected at registration) for account data; legitimate interest for operational logs.
+- **How long it is kept**: account data until erasure is requested; operational logs up to 30 days.
+- **Your rights**: access (`GET /api/users/me` + `GET /api/users/me/export`), rectification (`PATCH /api/users/me`), erasure (contact admin), portability (export button on Profile page).
+- **Contact**: how to reach the admin for erasure requests (operator fills in at deployment).
+- **Cookies**: one `HttpOnly` session cookie set on login; functional only (no tracking); 30-day TTL.
+
+The page layout uses the `(public)` minimal layout. A footer link to `/privacy` is added to all `(public)` auth pages.
+
+---
+
 ## Toast Notifications
 
 A global toast system is available in the app layout, invoked as `toast.show(message, type)` from anywhere.
@@ -573,15 +600,16 @@ After phase transitions triggered by WebSocket events, move focus programmatical
 
 ## Navigation Summary
 
-| Route           | Available to                | Nav element           |
-| --------------- | --------------------------- | --------------------- |
-| `/`             | Public (redirect if authed) | —                     |
-| `/auth/*`       | Public                      | —                     |
-| `/` (app)       | Authenticated               | Top nav               |
-| `/rooms/[code]` | Authenticated + in room     | Top nav + room chrome |
-| `/profile`      | Authenticated               | Top nav dropdown      |
-| `/studio`       | Authenticated (all users)   | Top nav               |
-| `/admin/*`      | Admin role                  | Sidebar + top nav     |
+| Route           | Available to                | Nav element               |
+| --------------- | --------------------------- | ------------------------- |
+| `/`             | Public (redirect if authed) | —                         |
+| `/auth/*`       | Public                      | —                         |
+| `/` (app)       | Authenticated               | Top nav                   |
+| `/rooms/[code]` | Authenticated + in room     | Top nav + room chrome     |
+| `/profile`      | Authenticated               | Top nav dropdown          |
+| `/studio`       | Authenticated (all users)   | Top nav                   |
+| `/admin/*`      | Admin role                  | Sidebar + top nav         |
+| `/privacy`      | Public                      | Footer link on auth pages |
 
 Top nav (app layout): logo left, `[Studio] [Profile ▼] [Logout]` right, connection dot far right. Admins also see a bell icon with unread `admin_notifications` badge count.
 
