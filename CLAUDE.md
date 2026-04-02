@@ -1,62 +1,154 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code working in this repository.
 
 ## Project
 
-FabDoYouMeme is a GPLv3-licensed open-source project hosted at github.com/MorganKryze/FabDoYouMeme. It is in early development — no build system, source code, or tooling has been established yet. Update this file as the stack, build commands, and architecture are established.
+**FabDoYouMeme** — GPLv3, self-hosted, invite-only multi-game platform (meme caption, match, vote). Runs on a single machine via Docker Compose. Reverse proxy is pre-existing and assumed to route `/api/*` to backend, `/*` to frontend.
 
-## Workflow Orchestration
+GitHub: `github.com/MorganKryze/FabDoYouMeme`
+Status: **pre-implementation** — no source code yet. `design/` is the authoritative architecture reference.
 
-### Planning
+---
 
-- Enter plan mode for any non-trivial task (3+ steps or architectural decisions)
-- If something goes sideways, stop and re-plan — don't keep pushing
-- Use plan mode for verification steps, not just building
-- Write detailed specs upfront to reduce ambiguity
+## Tech Stack
 
-### Subagent Strategy
+| Layer          | Technology                            |
+| -------------- | ------------------------------------- |
+| Frontend       | SvelteKit (`adapter-node`) + Svelte 5 |
+| Styling        | Tailwind CSS v4 + shadcn-svelte       |
+| Backend API    | Go + `chi` router                     |
+| Database       | PostgreSQL 17                         |
+| File storage   | RustFS (S3-compatible, self-hosted)   |
+| DB migrations  | `golang-migrate`                      |
+| Query layer    | `sqlc` (type-safe Go from raw SQL)    |
+| WebSockets     | `gorilla/websocket`                   |
+| Email          | `go-mail` (wneessen) via SMTP         |
+| Session tokens | Opaque tokens, DB-backed (not JWT)    |
+| Container      | Docker Compose                        |
 
-- Use subagents liberally to keep the main context window clean
-- Offload research, exploration, and parallel analysis to subagents
-- For complex problems, use more subagents for parallel compute
-- One focused task per subagent
+---
 
-### Self-Improvement Loop
+## Repository Structure
 
-- After any correction from the user: update `tasks/lessons.md` with the pattern
-- Write rules that prevent the same mistake from recurring
-- Review relevant lessons at session start
+```
+FabDoYouMeme/
+├── backend/
+│   ├── cmd/server/              # main.go — wires everything, registers game handlers
+│   ├── internal/
+│   │   ├── auth/                # session management, magic link, invite logic
+│   │   ├── game/                # game type registry, hub, room/round lifecycle
+│   │   │   ├── registry.go      # Register() + Dispatch()
+│   │   │   ├── hub.go           # WebSocket hub (per-room goroutine)
+│   │   │   └── types/meme_caption/  # implements GameTypeHandler
+│   │   ├── storage/             # RustFS/S3 client wrapper (interface-backed)
+│   │   ├── email/               # template rendering + SMTP sending
+│   │   ├── middleware/          # auth, rate-limit, structured logging, request ID
+│   │   └── config/              # env-based config loading
+│   ├── db/
+│   │   ├── migrations/          # golang-migrate .sql up/down pairs
+│   │   └── queries/             # sqlc .sql files → generated Go in db/sqlc/
+│   ├── Dockerfile
+│   └── go.mod
+├── frontend/
+│   ├── src/
+│   │   ├── lib/
+│   │   │   ├── components/      # shared UI (Button, Avatar, Timer, etc.)
+│   │   │   ├── state/           # Svelte 5 reactive state classes (ws, room, user)
+│   │   │   ├── api/             # typed fetch wrappers per REST endpoint
+│   │   │   └── games/meme-caption/  # SubmitForm, VoteForm, ResultsView, GameRules
+│   │   └── routes/              # SvelteKit file-based routing
+│   ├── Dockerfile
+│   └── package.json
+├── design/                      # architecture reference (see below)
+├── docker-compose.yml
+├── docker-compose.override.yml  # dev overrides (Mailpit, volume mounts)
+└── CLAUDE.md
+```
 
-### Verification Before Done
+---
 
-- Never mark a task complete without proving it works
-- Diff behavior between main and your changes when relevant
-- Run tests, check logs, demonstrate correctness
+## Design Docs
 
-### Elegance (Balanced)
+| File                              | Contents                                                                |
+| --------------------------------- | ----------------------------------------------------------------------- |
+| `design/00-index.md`              | Index + quick-reference flows                                           |
+| `design/01-overview.md`           | Goals, tech stack rationale, repo structure                             |
+| `design/02-identity.md`           | Auth flow, invite system, session management, rate limits               |
+| `design/03-data.md`               | PostgreSQL schema, indexes, RustFS storage, asset lifecycle             |
+| `design/04-protocol.md`           | REST endpoints, WebSocket protocol, game type handler interface         |
+| `design/05-frontend.md`           | SvelteKit routing, state architecture, UX flows, accessibility          |
+| `design/06-operations.md`         | Docker Compose, migrations, backups, CI, logging, Prometheus metrics    |
+| `design/ref-error-codes.md`       | Canonical `snake_case` error code table (REST + WebSocket)              |
+| `design/ref-env-vars.md`          | All environment variables: name, default, required, description         |
+| `design/ref-decisions.md`         | ADR-style decisions: why no JWT, why chi, why sentinel UUID, etc.       |
 
-- For non-trivial changes: pause and ask "is there a more elegant way?"
-- If a fix feels hacky: implement the elegant solution instead
-- Skip this for simple, obvious fixes — don't over-engineer
+---
 
-### Autonomous Bug Fixing
+## Quick Reference
 
-- When given a bug report: fix it without hand-holding
-- Point at logs, errors, failing tests — then resolve them
-- Fix failing CI tests without being told how
+**Auth flow**: `POST /api/auth/register` → `POST /api/auth/magic-link` → `GET /auth/verify?token=` (frontend page) → `POST /api/auth/verify` (backend) → session cookie set
 
-## Task Management
+**Game flow**: create room → WS `join` → host `start` → `round_started` (includes `ends_at` + `duration_seconds`) → `{slug}:submit` → `submissions_closed` → `{slug}:vote` → `vote_results` → repeat → `game_ended`
 
-1. **Plan First**: Write plan to `tasks/todo.md` with checkable items
-2. **Verify Plan**: Check in before starting implementation
-3. **Track Progress**: Mark items complete as you go
-4. **Explain Changes**: High-level summary at each step
-5. **Document Results**: Add review section to `tasks/todo.md`
-6. **Capture Lessons**: Update `tasks/lessons.md` after corrections
+**Asset flow**: create item record → `POST /api/assets/upload-url` (MIME + magic byte validation) → PUT directly to RustFS → `PATCH item { media_key }` to confirm
+
+**First boot**: set `SEED_ADMIN_EMAIL` → backend auto-creates admin + sends magic link on startup (idempotent)
+
+**Reconnect grace**: disconnected players have `RECONNECT_GRACE_WINDOW` (default 30s) to rejoin before being removed from the room
+
+---
+
+## Commands
+
+```bash
+# Start all services (includes Mailpit via docker-compose.override.yml)
+docker compose up --build
+
+# Watch backend logs
+docker compose logs -f backend
+
+# Apply all pending DB migrations
+migrate -path ./backend/db/migrations -database "$DATABASE_URL" up
+
+# Roll back one migration
+migrate -path ./backend/db/migrations -database "$DATABASE_URL" down 1
+
+# Regenerate sqlc types after modifying any query in backend/db/queries/
+cd backend && sqlc generate
+
+# Backend: build, vet, test
+cd backend && go build ./...
+cd backend && go vet ./...
+cd backend && go test -race -count=1 ./...
+
+# Frontend: install, type-check, build
+cd frontend && npm ci
+cd frontend && npm run check
+cd frontend && npm run build
+
+# View captured dev emails (Mailpit)
+open http://localhost:8025
+```
+
+---
+
+## Non-Obvious Patterns
+
+- **Sessions over JWT**: logout = `DELETE session` row; instantly revocable, no signing key, negligible overhead at this scale
+- **Magic links**: only a SHA-256 hash is stored — nothing crackable if DB leaks; token is one-time-use + short-lived
+- **`sqlc` workflow**: never write Go DB code by hand; write SQL in `backend/db/queries/`, run `sqlc generate`, use the generated types
+- **Game handler registry**: adding a new game type requires only implementing `GameTypeHandler` and calling `Register()` in `main.go` — no schema or protocol changes
+- **RustFS is external**: it lives in a separate Docker stack on `pangolin` network; the backend communicates via `RUSTFS_ENDPOINT`
+- **Rate limits are in-memory**: per-process only; if multi-instance is ever added, externalize to Redis (see ADR-005 in `ref-decisions.md`)
+- **`/api/metrics` must be IP-restricted**: never expose Prometheus endpoint to the internet
+- **Startup cleanup**: on every start, the backend marks `playing` rooms as `finished` (crash recovery) and closes stale `lobby` rooms older than 24h — both are idempotent
+
+---
 
 ## Core Principles
 
-- **Simplicity First**: Make every change as simple as possible; impact minimal code
-- **No Laziness**: Find root causes; no temporary fixes; senior developer standards
-- **Minimal Impact**: Changes should only touch what's necessary
+- **Simplicity First**: single-machine Docker Compose; no distributed systems complexity
+- **Least Attack Surface**: no passwords, no public asset access, secrets via env only
+- **Multi-game Extensibility**: game types are registered handler units; adding one requires no schema or protocol changes
+- **Minimal Impact**: changes should touch only what's necessary
