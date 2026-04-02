@@ -70,24 +70,26 @@ FabDoYouMeme/
 
 ## Design Docs
 
-| File                              | Contents                                                                |
-| --------------------------------- | ----------------------------------------------------------------------- |
-| `design/00-index.md`              | Index + quick-reference flows                                           |
-| `design/01-overview.md`           | Goals, tech stack rationale, repo structure                             |
-| `design/02-identity.md`           | Auth flow, invite system, session management, rate limits               |
-| `design/03-data.md`               | PostgreSQL schema, indexes, RustFS storage, asset lifecycle             |
-| `design/04-protocol.md`           | REST endpoints, WebSocket protocol, game type handler interface         |
-| `design/05-frontend.md`           | SvelteKit routing, state architecture, UX flows, accessibility          |
-| `design/06-operations.md`         | Docker Compose, migrations, backups, CI, logging, Prometheus metrics    |
-| `design/ref-error-codes.md`       | Canonical `snake_case` error code table (REST + WebSocket)              |
-| `design/ref-env-vars.md`          | All environment variables: name, default, required, description         |
-| `design/ref-decisions.md`         | ADR-style decisions: why no JWT, why chi, why sentinel UUID, etc.       |
+| File                           | Contents                                                                |
+| ------------------------------ | ----------------------------------------------------------------------- |
+| `design/00-index.md`           | Index + quick-reference flows                                           |
+| `design/01-overview.md`        | Goals, tech stack rationale, repo structure                             |
+| `design/02-identity.md`        | Auth flow, invite system, session management, rate limits               |
+| `design/03-data.md`            | PostgreSQL schema, indexes, RustFS storage, asset lifecycle             |
+| `design/04-protocol.md`        | REST endpoints, WebSocket protocol, game type handler interface         |
+| `design/05-frontend.md`        | SvelteKit routing, state architecture, UX flows, accessibility          |
+| `design/06-operations.md`      | Docker Compose, migrations, backups, CI, logging, Prometheus metrics    |
+| `design/ref-error-codes.md`    | Canonical `snake_case` error code table (REST + WebSocket)              |
+| `design/ref-env-vars.md`       | All environment variables: name, default, required, description         |
+| `design/ref-decisions.md`      | ADR-style decisions: why no JWT, why chi, why sentinel UUID, etc.       |
+| `design/ref-gdpr.md`           | GDPR compliance: lawful basis, ROPA-lite, rights, DPA, breach procedure |
+| `design/ref-privacy-policy.md` | Art. 13(1) Privacy Policy stub template for operator to complete        |
 
 ---
 
 ## Quick Reference
 
-**Auth flow**: `POST /api/auth/register` → `POST /api/auth/magic-link` → `GET /auth/verify?token=` (frontend page) → `POST /api/auth/verify` (backend) → session cookie set
+**Auth flow**: `POST /api/auth/register { invite_token, username, email, consent: true, age_affirmation: true }` → `POST /api/auth/magic-link` → `GET /auth/verify?token=` (frontend page) → `POST /api/auth/verify` (backend) → session cookie set
 
 **Game flow**: create room → WS `join` → host `start` → `round_started` (includes `ends_at` + `duration_seconds`) → `{slug}:submit` → `submissions_closed` → `{slug}:vote` → `vote_results` → repeat → `game_ended`
 
@@ -143,6 +145,7 @@ open http://localhost:8025
 - **Rate limits are in-memory**: per-process only; if multi-instance is ever added, externalize to Redis (see ADR-005 in `ref-decisions.md`)
 - **`/api/metrics` must be IP-restricted**: never expose Prometheus endpoint to the internet
 - **Startup cleanup**: on every start, the backend marks `playing` rooms as `finished` (crash recovery) and closes stale `lobby` rooms older than 24h — both are idempotent
+- **GDPR**: registration requires `consent: true` + `age_affirmation: true`; `users.consent_at` is set once and never changed; hard-delete replaces both `submissions.user_id` AND `votes.voter_id` with the sentinel UUID before deleting the user row; game data purged after 2 years; audit log PII anonymized after 3 years — see `ref-gdpr.md`
 
 ---
 
