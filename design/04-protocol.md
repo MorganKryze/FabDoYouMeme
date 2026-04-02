@@ -105,17 +105,45 @@ Combines with cursor pagination: `?q=alice&limit=50&after=...`. Clearing the sea
 
 ### Packs & Items
 
-| Method   | Path                            | Auth    | Description                                                                                                |
-| -------- | ------------------------------- | ------- | ---------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/api/packs`                    | session | List active packs (paginated; `?game_type_id=` to filter by compatibility)                                 |
-| `POST`   | `/api/packs`                    | admin   | Create pack                                                                                                |
-| `GET`    | `/api/packs/:id`                | admin   | Get pack details                                                                                           |
-| `DELETE` | `/api/packs/:id`                | admin   | Soft-delete pack                                                                                           |
-| `GET`    | `/api/packs/:id/items`          | session | List items — players see `id, position, media_url?, payload`; admins see `payload_version, created_at` too |
-| `POST`   | `/api/packs/:id/items`          | admin   | Add item (payload only, no image)                                                                          |
-| `PATCH`  | `/api/packs/:id/items/:item_id` | admin   | Edit metadata, payload, or confirm `media_key` after upload                                                |
-| `DELETE` | `/api/packs/:id/items/:item_id` | admin   | Remove item                                                                                                |
-| `PATCH`  | `/api/packs/:id/items/reorder`  | admin   | Bulk reorder — see Item Reorder below                                                                      |
+| Method   | Path                            | Auth         | Description                                                                                                                            |
+| -------- | ------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/packs`                    | session      | List packs (paginated; `?game_type_id=` for compatibility filter — see visibility rules below)                                         |
+| `POST`   | `/api/packs`                    | session      | Create pack (sets `owner_id` to current user; `is_official` requires admin)                                                            |
+| `GET`    | `/api/packs/:id`                | owner\|admin | Get pack details                                                                                                                       |
+| `PATCH`  | `/api/packs/:id`                | owner\|admin | Update name, description, or visibility; `is_official` field requires admin                                                            |
+| `DELETE` | `/api/packs/:id`                | owner\|admin | Soft-delete pack                                                                                                                       |
+| `PATCH`  | `/api/packs/:id/status`         | admin        | Set `status` to `active \| flagged \| banned`                                                                                          |
+| `GET`    | `/api/packs/:id/items`          | session      | List items — players see `id, position, media_url?, payload`; owners/admins also see `payload_version, created_at, current_version_id` |
+| `POST`   | `/api/packs/:id/items`          | owner\|admin | Add item (payload only, no image yet)                                                                                                  |
+| `PATCH`  | `/api/packs/:id/items/:item_id` | owner\|admin | Edit metadata or payload                                                                                                               |
+| `DELETE` | `/api/packs/:id/items/:item_id` | owner\|admin | Remove item                                                                                                                            |
+| `PATCH`  | `/api/packs/:id/items/reorder`  | owner\|admin | Bulk reorder — see Item Reorder below                                                                                                  |
+
+**Pack visibility rules for `GET /api/packs`**:
+
+- Admins see all packs (all visibilities, all statuses)
+- Authenticated users see: their own packs (any visibility) + all `public` packs with `status = 'active'`
+- `status = 'banned'` packs are excluded from all listings except for the owning admin
+- `?game_type_id={uuid}` further filters to packs with ≥1 compatible item (see `03-data.md`)
+
+**Admin notification trigger**: when `visibility` is set to `public` on a new pack (`POST`) or an existing pack (`PATCH`), the backend inserts an `admin_notifications` row of type `pack_published`. When a public pack's items are modified, it inserts `pack_modified`. The pack remains live.
+
+### Item Versions
+
+| Method   | Path                                                  | Auth         | Description                                                                                                                                                       |
+| -------- | ----------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/packs/:id/items/:item_id/versions`              | owner\|admin | List all versions (including binned) with timestamps                                                                                                              |
+| `POST`   | `/api/packs/:id/items/:item_id/versions`              | owner\|admin | Save new version — for image items, wraps the upload-url → PUT → confirm flow; for text items, accepts `{ payload }` directly and creates the version in one step |
+| `POST`   | `/api/packs/:id/items/:item_id/versions/:vid/restore` | owner\|admin | Set `game_items.current_version_id` to this version                                                                                                               |
+| `DELETE` | `/api/packs/:id/items/:item_id/versions/:vid`         | owner\|admin | Move to 30-day bin (`deleted_at = now()`)                                                                                                                         |
+| `DELETE` | `/api/packs/:id/items/:item_id/versions/:vid/purge`   | admin        | Immediate hard-purge: delete RustFS object + DB row                                                                                                               |
+
+### Admin Notifications
+
+| Method  | Path                           | Auth  | Description                                    |
+| ------- | ------------------------------ | ----- | ---------------------------------------------- |
+| `GET`   | `/api/admin/notifications`     | admin | List notifications (paginated; `?unread=true`) |
+| `PATCH` | `/api/admin/notifications/:id` | admin | Mark as read (`{ read_at: "now" }`)            |
 
 **Pack filtering by game type**: `GET /api/packs?game_type_id={uuid}` filters to packs that have ≥1 item with a `payload_version` in the game type's `supported_payload_versions`. This is the filter the room-creation pack dropdown uses. See `03-data.md` for the SQL query.
 
@@ -138,10 +166,10 @@ Combines with cursor pagination: `?q=alice&limit=50&after=...`. Clearing the sea
 
 ### Assets
 
-| Method | Path                       | Auth    | Description                                                                |
-| ------ | -------------------------- | ------- | -------------------------------------------------------------------------- |
-| `POST` | `/api/assets/upload-url`   | admin   | Request pre-signed upload URL                                              |
-| `POST` | `/api/assets/download-url` | session | Get pre-signed download URL (admin preview only; in-game URLs come via WS) |
+| Method | Path                       | Auth         | Description                                                                      |
+| ------ | -------------------------- | ------------ | -------------------------------------------------------------------------------- |
+| `POST` | `/api/assets/upload-url`   | owner\|admin | Request pre-signed upload URL (owner for their own packs; admin for any)         |
+| `POST` | `/api/assets/download-url` | session      | Get pre-signed download URL (admin/owner preview only; in-game URLs come via WS) |
 
 ### Observability
 
@@ -318,7 +346,7 @@ All list endpoints that can return unbounded rows support cursor-based paginatio
 
 The cursor encodes `{ id, created_at }` of the last row, base64-encoded. Clients treat it as opaque.
 
-**Paginated endpoints**: `GET /api/admin/users`, `GET /api/admin/invites`, `GET /api/packs`, `GET /api/packs/:id/items` (ordered by `position ASC`).
+**Paginated endpoints**: `GET /api/admin/users`, `GET /api/admin/invites`, `GET /api/packs`, `GET /api/packs/:id/items` (ordered by `position ASC`), `GET /api/packs/:id/items/:item_id/versions` (ordered by `version_number DESC`), `GET /api/admin/notifications` (ordered by `created_at DESC`).
 
 ---
 

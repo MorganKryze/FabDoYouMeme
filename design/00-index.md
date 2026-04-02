@@ -29,7 +29,9 @@
 
 **Game flow**: create room → WebSocket `join` → host sends `start` → `round_started` (includes `ends_at` + `duration_seconds`) → `{slug}:submit` → `submissions_closed` → `{slug}:vote` → `vote_results` → repeat → `game_ended`
 
-**Asset flow**: create item record → `POST /api/assets/upload-url` (MIME + magic byte validation) → PUT directly to RustFS → `PATCH item { media_key }` to confirm
+**Asset flow**: create item record → `POST /api/assets/upload-url` (MIME + magic byte validation; accessible to pack owners and admins) → PUT directly to RustFS → `POST versions` to save version + confirm
+
+**Studio moderation flow**: user creates/edits public pack → `admin_notifications` row queued → admin reviews in Studio Moderation tab → can set `status = flagged | banned` or deactivate user
 
 **First boot**: set `SEED_ADMIN_EMAIL` env var → backend auto-creates admin + sends magic link on startup (idempotent)
 

@@ -106,12 +106,19 @@ CREATE TABLE game_types (
 -- Game packs (portable content libraries; not tied to a specific game type)
 -- A pack of meme images can be reused across 'meme-caption', 'meme-vote', or any future type.
 -- Soft-deleted: deleted_at IS NOT NULL. All queries must filter WHERE deleted_at IS NULL.
+-- owner_id: null = official/admin pack (V1, V2, V3…); non-null = user-created pack.
+-- is_official: admin-settable only; marks canonical packs. Users cannot set this.
+-- visibility: private = usable only in rooms started by the owner; public = anyone can use.
+-- status: active (default) | flagged (admin notified, still usable) | banned (removed from room selection).
 -- ─────────────────────────────────────────────
 CREATE TABLE game_packs (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name        TEXT NOT NULL,
   description TEXT,
-  created_by  UUID NOT NULL REFERENCES users(id),
+  owner_id    UUID REFERENCES users(id) ON DELETE SET NULL,  -- null for official packs
+  is_official BOOLEAN NOT NULL DEFAULT false,
+  visibility  TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private', 'public')),
+  status      TEXT NOT NULL DEFAULT 'active'  CHECK (status IN ('active', 'flagged', 'banned')),
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   deleted_at  TIMESTAMPTZ
 );
@@ -121,16 +128,59 @@ CREATE TABLE game_packs (
 -- payload JSONB holds all item data. Game type handlers read the fields they need.
 -- A single item can serve multiple game types simultaneously.
 -- payload_version tracks schema revision; handlers declare supported versions.
+-- current_version_id: points to the active game_item_versions row for this item.
+--   Set to NULL if the current version is purged (item still exists for historical integrity).
 -- ─────────────────────────────────────────────
 CREATE TABLE game_items (
-  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  pack_id         UUID NOT NULL REFERENCES game_packs(id) ON DELETE CASCADE,
-  position        INT NOT NULL DEFAULT 0,
-  media_key       TEXT,                          -- RustFS object key; nullable if text-only
-  payload         JSONB NOT NULL DEFAULT '{}',
-  payload_version INT NOT NULL DEFAULT 1,
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  pack_id             UUID NOT NULL REFERENCES game_packs(id) ON DELETE CASCADE,
+  position            INT NOT NULL DEFAULT 0,
+  payload_version     INT NOT NULL DEFAULT 1,
+  current_version_id  UUID,                      -- FK set after INSERT of first game_item_versions row
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (pack_id, position)
+);
+
+-- ─────────────────────────────────────────────
+-- Game item versions (full history of each item's content)
+-- Each save in the Studio creates a new version row; current_version_id on game_items points to the active one.
+-- media_key: RustFS object key for image versions; null for text-only items.
+-- payload: full JSONB snapshot of the item at this version (text content, alt text, etc.)
+-- deleted_at: soft delete (moved to bin); a background job hard-purges rows where
+--   deleted_at < now() - 30 days, including the corresponding RustFS object deletion
+--   (logged as asset_purge before each S3 DELETE — same pattern as pack purge).
+-- ─────────────────────────────────────────────
+CREATE TABLE game_item_versions (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  item_id        UUID NOT NULL REFERENCES game_items(id) ON DELETE CASCADE,
+  version_number INT NOT NULL,
+  media_key      TEXT,                            -- null for text-only items
+  payload        JSONB NOT NULL DEFAULT '{}',
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at     TIMESTAMPTZ,
+  UNIQUE (item_id, version_number)
+);
+
+-- Add FK from game_items to game_item_versions (deferred to avoid circular dependency at creation time)
+ALTER TABLE game_items
+  ADD CONSTRAINT fk_current_version
+  FOREIGN KEY (current_version_id) REFERENCES game_item_versions(id) ON DELETE SET NULL;
+
+-- ─────────────────────────────────────────────
+-- Admin notifications (content moderation inbox)
+-- Queued when a user creates or modifies a public pack.
+-- Pack remains live during review; admin can flag/ban via PATCH /api/packs/:id/status.
+-- type: 'pack_published' (new public pack) | 'pack_modified' (existing public pack changed).
+-- actor_id: the user who triggered the event; SET NULL if user is hard-deleted.
+-- read_at: null = unread.
+-- ─────────────────────────────────────────────
+CREATE TABLE admin_notifications (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  type       TEXT NOT NULL CHECK (type IN ('pack_published', 'pack_modified')),
+  pack_id    UUID REFERENCES game_packs(id) ON DELETE CASCADE,
+  actor_id   UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  read_at    TIMESTAMPTZ
 );
 
 -- ─────────────────────────────────────────────
@@ -258,7 +308,15 @@ CREATE INDEX ON submissions(round_id, user_id);
 
 -- Partial: active-pack list (most common admin query)
 CREATE INDEX ON game_packs(created_at DESC) WHERE deleted_at IS NULL;
-CREATE INDEX ON game_packs(created_by) WHERE deleted_at IS NULL;
+CREATE INDEX ON game_packs(owner_id, created_at DESC) WHERE deleted_at IS NULL;
+
+-- game_item_versions: version lookup + bin cleanup
+CREATE INDEX ON game_item_versions(item_id, version_number);
+CREATE INDEX ON game_item_versions(deleted_at) WHERE deleted_at IS NOT NULL;
+
+-- admin_notifications: unread inbox query
+CREATE INDEX ON admin_notifications(read_at) WHERE read_at IS NULL;
+CREATE INDEX ON admin_notifications(created_at DESC);
 
 -- Partial: find the active round in a room (used before every WS event)
 CREATE INDEX ON rounds(room_id, round_number DESC) WHERE started_at IS NOT NULL;
@@ -308,6 +366,8 @@ DELETE FROM sessions WHERE expires_at < now();
 DELETE FROM magic_link_tokens
 WHERE used_at IS NOT NULL AND used_at < now() - interval '7 days';
 ```
+
+**Version bin purge**: a background job hard-purges `game_item_versions` rows where `deleted_at < now() - interval '30 days'`. For each row with a non-null `media_key`, the RustFS object is deleted first (same `asset_purge` / `asset_purge_failed` log pattern as pack purge below). The DB row is deleted after the S3 call regardless of outcome — the structured log enables recovery of any orphaned object references.
 
 **Asset cleanup audit log**: when an admin purges orphaned RustFS objects from a soft-deleted pack, each deletion MUST be preceded by a structured log entry:
 
@@ -431,13 +491,15 @@ The storage layer is wrapped behind a `Storage` interface in `internal/storage/`
 - All game assets stored in a single **private** bucket (`fabyoumeme-assets`)
 - **No public bucket access** — every read goes through a short-lived pre-signed URL
 - Pre-signed download URLs: **15-minute TTL**
-- Pre-signed upload URLs: issued only to authenticated admin sessions
+- Pre-signed upload URLs: issued to authenticated pack owners (for their own packs) and admins
 
 ### Object Key Convention
 
 ```plain
-packs/{pack_id}/items/{item_id}/{original_filename}
+packs/{pack_id}/items/{item_id}/v{version_number}/{original_filename}
 ```
+
+The version number is included so multiple versions of the same item can coexist in storage without key collision. Purging a specific version deletes only that versioned key, leaving other versions intact.
 
 ### Upload Flow
 

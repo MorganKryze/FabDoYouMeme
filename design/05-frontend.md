@@ -67,6 +67,24 @@ class UserState {
 export const user = new UserState();
 ```
 
+### `studio.svelte.ts` — Studio content creation state
+
+```ts
+class StudioState {
+  selectedPackId = $state<string | null>(null);
+  selectedItemId = $state<string | null>(null);
+  selectedVersionIds = $state<string[]>([]); // up to 2, for side-by-side comparison
+
+  // Loaded on demand — not prefetched
+  packs = $state<Pack[]>([]);
+  items = $state<Item[]>([]);
+  versions = $state<ItemVersion[]>([]);
+
+  // selectPack(), selectItem(), saveVersion(), restoreVersion(), moveVersionToBin()
+}
+export const studio = new StudioState();
+```
+
 ---
 
 ## Route Structure
@@ -99,7 +117,7 @@ src/routes/
   (admin)/                          ← admin layout: sidebar navigation
     +layout.svelte
     +layout.server.ts               ← admin role guard → 403 if not admin
-    +page.svelte                    ← Admin dashboard (stats overview)
+    +page.svelte                    ← Admin dashboard (stats overview + notification badge)
     users/
       +page.svelte                  ← User management table
     invites/
@@ -110,6 +128,11 @@ src/routes/
         +page.svelte                ← Pack item manager
     game-types/
       +page.svelte                  ← Game type registry (read-only)
+
+  (app)/studio/                     ← authenticated layout (all users, not admin-only)
+    +layout.svelte
+    +layout.server.ts               ← session guard → redirect to /auth/magic-link
+    +page.svelte                    ← Studio: pack navigator + item table + item editor
 ```
 
 ---
@@ -300,11 +323,77 @@ Triggered by `game_ended` event.
 
 ---
 
+### Studio `/studio`
+
+Three-panel layout. All authenticated users can access. Content and actions shown depend on pack ownership and role.
+
+```plain
+┌──────────────────┬───────────────────────────┬────────────────────────────┐
+│  Pack Navigator  │       Item Table           │       Item Editor          │
+│                  │                            │                            │
+│  ▸ Official      │  #  │ Preview │ Name │ Ver │  [Image mode / Text mode]  │
+│    V1  (42 items)│  1  │  🖼     │ ...  │  3  │                            │
+│    V2  (38 items)│  2  │  🖼     │ ...  │  1  │  Image: crop + draw tools  │
+│    V3  (12 items)│  ...                       │  Text: extensible textarea │
+│                  │                            │                            │
+│  ▸ Public        │  [+ New Item]              │  [Save → new version]      │
+│    user packs…   │  [Bulk Import]             │                            │
+│                  │                            │  ── Version History ───    │
+│  ▸ Private       │                            │  v3 · 2026-04-02 ← active  │
+│    my packs…     │                            │  v2 · 2026-03-28           │
+│                  │                            │  v1 · 2026-03-01           │
+│  [+ New Pack]    │                            │  [Restore] [Move to Bin]   │
+│                  │                            │                            │
+│  ── Admin only ──│                            │  [Compare v1 vs v3]        │
+│  Moderation (3)  │                            │                            │
+└──────────────────┴───────────────────────────┴────────────────────────────┘
+```
+
+**Pack Navigator** (left panel):
+
+- Groups: Official (V1, V2, V3…), Public (other users' public packs the current user follows), Private (own packs)
+- "New Pack" button at the bottom: inline name + description form → `POST /api/packs`
+- Admin-only "Moderation" tab: lists packs with `status = 'flagged'`; shows pack name, owner, date flagged; actions: "Ban Pack" (`PATCH status=banned`), "Clear Flag" (`PATCH status=active`)
+
+**Item Table** (center panel):
+
+- Columns: drag handle (reorder), thumbnail or text preview, item name, type badge (Image / Text), version number, last modified, delete action
+- **Bulk Import** (image packs only): drag-and-drop zone for multiple files → runs the 4-step upload flow for each file in sequence (POST item → POST upload-url → PUT → PATCH confirm)
+- Drag reorder → batch `PATCH /api/packs/:id/items/reorder`
+
+**Item Editor** (right panel):
+
+- Switches between Image and Text mode via an editor type indicator (not a toggle — mode is set at item creation and cannot change)
+- **Image mode**: upload/replace area + crop tool (aspect-ratio constrained, Canvas API) + freehand draw layer; "Save" creates a new `game_item_versions` row and updates `current_version_id`
+- **Text mode**: extensible `TextEditor` wrapper (accepts slots/plugins for future rich text; currently renders a textarea with character count); "Save" creates a new version row
+- **Version History drawer** (collapsible, bottom of editor):
+  - Timeline: version number, timestamp, "active" badge on current version
+  - Per-entry actions: "Restore" (sets `current_version_id`), "Move to Bin" (soft delete, `deleted_at = now()`)
+  - Select two versions → "Compare" button → side-by-side view (image diff or text diff)
+  - Binned versions shown with muted style and "Restoring from bin is not possible" note if `deleted_at` is set but purge has not run
+
+**Component locations**:
+
+```plain
+src/lib/components/studio/
+  PackNavigator.svelte
+  ItemTable.svelte
+  ItemEditor.svelte
+  ImageEditor.svelte       ← Canvas-based crop + draw (no external image-edit lib)
+  TextEditor.svelte        ← Extensible textarea wrapper
+  VersionHistory.svelte    ← Collapsible timeline + comparison
+src/lib/api/studio.ts      ← Typed fetch wrappers for all studio endpoints
+```
+
+---
+
 ### Admin Dashboard `/admin`
 
 Stats cards row: active rooms, total users, total packs, pending invites.
 
 Recent activity list (last 10 audit log entries): `Alice's role changed to admin by Bob · 2 hours ago`.
+
+**Notification badge**: if there are unread `admin_notifications`, a badge count appears on the admin nav bell icon (top-right of admin layout) and on the "Moderation" tab in the Studio Pack Navigator.
 
 ---
 
@@ -491,8 +580,9 @@ After phase transitions triggered by WebSocket events, move focus programmatical
 | `/` (app)       | Authenticated               | Top nav               |
 | `/rooms/[code]` | Authenticated + in room     | Top nav + room chrome |
 | `/profile`      | Authenticated               | Top nav dropdown      |
+| `/studio`       | Authenticated (all users)   | Top nav               |
 | `/admin/*`      | Admin role                  | Sidebar + top nav     |
 
-Top nav (app layout): logo left, `[Profile ▼] [Logout]` right, connection dot far right.
+Top nav (app layout): logo left, `[Studio] [Profile ▼] [Logout]` right, connection dot far right. Admins also see a bell icon with unread `admin_notifications` badge count.
 
 Admin sidebar: Users · Invites · Packs · Game Types · `← Back to App` at bottom.
