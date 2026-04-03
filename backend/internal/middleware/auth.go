@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"log/slog"
 	"net/http"
 )
 
@@ -11,7 +12,7 @@ import (
 // Returns userID, username, email, role, isActive; returns ("","","","",false,nil) if not found.
 type SessionLookupFn func(ctx context.Context, tokenHash string) (userID, username, email, role string, isActive bool, err error)
 
-func Session(lookup SessionLookupFn) func(http.Handler) http.Handler {
+func Session(lookup SessionLookupFn, logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			cookie, err := r.Cookie("session")
@@ -21,7 +22,15 @@ func Session(lookup SessionLookupFn) func(http.Handler) http.Handler {
 			}
 			hash := sha256token(cookie.Value)
 			userID, username, email, role, isActive, err := lookup(r.Context(), hash)
-			if err != nil || !isActive {
+			if err != nil {
+				logger.Error("session lookup failed",
+					"error", err,
+					"request_id", r.Header.Get("X-Request-ID"),
+				)
+				next.ServeHTTP(w, r)
+				return
+			}
+			if !isActive {
 				next.ServeHTTP(w, r)
 				return
 			}
