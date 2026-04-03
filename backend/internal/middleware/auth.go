@@ -1,0 +1,42 @@
+package middleware
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"net/http"
+)
+
+// SessionLookupFn is the DB query function injected at startup.
+// Returns userID, username, email, role, isActive; returns ("","","","",false,nil) if not found.
+type SessionLookupFn func(ctx context.Context, tokenHash string) (userID, username, email, role string, isActive bool, err error)
+
+func Session(lookup SessionLookupFn) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			cookie, err := r.Cookie("session")
+			if err != nil || cookie.Value == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+			hash := sha256token(cookie.Value)
+			userID, username, email, role, isActive, err := lookup(r.Context(), hash)
+			if err != nil || !isActive {
+				next.ServeHTTP(w, r)
+				return
+			}
+			r = SetSessionUser(r, SessionUser{
+				UserID:   userID,
+				Username: username,
+				Email:    email,
+				Role:     role,
+			})
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func sha256token(token string) string {
+	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:])
+}

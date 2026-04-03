@@ -12,7 +12,7 @@ Master tracker. Check boxes as phases complete. Each phase links to a detailed s
 | --- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------ |
 | 1   | Infrastructure & project bootstrap                          | [01-infrastructure.md](superpowers/plans/2026-04-03-01-infrastructure.md)               | `[x]`  |
 | 2   | Database — migrations + sqlc                                | [02-backend-db.md](superpowers/plans/2026-04-03-02-backend-db.md)                       | `[x]`  |
-| 3   | Backend — config + middleware                               | [03-backend-core.md](superpowers/plans/2026-04-03-03-backend-core.md)                   | `[ ]`  |
+| 3   | Backend — config + middleware                               | [03-backend-core.md](superpowers/plans/2026-04-03-03-backend-core.md)                   | `[x]`  |
 | 4   | Backend — auth (sessions, magic links, invites)             | [04-backend-auth.md](superpowers/plans/2026-04-03-04-backend-auth.md)                   | `[ ]`  |
 | 5   | Backend — storage (RustFS) + email                          | [05-backend-storage-email.md](superpowers/plans/2026-04-03-05-backend-storage-email.md) | `[ ]`  |
 | 6   | Backend — game engine (registry, hub, meme-caption)         | [06-backend-game.md](superpowers/plans/2026-04-03-06-backend-game.md)                   | `[ ]`  |
