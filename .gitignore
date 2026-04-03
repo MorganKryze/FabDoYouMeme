@@ -5,6 +5,7 @@
 # Go
 backend/vendor/
 backend/tmp/
+backend/server
 
 # Node
 frontend/node_modules/
