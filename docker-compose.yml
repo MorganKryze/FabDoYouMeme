@@ -1,0 +1,81 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fabyoumeme
+      POSTGRES_USER: fabyoumeme
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U fabyoumeme']
+      interval: 5s
+      retries: 5
+    expose:
+      - 5432
+    networks:
+      - project_network
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://fabyoumeme:${POSTGRES_PASSWORD}@postgres:5432/fabyoumeme
+      RUSTFS_ENDPOINT: ${RUSTFS_ENDPOINT}
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
+      RUSTFS_BUCKET: ${RUSTFS_BUCKET:-fabyoumeme-assets}
+      ALLOWED_ORIGIN: ${FRONTEND_URL}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      SMTP_FROM: ${SMTP_FROM}
+      MAGIC_LINK_BASE_URL: ${FRONTEND_URL}
+      MAGIC_LINK_TTL: ${MAGIC_LINK_TTL:-15m}
+      SESSION_TTL: ${SESSION_TTL:-720h}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
+      PORT: ${BACKEND_PORT:-8080}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      RECONNECT_GRACE_WINDOW: ${RECONNECT_GRACE_WINDOW:-30s}
+      WS_RATE_LIMIT: ${WS_RATE_LIMIT:-20}
+      WS_READ_LIMIT_BYTES: ${WS_READ_LIMIT_BYTES:-4096}
+      WS_READ_DEADLINE: ${WS_READ_DEADLINE:-60s}
+      WS_PING_INTERVAL: ${WS_PING_INTERVAL:-25s}
+      SESSION_RENEW_INTERVAL: ${SESSION_RENEW_INTERVAL:-60m}
+      MAX_UPLOAD_SIZE_BYTES: ${MAX_UPLOAD_SIZE_BYTES:-2097152}
+      RATE_LIMIT_AUTH_RPM: ${RATE_LIMIT_AUTH_RPM:-10}
+      RATE_LIMIT_INVITE_VALIDATION_RPH: ${RATE_LIMIT_INVITE_VALIDATION_RPH:-20}
+      RATE_LIMIT_ROOMS_RPH: ${RATE_LIMIT_ROOMS_RPH:-10}
+      RATE_LIMIT_UPLOADS_RPH: ${RATE_LIMIT_UPLOADS_RPH:-50}
+      RATE_LIMIT_GLOBAL_RPM: ${RATE_LIMIT_GLOBAL_RPM:-100}
+    expose:
+      - 8080
+    networks:
+      - project_network
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      PUBLIC_API_URL: ${BACKEND_URL}
+    expose:
+      - 3000
+    networks:
+      - project_network
+      - pangolin
+
+volumes:
+  postgres_data:
+
+networks:
+  project_network:
+    driver: bridge
+  pangolin:
+    external: true

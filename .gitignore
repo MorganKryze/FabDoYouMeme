@@ -1,0 +1,24 @@
+.env
+*.env.local
+*.env.production
+
+# Go
+backend/vendor/
+backend/tmp/
+
+# Node
+frontend/node_modules/
+frontend/.svelte-kit/
+frontend/build/
+
+# IDE
+.idea/
+.vscode/settings.json
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+postgres_data/

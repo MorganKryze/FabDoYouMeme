@@ -10,7 +10,7 @@ Master tracker. Check boxes as phases complete. Each phase links to a detailed s
 
 | #   | Phase                                                       | Sub-plan                                                                                | Status |
 | --- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------- | ------ |
-| 1   | Infrastructure & project bootstrap                          | [01-infrastructure.md](superpowers/plans/2026-04-03-01-infrastructure.md)               | `[ ]`  |
+| 1   | Infrastructure & project bootstrap                          | [01-infrastructure.md](superpowers/plans/2026-04-03-01-infrastructure.md)               | `[x]`  |
 | 2   | Database — migrations + sqlc                                | [02-backend-db.md](superpowers/plans/2026-04-03-02-backend-db.md)                       | `[ ]`  |
 | 3   | Backend — config + middleware                               | [03-backend-core.md](superpowers/plans/2026-04-03-03-backend-core.md)                   | `[ ]`  |
 | 4   | Backend — auth (sessions, magic links, invites)             | [04-backend-auth.md](superpowers/plans/2026-04-03-04-backend-auth.md)                   | `[ ]`  |
