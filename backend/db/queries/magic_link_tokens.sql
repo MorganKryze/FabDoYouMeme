@@ -22,3 +22,11 @@ DELETE FROM magic_link_tokens WHERE expires_at < now() AND used_at IS NULL;
 -- name: DeleteOldUsedTokens :exec
 DELETE FROM magic_link_tokens
 WHERE used_at IS NOT NULL AND used_at < now() - interval '7 days';
+
+-- name: ConsumeMagicLinkTokenAtomic :one
+UPDATE magic_link_tokens
+SET used_at = NOW()
+WHERE token_hash = $1
+  AND expires_at > NOW()
+  AND used_at IS NULL
+RETURNING *;

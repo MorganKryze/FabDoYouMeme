@@ -6,6 +6,8 @@
 backend/vendor/
 backend/tmp/
 backend/server
+*.test
+*.out
 
 # Node
 frontend/node_modules/

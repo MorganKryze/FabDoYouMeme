@@ -10,6 +10,9 @@ type contextKey string
 
 const sessionUserKey contextKey = "session_user"
 
+// SessionUserContextKey is exported for use in tests that need to inject a session user directly.
+var SessionUserContextKey = sessionUserKey
+
 type SessionUser struct {
 	UserID   string
 	Username string

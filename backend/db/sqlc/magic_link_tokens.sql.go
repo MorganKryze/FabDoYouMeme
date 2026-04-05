@@ -105,6 +105,30 @@ func (q *Queries) GetMagicLinkToken(ctx context.Context, tokenHash string) (Magi
 	return i, err
 }
 
+const consumeMagicLinkTokenAtomic = `-- name: ConsumeMagicLinkTokenAtomic :one
+UPDATE magic_link_tokens
+SET used_at = NOW()
+WHERE token_hash = $1
+  AND expires_at > NOW()
+  AND used_at IS NULL
+RETURNING id, user_id, token_hash, purpose, expires_at, used_at, created_at
+`
+
+func (q *Queries) ConsumeMagicLinkTokenAtomic(ctx context.Context, tokenHash string) (MagicLinkToken, error) {
+	row := q.db.QueryRow(ctx, consumeMagicLinkTokenAtomic, tokenHash)
+	var i MagicLinkToken
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.TokenHash,
+		&i.Purpose,
+		&i.ExpiresAt,
+		&i.UsedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const invalidatePendingTokens = `-- name: InvalidatePendingTokens :exec
 UPDATE magic_link_tokens SET used_at = now()
 WHERE user_id = $1 AND purpose = $2 AND used_at IS NULL
