@@ -455,7 +455,7 @@ sql:
       go:
         package: 'db'
         out: 'db/sqlc'
-        sql_driver: 'pgx/v5'
+        sql_package: 'pgx/v5'
         emit_json_tags: true
         emit_pointers_for_null_types: true
         overrides:

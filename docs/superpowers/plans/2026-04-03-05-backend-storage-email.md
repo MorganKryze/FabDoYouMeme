@@ -90,6 +90,7 @@ package storage
 
 import (
 	"context"
+	"strconv"
 	"time"
 )
 
@@ -110,19 +111,7 @@ type Storage interface {
 // ObjectKey returns the canonical storage key for an item version.
 // Format: packs/{packID}/items/{itemID}/v{versionNumber}/{filename}
 func ObjectKey(packID, itemID string, versionNumber int, filename string) string {
-	return "packs/" + packID + "/items/" + itemID + "/v" + itoa(versionNumber) + "/" + filename
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	b := make([]byte, 0, 10)
-	for n > 0 {
-		b = append([]byte{byte('0' + n%10)}, b...)
-		n /= 10
-	}
-	return string(b)
+	return "packs/" + packID + "/items/" + itemID + "/v" + strconv.Itoa(versionNumber) + "/" + filename
 }
 ```
 

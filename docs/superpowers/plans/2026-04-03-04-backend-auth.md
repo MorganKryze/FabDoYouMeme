@@ -214,12 +214,14 @@ func (h *Handler) SessionLookupFn(ctx context.Context, tokenHash string) (string
 	if err != nil {
 		return "", "", "", "", false, err
 	}
-	// Renew TTL for active sessions (fire-and-forget; failure is non-fatal)
+	// Renew TTL for active sessions; log on failure but do not block the request
 	newExpiry := time.Now().Add(h.cfg.SessionTTL)
-	_, _ = h.db.RenewSession(ctx, db.RenewSessionParams{
+	if _, err := h.db.RenewSession(ctx, db.RenewSessionParams{
 		ID:        row.ID,
 		ExpiresAt: newExpiry,
-	})
+	}); err != nil && h.log != nil {
+		h.log.WarnContext(ctx, "session renewal failed", "err", err)
+	}
 	return row.UID.String(), row.Username, row.Email, row.Role, row.IsActive, nil
 }
 

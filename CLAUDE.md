@@ -149,6 +149,18 @@ open http://localhost:8025
 
 ---
 
+## Plan Deviation Policy
+
+When implementation requires a justified deviation from a plan (wrong type signature, invalid syntax in the plan, stdlib preferred over custom helper, etc.):
+
+1. **Update the plan file** — edit the relevant code snippet to match what was actually implemented.
+2. **Add an inline note** — if the reason is non-obvious, add a `> **Deviation (implemented):** ...` blockquote immediately after the snippet explaining what changed and why.
+3. **Never leave the plan inconsistent with the code** — a future reader (or agent) doing a consistency check must be able to trust that plan = code.
+
+This applies to all files under `docs/superpowers/plans/`.
+
+---
+
 ## Git Workflow
 
 - **No git modifications allowed via Claude:** Do not commit, push, create branches, or run any destructive git commands. Read-only git access only (e.g. `git log`, `git diff`, `git status`).
