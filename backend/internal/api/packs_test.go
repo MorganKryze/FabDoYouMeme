@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -30,9 +31,15 @@ func newPackHandler(t *testing.T) (*api.PackHandler, *db.Queries) {
 
 func seedAdmin(t *testing.T, q *db.Queries) db.User {
 	t.Helper()
+	// Derive unique credentials from the test name to prevent unique-constraint
+	// collisions when multiple tests run against the same shared database.
+	slug := strings.ToLower(strings.NewReplacer("/", "_", " ", "_").Replace(t.Name()))
+	if len(slug) > 30 {
+		slug = slug[:30]
+	}
 	u, err := q.CreateUser(context.Background(), db.CreateUserParams{
-		Username:  "admin_pack",
-		Email:     "admin_pack@test.com",
+		Username:  slug,
+		Email:     slug + "@test.com",
 		Role:      "admin",
 		IsActive:  true,
 		ConsentAt: time.Now(),

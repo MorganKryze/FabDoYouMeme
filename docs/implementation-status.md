@@ -17,7 +17,7 @@ Master tracker. Check boxes as phases complete. Each phase links to a detailed s
 | 5   | Backend — storage (RustFS) + email                          | [05-backend-storage-email.md](superpowers/plans/2026-04-03-05-backend-storage-email.md) | `[x]`  |
 | 6   | Backend — game engine (registry, hub, meme-caption)         | [06-backend-game.md](superpowers/plans/2026-04-03-06-backend-game.md)                   | `[x]`  |
 | 7   | Backend — REST API wiring + observability                   | [07-backend-api.md](superpowers/plans/2026-04-03-07-backend-api.md)                     | `[x]`  |
-| 8   | Frontend — project setup + state layer + API client         | [08-frontend-setup.md](superpowers/plans/2026-04-03-08-frontend-setup.md)               | `[ ]`  |
+| 8   | Frontend — project setup + state layer + API client         | [08-frontend-setup.md](superpowers/plans/2026-04-03-08-frontend-setup.md)               | `[x]`  |
 | 9   | Frontend — auth routes (register, magic-link, verify)       | [09-frontend-auth.md](superpowers/plans/2026-04-03-09-frontend-auth.md)                 | `[ ]`  |
 | 10  | Frontend — app routes (lobby, rooms, profile) + game plugin | [10-frontend-app.md](superpowers/plans/2026-04-03-10-frontend-app.md)                   | `[ ]`  |
 | 11  | Frontend — studio                                           | [11-frontend-studio.md](superpowers/plans/2026-04-03-11-frontend-studio.md)             | `[ ]`  |
