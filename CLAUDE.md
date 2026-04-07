@@ -31,7 +31,7 @@ Status: **pre-implementation** — no source code yet. `design/` is the authorit
 
 ## Repository Structure
 
-```
+```plain
 FabDoYouMeme/
 ├── backend/
 │   ├── cmd/server/              # main.go — wires everything, registers game handlers
@@ -146,6 +146,12 @@ open http://localhost:8025
 - **`/api/metrics` must be IP-restricted**: never expose Prometheus endpoint to the internet
 - **Startup cleanup**: on every start, the backend marks `playing` rooms as `finished` (crash recovery) and closes stale `lobby` rooms older than 24h — both are idempotent
 - **GDPR**: registration requires `consent: true` + `age_affirmation: true`; `users.consent_at` is set once and never changed; hard-delete replaces both `submissions.user_id` AND `votes.voter_id` with the sentinel UUID before deleting the user row; game data purged after 2 years; audit log PII anonymized after 3 years — see `ref-gdpr.md`
+
+---
+
+## Git Workflow
+
+- **No git modifications allowed via Claude:** Do not commit, push, create branches, or run any destructive git commands. Read-only git access only (e.g. `git log`, `git diff`, `git status`).
 
 ---
 

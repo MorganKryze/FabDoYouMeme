@@ -1,0 +1,89 @@
+// backend/internal/storage/s3.go
+package storage
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+)
+
+// S3Storage is the concrete Storage implementation backed by an S3-compatible store (RustFS).
+type S3Storage struct {
+	client    *s3.Client
+	presigner *s3.PresignClient
+	bucket    string
+}
+
+// NewS3 builds an S3Storage pointed at the given endpoint.
+// UsePathStyle is forced on — required by RustFS.
+func NewS3(endpoint, accessKey, secretKey, bucket string) (*S3Storage, error) {
+	if endpoint == "" || accessKey == "" || secretKey == "" || bucket == "" {
+		return nil, fmt.Errorf("storage: endpoint, accessKey, secretKey, and bucket are required")
+	}
+
+	cfg, err := awsconfig.LoadDefaultConfig(context.Background(),
+		awsconfig.WithRegion("us-east-1"), // RustFS ignores region value
+		awsconfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(accessKey, secretKey, ""),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("storage: load AWS config: %w", err)
+	}
+
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(endpoint)
+		o.UsePathStyle = true // RustFS requires path-style, not virtual-hosted-style
+	})
+
+	return &S3Storage{
+		client:    client,
+		presigner: s3.NewPresignClient(client),
+		bucket:    bucket,
+	}, nil
+}
+
+// PresignUpload returns a pre-signed PUT URL valid for ttl.
+func (s *S3Storage) PresignUpload(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	req, err := s.presigner.PresignPutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	}, s3.WithPresignExpires(ttl))
+	if err != nil {
+		return "", fmt.Errorf("presign upload %q: %w", key, err)
+	}
+	return req.URL, nil
+}
+
+// PresignDownload returns a pre-signed GET URL with attachment disposition.
+func (s *S3Storage) PresignDownload(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	req, err := s.presigner.PresignGetObject(ctx, &s3.GetObjectInput{
+		Bucket:                     aws.String(s.bucket),
+		Key:                        aws.String(key),
+		ResponseContentDisposition: aws.String("attachment"),
+	}, s3.WithPresignExpires(ttl))
+	if err != nil {
+		return "", fmt.Errorf("presign download %q: %w", key, err)
+	}
+	return req.URL, nil
+}
+
+// Delete removes the object at key. Returns nil if the key does not exist.
+func (s *S3Storage) Delete(ctx context.Context, key string) error {
+	_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(key),
+	})
+	if err != nil {
+		return fmt.Errorf("delete %q: %w", key, err)
+	}
+	return nil
+}
+
+// Compile-time interface check
+var _ Storage = (*S3Storage)(nil)
