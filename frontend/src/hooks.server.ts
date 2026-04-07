@@ -1,6 +1,6 @@
 import type { Handle } from '@sveltejs/kit';
 import { randomBytes } from 'node:crypto';
-import { env } from '$env/dynamic/private';
+import { env } from '$env/dynamic/public';
 
 const API_URL = env.PUBLIC_API_URL || 'http://localhost:8080';
 

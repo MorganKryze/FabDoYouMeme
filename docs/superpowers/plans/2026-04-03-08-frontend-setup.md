@@ -45,9 +45,14 @@ export {};
 // frontend/src/hooks.server.ts
 import type { Handle } from '@sveltejs/kit';
 import { randomBytes } from 'node:crypto';
-import { env } from '$env/dynamic/private';
+import { env } from '$env/dynamic/public';
 
 const API_URL = env.PUBLIC_API_URL || 'http://localhost:8080';
+```
+
+> **Deviation (implemented):** Plan originally imported from `$env/dynamic/private`. Changed to `$env/dynamic/public` because `PUBLIC_*` variables are reserved for the public env module by SvelteKit convention — reading them from the private module works at runtime but fails static analysis and env validation.
+
+```ts
 
 export const handle: Handle = async ({ event, resolve }) => {
   // Generate per-request CSP nonce
@@ -541,6 +546,7 @@ class WsState {
   #retryTimer: ReturnType<typeof setTimeout> | null = null;
   #pingTimer: ReturnType<typeof setInterval> | null = null;
   #pongTimeout: ReturnType<typeof setTimeout> | null = null;
+  #pongUnsub: (() => void) | null = null;
 
   /** Connect to a room's WebSocket. */
   connect(roomCode: string) {
@@ -577,7 +583,7 @@ class WsState {
       if (this.retryCount < 10) {
         this.status = 'reconnecting';
         const delay =
-          Math.min(30, Math.pow(2, this.retryCount - 1)) + Math.random();
+          Math.min(30, Math.pow(2, this.retryCount)) + Math.random();
         this.#retryTimer = setTimeout(() => {
           this.retryCount++;
           this.#connect();
@@ -639,7 +645,7 @@ class WsState {
       }, 10_000);
     }, 25_000);
 
-    this.onMessage('pong', () => {
+    this.#pongUnsub = this.onMessage('pong', () => {
       if (this.#pongTimeout) clearTimeout(this.#pongTimeout);
     });
   }
@@ -647,6 +653,8 @@ class WsState {
   #stopPing() {
     if (this.#pingTimer) clearInterval(this.#pingTimer);
     if (this.#pongTimeout) clearTimeout(this.#pongTimeout);
+    this.#pongUnsub?.();
+    this.#pongUnsub = null;
   }
 }
 
@@ -663,10 +671,10 @@ type RoomPhase = 'idle' | 'countdown' | 'submitting' | 'voting' | 'results';
 type RoomStatus = 'lobby' | 'playing' | 'finished';
 
 interface Round {
-  roundNumber: number;
+  round_number: number;
   item: { payload: unknown; media_url?: string };
-  durationSeconds: number;
-  endsAt: string; // ISO8601
+  duration_seconds: number;
+  ends_at: string; // ISO8601
 }
 
 class RoomState {

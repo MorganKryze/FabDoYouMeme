@@ -4,10 +4,10 @@ type RoomPhase = 'idle' | 'countdown' | 'submitting' | 'voting' | 'results';
 type RoomStatus = 'lobby' | 'playing' | 'finished';
 
 interface Round {
-  roundNumber: number;
+  round_number: number;
   item: { payload: unknown; media_url?: string };
-  durationSeconds: number;
-  endsAt: string; // ISO8601
+  duration_seconds: number;
+  ends_at: string; // ISO8601
 }
 
 class RoomState {

@@ -13,6 +13,7 @@ class WsState {
   #retryTimer: ReturnType<typeof setTimeout> | null = null;
   #pingTimer: ReturnType<typeof setInterval> | null = null;
   #pongTimeout: ReturnType<typeof setTimeout> | null = null;
+  #pongUnsub: (() => void) | null = null;
 
   /** Connect to a room's WebSocket. */
   connect(roomCode: string) {
@@ -49,7 +50,7 @@ class WsState {
       if (this.retryCount < 10) {
         this.status = 'reconnecting';
         const delay =
-          Math.min(30, Math.pow(2, this.retryCount - 1)) + Math.random();
+          Math.min(30, Math.pow(2, this.retryCount)) + Math.random();
         this.#retryTimer = setTimeout(() => {
           this.retryCount++;
           this.#connect();
@@ -111,7 +112,7 @@ class WsState {
       }, 10_000);
     }, 25_000);
 
-    this.onMessage('pong', () => {
+    this.#pongUnsub = this.onMessage('pong', () => {
       if (this.#pongTimeout) clearTimeout(this.#pongTimeout);
     });
   }
@@ -119,6 +120,8 @@ class WsState {
   #stopPing() {
     if (this.#pingTimer) clearInterval(this.#pingTimer);
     if (this.#pongTimeout) clearTimeout(this.#pongTimeout);
+    this.#pongUnsub?.();
+    this.#pongUnsub = null;
   }
 }
 

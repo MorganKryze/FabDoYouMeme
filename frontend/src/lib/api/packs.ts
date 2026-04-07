@@ -16,8 +16,10 @@ export const packsApi = {
   create: (body: { name: string; description?: string; visibility?: string }) =>
     api.post<Pack>('/api/packs', body),
   get: (id: string) => api.get<Pack>(`/api/packs/${id}`),
-  update: (id: string, body: Partial<Pack>) =>
-    api.patch<Pack>(`/api/packs/${id}`, body),
+  update: (
+    id: string,
+    body: { name?: string; description?: string; visibility?: 'private' | 'public'; is_official?: boolean }
+  ) => api.patch<Pack>(`/api/packs/${id}`, body),
   delete: (id: string) => api.delete<void>(`/api/packs/${id}`),
   listItems: (packId: string, params?: { after?: string }) => {
     const q = new URLSearchParams();

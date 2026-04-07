@@ -29,5 +29,5 @@ export const authApi = {
       `/api/users/me/history${cursor ? `?after=${cursor}` : ''}`
     ),
 
-  getExport: () => api.get<Blob>('/api/users/me/export')
+  getExport: () => api.get<unknown>('/api/users/me/export')
 };
