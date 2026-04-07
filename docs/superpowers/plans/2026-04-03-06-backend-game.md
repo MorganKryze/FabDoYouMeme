@@ -230,26 +230,9 @@ type Message struct {
 	Type string          `json:"type"`
 	Data json.RawMessage `json:"data,omitempty"`
 }
-
-// Player represents a connected player inside the hub.
-type Player struct {
-	UserID      string
-	Username    string
-	Conn        WSConn // interface below
-	Send        chan []byte
-	Reconnecting bool
-}
-
-// WSConn is the minimal interface the hub needs from gorilla/websocket.
-// Using an interface allows stubbing in tests.
-type WSConn interface {
-	ReadMessage() (messageType int, p []byte, err error)
-	WriteMessage(messageType int, data []byte) error
-	Close() error
-	SetReadLimit(limit int64)
-	SetReadDeadline(t interface{ ...interface{} }) error // simplified; see hub.go for actual
-}
 ```
+
+> **Deviation (implemented):** `Player` and `WSConn` were removed. The hub uses `*websocket.Conn` directly via `connectedPlayer` in `hub.go`, so `WSConn` was unused. The `WSConn` interface definition also contained invalid Go syntax (`SetReadDeadline(t interface{ ...interface{} }) error`) that would not compile.
 
 - [ ] **Step 2: Write `hub.go`**
 
@@ -291,9 +274,9 @@ type Hub struct {
 
 	registry *Registry
 	db       *db.Queries
-	pool     interface{ Begin(context.Context) (interface{ Commit(context.Context) error; Rollback(context.Context); db interface{} }, error) } // pgxpool
-	cfg      *config.Config
-	log      *slog.Logger
+	// Note: pool field removed — hub only needs *db.Queries for the queries it calls.
+	cfg *config.Config
+	log *slog.Logger
 
 	state   HubState
 	players map[string]*connectedPlayer // userID → player
@@ -483,7 +466,7 @@ func (h *Hub) startGame(ctx context.Context) {
 		return
 	}
 	h.state = HubPlaying
-	if err := h.db.SetRoomState(ctx, db.SetRoomStateParams{
+	if _, err := h.db.SetRoomState(ctx, db.SetRoomStateParams{
 		ID: h.roomID, State: "playing",
 	}); err != nil {
 		h.log.Error("hub: set room state playing", "error", err)
@@ -500,7 +483,7 @@ func (h *Hub) runRounds(ctx context.Context) {
 }
 
 func (h *Hub) finishRoom(ctx context.Context, reason string) {
-	if err := h.db.SetRoomState(ctx, db.SetRoomStateParams{
+	if _, err := h.db.SetRoomState(ctx, db.SetRoomStateParams{
 		ID: h.roomID, State: "finished",
 	}); err != nil {
 		h.log.Error("hub: set room state finished", "error", err)
@@ -613,10 +596,9 @@ func writeWS(conn *websocket.Conn, msg []byte) {
 	conn.WriteMessage(websocket.TextMessage, msg)
 }
 
-// SetRoomStateParams adapts to sqlc's generated type name (defined in Phase 2).
-// If sqlc generates a different name, adjust accordingly.
-type setRoomStateAdapter = db.SetRoomStateParams
 ```
+
+> **Deviation (implemented):** `setRoomStateAdapter` type alias removed — `db.SetRoomStateParams` is used directly. The alias was unnecessary once the actual sqlc output was confirmed.
 
 - [ ] **Step 3: Build check**
 
