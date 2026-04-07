@@ -73,6 +73,11 @@ func (m *Manager) Get(roomCode string) (*Hub, bool) {
 	return h, ok
 }
 
+// Registry returns the game type registry.
+func (m *Manager) Registry() *Registry {
+	return m.registry
+}
+
 // ActiveCount returns the number of rooms with an active hub.
 func (m *Manager) ActiveCount() int {
 	m.mu.RLock()
