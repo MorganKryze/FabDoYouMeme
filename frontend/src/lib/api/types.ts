@@ -38,6 +38,7 @@ export interface Pack {
   is_official: boolean;
   visibility: 'private' | 'public';
   status: 'active' | 'flagged' | 'banned';
+  item_count?: number;
   created_at: string;
 }
 

@@ -12,22 +12,24 @@
 
 ## Files
 
-| File                                                     | Role                                               |
-| -------------------------------------------------------- | -------------------------------------------------- |
-| `frontend/src/routes/(admin)/+layout.server.ts`          | Admin role guard → 403 if not admin                |
-| `frontend/src/routes/(admin)/+layout.svelte`             | Admin sidebar layout with notification badge       |
-| `frontend/src/routes/(admin)/+page.server.ts`            | Load dashboard stats + recent audit log            |
-| `frontend/src/routes/(admin)/+page.svelte`               | Dashboard: stats cards + recent activity           |
-| `frontend/src/routes/(admin)/users/+page.server.ts`      | Load paginated users; patch/delete actions         |
-| `frontend/src/routes/(admin)/users/+page.svelte`         | User management table                              |
-| `frontend/src/routes/(admin)/invites/+page.server.ts`    | Load invites; create/revoke actions                |
-| `frontend/src/routes/(admin)/invites/+page.svelte`       | Invite table with create slide-over                |
-| `frontend/src/routes/(admin)/packs/+page.server.ts`      | Load all packs; create/delete actions              |
-| `frontend/src/routes/(admin)/packs/+page.svelte`         | Pack list table                                    |
-| `frontend/src/routes/(admin)/packs/[id]/+page.server.ts` | Load pack + items; add/reorder/delete item actions |
-| `frontend/src/routes/(admin)/packs/[id]/+page.svelte`    | Pack item manager                                  |
-| `frontend/src/routes/(admin)/game-types/+page.server.ts` | Load game type registry                            |
-| `frontend/src/routes/(admin)/game-types/+page.svelte`    | Game type read-only list                           |
+| File                                                           | Role                                               |
+| -------------------------------------------------------------- | -------------------------------------------------- |
+| `frontend/src/routes/(admin)/+layout.server.ts`                | Admin role guard → 403 if not admin                |
+| `frontend/src/routes/(admin)/+layout.svelte`                   | Admin sidebar layout with notification badge       |
+| `frontend/src/routes/(admin)/admin/+page.server.ts`            | Load dashboard stats + recent audit log            |
+| `frontend/src/routes/(admin)/admin/+page.svelte`               | Dashboard: stats cards + recent activity           |
+| `frontend/src/routes/(admin)/admin/users/+page.server.ts`      | Load paginated users; patch/delete actions         |
+| `frontend/src/routes/(admin)/admin/users/+page.svelte`         | User management table                              |
+| `frontend/src/routes/(admin)/admin/invites/+page.server.ts`    | Load invites; create/revoke actions                |
+| `frontend/src/routes/(admin)/admin/invites/+page.svelte`       | Invite table with create slide-over                |
+| `frontend/src/routes/(admin)/admin/packs/+page.server.ts`      | Load all packs; create/delete actions              |
+| `frontend/src/routes/(admin)/admin/packs/+page.svelte`         | Pack list table                                    |
+| `frontend/src/routes/(admin)/admin/packs/[id]/+page.server.ts` | Load pack + items; add/reorder/delete item actions |
+| `frontend/src/routes/(admin)/admin/packs/[id]/+page.svelte`    | Pack item manager                                  |
+| `frontend/src/routes/(admin)/admin/game-types/+page.server.ts` | Load game type registry                            |
+| `frontend/src/routes/(admin)/admin/game-types/+page.svelte`    | Game type read-only list                           |
+
+> **Deviation (implemented):** All page files were placed under `(admin)/admin/` instead of directly under `(admin)/`. SvelteKit route groups are URL-transparent, so `(admin)/+page.svelte` resolves to `/`, conflicting with `(app)/+page.svelte`. Adding the `admin/` segment gives the intended `/admin/*` URLs. Layout files stay at `(admin)/` level and correctly apply to all routes in the group.
 
 ---
 
@@ -63,7 +65,7 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 ```svelte
 <!-- frontend/src/routes/(admin)/+layout.svelte -->
 <script lang="ts">
-  import '../../../app.css';
+  import '../../app.css';
   import Toast from '$lib/components/Toast.svelte';
   import type { LayoutData } from './$types';
 
@@ -860,6 +862,8 @@ export const actions: Actions = {
   </div>
 </div>
 ```
+
+> **Deviation (implemented):** `pack.item_count` was used in the template but `item_count` was missing from the `Pack` interface in `$lib/api/types.ts`. Added `item_count?: number` as an optional field — the backend list endpoint includes this aggregate and the type should reflect it.
 
 - [ ] **Step 3: Type-check**
 
