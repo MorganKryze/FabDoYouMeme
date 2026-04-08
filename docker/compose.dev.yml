@@ -1,7 +1,7 @@
-# docker-compose.override.yml  — dev only
 services:
   mailpit:
     image: axllent/mailpit:latest
+    restart: unless-stopped
     ports:
       - '8025:8025'
     expose:
@@ -10,6 +10,7 @@ services:
       - project_network
 
   backend:
+    build: ../backend
     environment:
       SMTP_HOST: mailpit
       SMTP_PORT: '1025'
@@ -17,13 +18,12 @@ services:
       SMTP_PASSWORD: ''
       SMTP_FROM: noreply@fabyoumeme.local
       LOG_LEVEL: debug
-    volumes:
-      - ./backend:/app
 
   frontend:
-    volumes:
-      - ./frontend:/app
+    build: ../frontend
+    ports:
+      - '3000:3000'
 
-networks:
-  project_network:
-    external: true
+  postgres:
+    ports:
+      - '5432:5432'

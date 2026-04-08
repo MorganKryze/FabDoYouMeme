@@ -8,6 +8,14 @@
 
 **Tech Stack:** SvelteKit 2, Svelte 5 runes, Tailwind CSS v4, shadcn-svelte, gorilla/websocket, `$lib/state/*` from Phase 8
 
+> **Deviation (implemented):** Several adaptations were made to match the existing Phase 8 `WsState` API:
+> 1. `ws.connect(wsUrl)` → `ws.connect(roomCode)` — WsState builds the URL internally from `PUBLIC_API_URL`; room layout server load no longer returns `wsUrl`. `reconnect()` method added to WsState for the nav retry button.
+> 2. `ws.send({type, payload})` → `ws.send(type, data)` — matches existing `send(type: string, data?: unknown)` signature.
+> 3. `ws.onMessage(callback)` → `ws.onMessage('*', callback)` — matches existing `onMessage(type, handler)` signature; `'*'` is the catch-all.
+> 4. `room.status` renamed to `room.state` and `room.gameTypeSlug` replaced with `room.gameType: GameType | null` — to match plan's usage.
+> 5. `/(public)/+page.svelte` (root `/`) deleted — it conflicted with `/(app)/+page.svelte`. Unauthenticated users at `/` are now redirected by the app layout guard to `/auth/magic-link?next=/`.
+> 6. `Round`, `Submission` types added to `$lib/api/types`; `Player` updated with `connected?`/`is_host?`; `LeaderboardEntry` gains `score` field.
+
 ---
 
 ## Files

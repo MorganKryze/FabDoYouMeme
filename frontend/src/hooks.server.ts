@@ -1,8 +1,6 @@
 import type { Handle } from '@sveltejs/kit';
 import { randomBytes } from 'node:crypto';
-import { env } from '$env/dynamic/public';
-
-const API_URL = env.PUBLIC_API_URL || 'http://localhost:8080';
+import { API_BASE } from '$lib/server/backend';
 
 export const handle: Handle = async ({ event, resolve }) => {
   // Generate per-request CSP nonce
@@ -11,7 +9,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
   // Load session from backend (session cookie is HttpOnly — forwarded automatically)
   try {
-    const res = await fetch(`${API_URL}/api/auth/me`, {
+    const res = await fetch(`${API_BASE}/api/auth/me`, {
       headers: { cookie: event.request.headers.get('cookie') ?? '' }
     });
     if (res.ok) {

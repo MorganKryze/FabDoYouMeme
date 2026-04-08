@@ -18,13 +18,14 @@ services:
       - project_network
 
   backend:
-    build: ./backend
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://fabyoumeme:${POSTGRES_PASSWORD}@postgres:5432/fabyoumeme
+      FRONTEND_URL: ${FRONTEND_URL}
+      BACKEND_URL: ${BACKEND_URL}
       RUSTFS_ENDPOINT: ${RUSTFS_ENDPOINT}
       RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
       RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
@@ -59,17 +60,17 @@ services:
       - project_network
 
   frontend:
-    build: ./frontend
     restart: unless-stopped
     depends_on:
       - backend
     environment:
+      ORIGIN: ${FRONTEND_URL}
+      API_URL: http://backend:8080
       PUBLIC_API_URL: ${BACKEND_URL}
     expose:
       - 3000
     networks:
       - project_network
-      - pangolin
 
 volumes:
   postgres_data:
@@ -77,5 +78,3 @@ volumes:
 networks:
   project_network:
     driver: bridge
-  pangolin:
-    external: true

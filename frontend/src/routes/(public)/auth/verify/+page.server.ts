@@ -1,6 +1,7 @@
 // frontend/src/routes/(public)/auth/verify/+page.server.ts
 import { redirect, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { API_BASE } from '$lib/server/backend';
 
 export const load: PageServerLoad = async ({ url }) => {
   return {
@@ -10,15 +11,14 @@ export const load: PageServerLoad = async ({ url }) => {
 };
 
 export const actions: Actions = {
-  default: async ({ request, fetch }) => {
+  default: async ({ request, fetch, cookies }) => {
     const data = await request.formData();
     const token = (data.get('token') as string | null) ?? '';
     const next = (data.get('next') as string | null) ?? '/';
 
-    const res = await fetch('/api/auth/verify', {
+    const res = await fetch(`${API_BASE}/api/auth/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      // SvelteKit's event.fetch propagates Set-Cookie from same-origin responses automatically
       body: JSON.stringify({ token })
     });
 
@@ -31,6 +31,22 @@ export const actions: Actions = {
         // ignore
       }
       return fail(400, { error: code });
+    }
+
+    // The backend sets the session cookie on its own response, but SvelteKit does not
+    // automatically forward Set-Cookie headers from proxied fetches to the browser.
+    // Parse the raw header and re-issue it via cookies.set() so the browser receives it.
+    const raw = res.headers.get('set-cookie') ?? '';
+    const valueMatch = raw.match(/^session=([^;]+)/);
+    const maxAgeMatch = raw.match(/[Mm]ax-[Aa]ge=(\d+)/);
+    if (valueMatch) {
+      cookies.set('session', valueMatch[1], {
+        path: '/',
+        httpOnly: true,
+        secure: true,
+        sameSite: 'strict',
+        maxAge: maxAgeMatch ? parseInt(maxAgeMatch[1]) : 720 * 3600
+      });
     }
 
     throw redirect(303, next.startsWith('/') ? next : '/');

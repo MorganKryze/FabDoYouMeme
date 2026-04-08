@@ -1,0 +1,12 @@
+services:
+  backend:
+    image: ghcr.io/morgankryze/fabyoumeme-backend:latest
+
+  frontend:
+    image: ghcr.io/morgankryze/fabyoumeme-frontend:latest
+    networks:
+      - pangolin
+
+networks:
+  pangolin:
+    external: true

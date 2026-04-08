@@ -49,7 +49,7 @@ type Config struct {
 func Load() (*Config, error) {
 	required := []string{
 		"DATABASE_URL", "RUSTFS_ENDPOINT", "RUSTFS_ACCESS_KEY", "RUSTFS_SECRET_KEY",
-		"FRONTEND_URL", "BACKEND_URL", "SMTP_HOST", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM",
+		"FRONTEND_URL", "BACKEND_URL", "SMTP_HOST", "SMTP_FROM",
 	}
 	for _, k := range required {
 		if os.Getenv(k) == "" {

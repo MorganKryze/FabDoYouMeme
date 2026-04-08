@@ -1,0 +1,12 @@
+services:
+  backend:
+    build: ../backend
+
+  frontend:
+    build: ../frontend
+    networks:
+      - pangolin
+
+networks:
+  pangolin:
+    external: true

@@ -1,6 +1,7 @@
 // frontend/src/routes/(public)/auth/register/+page.server.ts
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import { API_BASE } from '$lib/server/backend';
 
 const ERROR_MESSAGES: Record<string, string> = {
   invalid_invite: 'That invite token is invalid, expired, or already used.',
@@ -24,7 +25,7 @@ export const actions: Actions = {
     const consent = data.get('consent') === 'true';
     const age_affirmation = data.get('age_affirmation') === 'true';
 
-    const res = await fetch('/api/auth/register', {
+    const res = await fetch(`${API_BASE}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

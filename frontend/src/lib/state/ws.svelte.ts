@@ -85,6 +85,14 @@ class WsState {
     };
   }
 
+  /** Reconnect using the previously set room code (e.g. after a manual retry). */
+  reconnect() {
+    if (this.#roomCode) {
+      this.retryCount = 0;
+      this.#connect();
+    }
+  }
+
   disconnect() {
     this.#roomCode = null;
     if (this.#retryTimer) clearTimeout(this.#retryTimer);

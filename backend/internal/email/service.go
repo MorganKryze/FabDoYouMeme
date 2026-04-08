@@ -64,13 +64,19 @@ func (s *Service) send(ctx context.Context, to, subject, htmlBody, txtBody strin
 		tlsPolicy = gomail.NoTLS
 	}
 
-	client, err := gomail.NewClient(s.cfg.SMTPHost,
+	opts := []gomail.Option{
 		gomail.WithPort(s.cfg.SMTPPort),
 		gomail.WithTLSPolicy(tlsPolicy),
-		gomail.WithUsername(s.cfg.SMTPUsername),
-		gomail.WithPassword(s.cfg.SMTPPassword),
-		gomail.WithSMTPAuth(gomail.SMTPAuthPlain),
-	)
+	}
+	if s.cfg.SMTPUsername != "" {
+		opts = append(opts,
+			gomail.WithUsername(s.cfg.SMTPUsername),
+			gomail.WithPassword(s.cfg.SMTPPassword),
+			gomail.WithSMTPAuth(gomail.SMTPAuthPlain),
+		)
+	}
+
+	client, err := gomail.NewClient(s.cfg.SMTPHost, opts...)
 	if err != nil {
 		return fmt.Errorf("email: new client: %w", err)
 	}

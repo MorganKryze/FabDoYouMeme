@@ -3,17 +3,24 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	migrations "github.com/MorganKryze/FabDoYouMeme/backend/db/migrations"
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/api"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/auth"
@@ -42,6 +49,13 @@ func main() {
 		os.Exit(1)
 	}
 	defer pool.Close()
+
+	// ── Migrations ───────────────────────────────────────────────────────────
+	if err := runMigrations(cfg.DatabaseURL, logger); err != nil {
+		logger.Error("migrations failed", "error", err)
+		os.Exit(1)
+	}
+
 	queries := db.New(pool)
 
 	// ── Startup cleanup (idempotent) ─────────────────────────────────────────
@@ -195,4 +209,28 @@ func main() {
 		logger.Error("shutdown error", "error", err)
 	}
 	logger.Info("server stopped")
+}
+
+func runMigrations(databaseURL string, logger *slog.Logger) error {
+	src, err := iofs.New(migrations.FS, ".")
+	if err != nil {
+		return fmt.Errorf("create migration source: %w", err)
+	}
+
+	// golang-migrate's pgx/v5 driver uses "pgx5://" scheme
+	migrateURL := strings.Replace(databaseURL, "postgres://", "pgx5://", 1)
+
+	m, err := migrate.NewWithSourceInstance("iofs", src, migrateURL)
+	if err != nil {
+		return fmt.Errorf("init migrator: %w", err)
+	}
+	defer m.Close()
+
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return fmt.Errorf("apply migrations: %w", err)
+	}
+
+	v, _, _ := m.Version()
+	logger.Info("migrations up to date", "version", v)
+	return nil
 }

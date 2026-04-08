@@ -1,28 +1,28 @@
-import type { Player, LeaderboardEntry, WsMessage } from '$lib/api/types';
+import type { GameType, Player, LeaderboardEntry, Submission, Round, WsMessage } from '$lib/api/types';
 
 type RoomPhase = 'idle' | 'countdown' | 'submitting' | 'voting' | 'results';
 type RoomStatus = 'lobby' | 'playing' | 'finished';
 
-interface Round {
-  round_number: number;
-  item: { payload: unknown; media_url?: string };
-  duration_seconds: number;
-  ends_at: string; // ISO8601
-}
-
 class RoomState {
   code = $state<string | null>(null);
-  gameTypeSlug = $state<string | null>(null);
-  status = $state<RoomStatus>('lobby');
+  gameType = $state<GameType | null>(null);
+  state = $state<RoomStatus>('lobby');
   players = $state<Player[]>([]);
   currentRound = $state<Round | null>(null);
   phase = $state<RoomPhase>('idle');
-  submissions = $state<unknown[]>([]);
+  submissions = $state<Submission[]>([]);
   leaderboard = $state<LeaderboardEntry[]>([]);
   endReason = $state<string | null>(null);
 
   hasSubmitted = $state(false);
   hasVoted = $state(false);
+
+  init(data: { code: string; game_type: GameType; state: string; players: Player[] }): void {
+    this.code = data.code;
+    this.gameType = data.game_type;
+    this.state = data.state as RoomStatus;
+    this.players = data.players;
+  }
 
   handleMessage(msg: WsMessage) {
     switch (msg.type) {
@@ -40,7 +40,7 @@ class RoomState {
         break;
       }
       case 'game_started':
-        this.status = 'playing';
+        this.state = 'playing';
         this.phase = 'countdown';
         break;
       case 'round_started':
@@ -53,15 +53,19 @@ class RoomState {
       case 'submissions_closed':
         this.phase = 'voting';
         break;
-      case 'vote_results':
+      case 'vote_results': {
+        const d = msg.data as { submissions: Submission[]; leaderboard: LeaderboardEntry[] };
+        this.submissions = d.submissions ?? [];
+        this.leaderboard = d.leaderboard ?? [];
         this.phase = 'results';
         break;
+      }
       case 'game_ended': {
         const d = msg.data as {
           reason: string;
           leaderboard: LeaderboardEntry[];
         };
-        this.status = 'finished';
+        this.state = 'finished';
         this.phase = 'idle';
         this.endReason = d.reason;
         this.leaderboard = d.leaderboard ?? [];
@@ -69,7 +73,7 @@ class RoomState {
       }
       case 'room_state': {
         const d = msg.data as { state: RoomStatus; players: Player[] };
-        this.status = d.state;
+        this.state = d.state;
         this.players = d.players;
         break;
       }
@@ -78,8 +82,8 @@ class RoomState {
 
   reset() {
     this.code = null;
-    this.gameTypeSlug = null;
-    this.status = 'lobby';
+    this.gameType = null;
+    this.state = 'lobby';
     this.players = [];
     this.currentRound = null;
     this.phase = 'idle';

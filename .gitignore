@@ -25,3 +25,6 @@ Thumbs.db
 
 # Docker
 postgres_data/
+.env.dev
+.env.preprod
+.env.prod

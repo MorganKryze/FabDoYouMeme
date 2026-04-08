@@ -108,11 +108,31 @@ export interface WsMessage {
 export interface Player {
   user_id: string;
   username: string;
+  connected?: boolean;
+  is_host?: boolean;
 }
 
 export interface LeaderboardEntry {
   user_id: string;
   username: string;
   total_score: number;
+  score: number;
   rank: number;
+}
+
+export interface Round {
+  round_number: number;
+  ends_at: string;
+  duration_seconds: number;
+  text_prompt?: string;
+  media_url?: string;
+}
+
+export interface Submission {
+  id: string;
+  user_id: string;
+  username: string;
+  caption: string;
+  vote_count?: number;
+  score?: number;
 }
