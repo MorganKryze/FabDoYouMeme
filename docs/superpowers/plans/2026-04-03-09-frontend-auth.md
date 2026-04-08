@@ -37,9 +37,14 @@
 ```svelte
 <!-- frontend/src/routes/(public)/+layout.svelte -->
 <script lang="ts">
-  import '../../../app.css';
+  import '../../app.css';
   let { children } = $props();
 </script>
+```
+
+> **Deviation (implemented):** Plan had `'../../../app.css'` but the correct relative path from `frontend/src/routes/(public)/+layout.svelte` to `frontend/src/app.css` is `'../../app.css'` (two levels up, not three).
+
+```svelte
 
 <div class="min-h-screen flex flex-col items-center justify-center bg-background text-foreground px-4">
   <main class="w-full max-w-sm flex flex-col gap-6">
@@ -319,11 +324,13 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_invite: 'That invite token is invalid, expired, or already used.',
   consent_required: 'You must agree to the Privacy Policy to register.',
   age_affirmation_required: 'You must confirm you are at least 16 years old.',
-  invalid_username:
-    'Username must be 3–30 characters using letters, numbers, and underscores only.',
-  invalid_email: 'Please enter a valid email address.'
+  username_taken: 'That username is already taken. Please choose another.'
 };
+```
 
+> **Deviation (implemented):** Plan originally included `invalid_username` and `invalid_email` which the backend never emits (client-side HTML validation handles those). Replaced with `username_taken` (409 returned by `POST /api/auth/register` when the chosen username is already taken).
+
+```ts
 export const load: PageServerLoad = async ({ url }) => {
   return {
     inviteToken: url.searchParams.get('invite') ?? ''
@@ -597,7 +604,8 @@ export const actions: Actions = {
   let isExpired = $derived(
     form?.error === 'invalid_token' ||
     form?.error === 'token_expired' ||
-    form?.error === 'token_used'
+    form?.error === 'token_used' ||
+    form?.error === 'account_inactive'
   );
 </script>
 
@@ -646,6 +654,8 @@ export const actions: Actions = {
   {/if}
 </div>
 ```
+
+> **Deviation (implemented):** Added `form?.error === 'account_inactive'` to the `isExpired` check. The backend returns `account_inactive` (not `user_inactive` as in the design doc) when a deactivated user's token is verified. Without this, the page shows the "Log In" button with no error message, trapping the user in a silent loop. Also, `token_expired` and `token_used` checks are dead code — the backend returns `invalid_token` as a single code for all token failures — but they are harmless.
 
 - [ ] **Step 3: Type-check**
 
@@ -772,9 +782,9 @@ git commit -m "feat(frontend): add magic-link verify page with expired state han
 The public layout constrains width to `max-w-sm` (mobile-first). The privacy page needs wider prose. Since the layout already includes `w-full`, the page's own `max-w-prose mx-auto` override is sufficient — the layout `max-w-sm` wraps the `<main>`, so the privacy page should use its own layout. Create a `+layout@.svelte` to escape the public layout:
 
 ```svelte
-<!-- frontend/src/routes/(public)/privacy/+layout.svelte -->
+<!-- frontend/src/routes/(public)/privacy/+layout@.svelte -->
 <script lang="ts">
-  import '../../../../app.css';
+  import '../../../app.css';
   let { children } = $props();
 </script>
 
@@ -782,6 +792,8 @@ The public layout constrains width to `max-w-sm` (mobile-first). The privacy pag
   {@render children()}
 </div>
 ```
+
+> **Deviation (implemented):** Plan had the wrong filename (`+layout.svelte`) and wrong CSS path (`../../../../app.css`). Correct filename is `+layout@.svelte` (SvelteKit syntax to reset layout inheritance) and correct path from `frontend/src/routes/(public)/privacy/` is `'../../../app.css'`.
 
 - [ ] **Step 3: Type-check**
 
