@@ -14,7 +14,7 @@ require (
 	github.com/jackc/pgx/v5 v5.6.0
 	github.com/testcontainers/testcontainers-go v0.41.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.41.0
-	github.com/wneessen/go-mail v0.4.2
+	github.com/wneessen/go-mail v0.7.1
 	golang.org/x/image v0.38.0
 	golang.org/x/time v0.5.0
 )
