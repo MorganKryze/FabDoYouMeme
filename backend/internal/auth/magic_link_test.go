@@ -1,4 +1,3 @@
-//go:build integration
 
 package auth_test
 
@@ -48,5 +47,17 @@ func TestMagicLink_ExistingUser(t *testing.T) {
 	h.MagicLink(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Errorf("want 200, got %d", rec.Code)
+	}
+}
+
+func TestMagicLink_MalformedJSON_Returns200(t *testing.T) {
+	// MagicLink intentionally returns 200 for all inputs — including bad JSON —
+	// to prevent email enumeration. Any parsing error is treated silently.
+	h, _ := newTestHandler(t)
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/magic-link", bytes.NewBufferString("{bad json"))
+	rec := httptest.NewRecorder()
+	h.MagicLink(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200 (anti-enumeration) for malformed JSON, got %d", rec.Code)
 	}
 }

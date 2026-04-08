@@ -1,5 +1,4 @@
 // backend/internal/auth/session_test.go
-//go:build integration
 
 package auth_test
 

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -22,6 +21,12 @@ const (
 	HubLobby   HubState = "lobby"
 	HubPlaying HubState = "playing"
 )
+
+// graceExpiredMsg is sent to the Run goroutine when a reconnect grace window expires.
+type graceExpiredMsg struct {
+	userID   string
+	username string
+}
 
 // Hub manages one room's WebSocket connections and game lifecycle.
 // All state mutations happen in the main Run() goroutine — no locking needed
@@ -40,11 +45,10 @@ type Hub struct {
 	state   HubState
 	players map[string]*connectedPlayer // userID → player
 
-	register   chan *connectedPlayer
-	unregister chan *connectedPlayer
-	incoming   chan playerMessage
-
-	mu sync.Mutex // only for accessing hub from outside Run()
+	register     chan *connectedPlayer
+	unregister   chan *connectedPlayer
+	incoming     chan playerMessage
+	graceExpired chan graceExpiredMsg
 }
 
 // connectedPlayer is hub-internal player state.
@@ -54,7 +58,6 @@ type connectedPlayer struct {
 	conn         *websocket.Conn
 	send         chan []byte
 	reconnecting bool
-	graceTimer   *time.Timer
 }
 
 // playerMessage is a message arriving from a player connection.
@@ -92,6 +95,7 @@ func NewHub(hc HubConfig) *Hub {
 		register:     make(chan *connectedPlayer, 8),
 		unregister:   make(chan *connectedPlayer, 8),
 		incoming:     make(chan playerMessage, 64),
+		graceExpired: make(chan graceExpiredMsg, 16),
 	}
 }
 
@@ -126,10 +130,13 @@ func (h *Hub) Run(ctx context.Context) {
 			h.handleRegister(p)
 
 		case p := <-h.unregister:
-			h.handleUnregister(ctx, p)
+			h.handleUnregister(p)
 
 		case msg := <-h.incoming:
 			h.handleMessage(ctx, msg)
+
+		case msg := <-h.graceExpired:
+			h.handleGraceExpired(ctx, msg)
 		}
 	}
 }
@@ -137,19 +144,19 @@ func (h *Hub) Run(ctx context.Context) {
 func (h *Hub) handleRegister(p *connectedPlayer) {
 	existing, reconnecting := h.players[p.userID]
 	if reconnecting && existing.reconnecting {
-		// Player reconnecting within grace window
-		if existing.graceTimer != nil {
-			existing.graceTimer.Stop()
-		}
-		existing.conn = p.conn
-		existing.send = p.send
-		existing.reconnecting = false
-		h.sendTo(existing, buildMessage("room_state", h.buildRoomState()))
+		// Player reconnecting within grace window.
+		// Close the old send channel to stop the old writePump cleanly,
+		// then install the new connection struct — avoiding field mutation
+		// that would race with the old writePump goroutine.
+		close(existing.send)
+		h.players[p.userID] = p
+		p.reconnecting = false
+		h.sendTo(p, buildMessage("room_state", h.buildRoomState()))
 		h.broadcast(buildMessage("player_joined", map[string]string{
 			"user_id": p.userID, "username": p.username,
 		}))
-		go h.readPump(existing)
-		go h.writePump(existing)
+		go h.readPump(p)
+		go h.writePump(p)
 		return
 	}
 
@@ -169,7 +176,7 @@ func (h *Hub) handleRegister(p *connectedPlayer) {
 	go h.writePump(p)
 }
 
-func (h *Hub) handleUnregister(ctx context.Context, p *connectedPlayer) {
+func (h *Hub) handleUnregister(p *connectedPlayer) {
 	if _, ok := h.players[p.userID]; !ok {
 		return
 	}
@@ -177,20 +184,31 @@ func (h *Hub) handleUnregister(ctx context.Context, p *connectedPlayer) {
 	h.broadcast(buildMessage("reconnecting", map[string]string{
 		"user_id": p.userID, "username": p.username,
 	}))
-	// Start grace window timer
-	p.graceTimer = time.AfterFunc(h.cfg.ReconnectGraceWindow, func() {
-		h.mu.Lock()
-		defer h.mu.Unlock()
-		if cp, ok := h.players[p.userID]; ok && cp.reconnecting {
-			delete(h.players, p.userID)
-			h.broadcastLocked(buildMessage("player_left", map[string]string{
-				"user_id": p.userID, "username": p.username,
-			}))
-			if p.userID == h.hostUserID && h.state == HubPlaying {
-				h.finishRoom(ctx, "host_disconnected")
-			}
+	// Start grace window goroutine; it sends to h.graceExpired so that
+	// all state changes happen inside Run() — no cross-goroutine state access.
+	userID, username := p.userID, p.username
+	grace := h.cfg.ReconnectGraceWindow
+	go func() {
+		time.Sleep(grace)
+		select {
+		case h.graceExpired <- graceExpiredMsg{userID: userID, username: username}:
+		default:
 		}
-	})
+	}()
+}
+
+func (h *Hub) handleGraceExpired(ctx context.Context, msg graceExpiredMsg) {
+	cp, ok := h.players[msg.userID]
+	if !ok || !cp.reconnecting {
+		return // player reconnected in time — ignore
+	}
+	delete(h.players, msg.userID)
+	h.broadcast(buildMessage("player_left", map[string]string{
+		"user_id": msg.userID, "username": msg.username,
+	}))
+	if msg.userID == h.hostUserID && h.state == HubPlaying {
+		h.finishRoom(ctx, "host_disconnected")
+	}
 }
 
 func (h *Hub) handleMessage(ctx context.Context, msg playerMessage) {
@@ -292,7 +310,7 @@ func (h *Hub) writePump(p *connectedPlayer) {
 		select {
 		case msg, ok := <-p.send:
 			if !ok {
-				p.conn.WriteMessage(websocket.CloseMessage, nil)
+				p.conn.WriteMessage(websocket.CloseMessage, nil) //nolint:errcheck
 				return
 			}
 			if err := p.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
@@ -316,10 +334,6 @@ func (h *Hub) broadcast(msg []byte) {
 			}
 		}
 	}
-}
-
-func (h *Hub) broadcastLocked(msg []byte) {
-	h.broadcast(msg) // mu is held by caller
 }
 
 func (h *Hub) sendTo(p *connectedPlayer, msg []byte) {

@@ -1,5 +1,4 @@
 // backend/internal/auth/bootstrap_test.go
-//go:build integration
 
 package auth_test
 
@@ -9,6 +8,9 @@ import (
 )
 
 func TestSeedAdmin_CreatesAdminUser(t *testing.T) {
+	// SeedAdmin creates the admin on first call and is a no-op on subsequent calls.
+	// Both behaviours are tested here because SeedAdmin hardcodes username="admin",
+	// so two separate tests would conflict on the unique constraint.
 	h, q := newTestHandler(t)
 	h.SetSeedAdminEmail("bootstrap_admin@test.com")
 
@@ -23,18 +25,10 @@ func TestSeedAdmin_CreatesAdminUser(t *testing.T) {
 	if user.Role != "admin" {
 		t.Errorf("expected role=admin, got %s", user.Role)
 	}
-}
 
-func TestSeedAdmin_Idempotent(t *testing.T) {
-	h, _ := newTestHandler(t)
-	h.SetSeedAdminEmail("idempotent_admin@test.com")
-
-	// Run twice — must not error or create duplicates
+	// Idempotency: second call must find the existing user and return nil.
 	if err := h.SeedAdmin(context.Background()); err != nil {
-		t.Fatalf("first SeedAdmin: %v", err)
-	}
-	if err := h.SeedAdmin(context.Background()); err != nil {
-		t.Fatalf("second SeedAdmin: %v", err)
+		t.Fatalf("second SeedAdmin (idempotency check): %v", err)
 	}
 }
 

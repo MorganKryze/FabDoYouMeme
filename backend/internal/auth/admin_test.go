@@ -1,5 +1,4 @@
 // backend/internal/auth/admin_test.go
-//go:build integration
 
 package auth_test
 

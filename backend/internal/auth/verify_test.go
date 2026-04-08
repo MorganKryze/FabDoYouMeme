@@ -1,5 +1,4 @@
 // backend/internal/auth/verify_test.go
-//go:build integration
 
 package auth_test
 
@@ -16,6 +15,7 @@ import (
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/auth"
+	"github.com/MorganKryze/FabDoYouMeme/backend/internal/testutil"
 )
 
 func seedMagicToken(t *testing.T, q *db.Queries, userID uuid.UUID, purpose string) string {
@@ -126,5 +126,30 @@ func TestVerify_EmptyToken_BadRequest(t *testing.T) {
 	h.Verify(rec, req)
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("want 400 for empty token, got %d", rec.Code)
+	}
+}
+
+func TestVerify_ExpiredToken(t *testing.T) {
+	h, q := newTestHandler(t)
+	user := seedUser(t, q, "expuser_"+testutil.SeedName(t), "expuser_"+testutil.SeedName(t)+"@test.com")
+
+	// Seed a token that's already expired.
+	raw, _ := auth.GenerateRawToken()
+	hash := auth.HashToken(raw)
+	if _, err := q.CreateMagicLinkToken(context.Background(), db.CreateMagicLinkTokenParams{
+		UserID:    user.ID,
+		TokenHash: hash,
+		Purpose:   "login",
+		ExpiresAt: time.Now().UTC().Add(-time.Minute), // past expiry
+	}); err != nil {
+		t.Fatalf("seed expired token: %v", err)
+	}
+
+	body := `{"token":"` + raw + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/verify", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+	h.Verify(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("want 401 for expired token, got %d", rec.Code)
 	}
 }

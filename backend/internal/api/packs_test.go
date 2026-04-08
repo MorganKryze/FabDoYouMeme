@@ -1,4 +1,3 @@
-//go:build integration
 
 package api_test
 
@@ -12,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
@@ -23,10 +23,10 @@ import (
 
 func newPackHandler(t *testing.T) (*api.PackHandler, *db.Queries) {
 	t.Helper()
-	pool, q := testutil.NewDB(t)
+	pool := testutil.Pool()
 	cfg := &config.Config{MaxUploadSizeBytes: 2097152}
 	h := api.NewPackHandler(pool, cfg, nil) // nil storage — not needed for pack CRUD
-	return h, q
+	return h, db.New(pool)
 }
 
 func seedAdmin(t *testing.T, q *db.Queries) db.User {
@@ -76,6 +76,14 @@ func TestCreatePack_Success(t *testing.T) {
 	}
 }
 
+func newChiCtx(key, val string) func(*http.Request) *http.Request {
+	return func(r *http.Request) *http.Request {
+		rctx := chi.NewRouteContext()
+		rctx.URLParams.Add(key, val)
+		return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	}
+}
+
 func TestListPacks_ReturnsOwnPacks(t *testing.T) {
 	h, q := newPackHandler(t)
 	admin := seedAdmin(t, q)
@@ -100,5 +108,111 @@ func TestListPacks_ReturnsOwnPacks(t *testing.T) {
 	data, _ := resp["data"].([]any)
 	if len(data) == 0 {
 		t.Error("expected at least one pack in response")
+	}
+}
+
+func TestDeletePack_Success(t *testing.T) {
+	h, q := newPackHandler(t)
+	admin := seedAdmin(t, q)
+
+	pack, err := q.CreatePack(context.Background(), db.CreatePackParams{
+		Name:       testutil.SeedName(t),
+		OwnerID:    pgtype.UUID{Bytes: admin.ID, Valid: true},
+		Visibility: "private",
+	})
+	if err != nil {
+		t.Fatalf("create pack: %v", err)
+	}
+
+	applyCtx := newChiCtx("id", pack.ID.String())
+	req := applyCtx(httptest.NewRequest(http.MethodDelete, "/api/packs/"+pack.ID.String(), nil))
+	req = withUser(req, admin.ID.String(), admin.Username, admin.Email, admin.Role)
+	rec := httptest.NewRecorder()
+	h.Delete(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Errorf("want 204, got %d — body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDeletePack_NotOwner(t *testing.T) {
+	h, q := newPackHandler(t)
+	admin := seedAdmin(t, q)
+	slug2 := testutil.SeedName(t) + "2"
+	player, err := q.CreateUser(context.Background(), db.CreateUserParams{
+		Username:  slug2,
+		Email:     slug2 + "@test.com",
+		Role:      "player",
+		IsActive:  true,
+		ConsentAt: time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	// Pack owned by admin.
+	pack, _ := q.CreatePack(context.Background(), db.CreatePackParams{
+		Name:       testutil.SeedName(t) + "_adm",
+		OwnerID:    pgtype.UUID{Bytes: admin.ID, Valid: true},
+		Visibility: "private",
+	})
+
+	applyCtx := newChiCtx("id", pack.ID.String())
+	req := applyCtx(httptest.NewRequest(http.MethodDelete, "/api/packs/"+pack.ID.String(), nil))
+	req = withUser(req, player.ID.String(), player.Username, player.Email, player.Role)
+	rec := httptest.NewRecorder()
+	h.Delete(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("want 403, got %d", rec.Code)
+	}
+}
+
+func TestSetStatus_InvalidStatus(t *testing.T) {
+	h, q := newPackHandler(t)
+	admin := seedAdmin(t, q)
+
+	pack, _ := q.CreatePack(context.Background(), db.CreatePackParams{
+		Name:       testutil.SeedName(t) + "_st",
+		OwnerID:    pgtype.UUID{Bytes: admin.ID, Valid: true},
+		Visibility: "private",
+	})
+
+	body := `{"status":"invalid_value"}`
+	applyCtx := newChiCtx("id", pack.ID.String())
+	req := applyCtx(httptest.NewRequest(http.MethodPatch, "/api/packs/"+pack.ID.String()+"/status", bytes.NewBufferString(body)))
+	req = withUser(req, admin.ID.String(), admin.Username, admin.Email, admin.Role)
+	rec := httptest.NewRecorder()
+	h.SetStatus(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("want 400 for invalid status, got %d", rec.Code)
+	}
+}
+
+func TestSetStatus_Flagged(t *testing.T) {
+	h, q := newPackHandler(t)
+	admin := seedAdmin(t, q)
+
+	pack, _ := q.CreatePack(context.Background(), db.CreatePackParams{
+		Name:       testutil.SeedName(t) + "_fl",
+		OwnerID:    pgtype.UUID{Bytes: admin.ID, Valid: true},
+		Visibility: "private",
+	})
+
+	body := `{"status":"flagged"}`
+	applyCtx := newChiCtx("id", pack.ID.String())
+	req := applyCtx(httptest.NewRequest(http.MethodPatch, "/api/packs/"+pack.ID.String()+"/status", bytes.NewBufferString(body)))
+	req = withUser(req, admin.ID.String(), admin.Username, admin.Email, admin.Role)
+	rec := httptest.NewRecorder()
+	h.SetStatus(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200, got %d — body: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["status"] != "flagged" {
+		t.Errorf("want status=flagged, got %v", resp["status"])
 	}
 }
