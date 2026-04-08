@@ -8,6 +8,15 @@
 
 **Tech Stack:** SvelteKit 2, Svelte 5 runes, Tailwind CSS v4, Canvas API, typed `$lib/api/studio.ts`, `StudioState` from `$lib/state/studio.svelte.ts`
 
+> **Deviation (implemented):** Several adaptations were made during implementation:
+> 1. `apiFetch<T>(path, init)` → `api.get/post/patch/delete` — the actual client exports an `api` object (from Phase 8); there is no standalone `apiFetch`.
+> 2. `studio.selectedPackId = packId` etc. → `studio.selectPack(packId)` / `studio.selectItem(itemId)` / `studio.toggleVersionSelection(id)` — `StudioState` already exposes these helper methods which handle clearing dependent state atomically.
+> 3. `PackNavigator` pack button: `{pack.item_count ?? 0} items` line removed — `Pack` type does not have `item_count`.
+> 4. `VersionHistory` Compare button: added `onclick={() => toast.show('Side-by-side comparison coming soon.', 'warning')}` — the plan had no handler (dead button).
+> 5. `ItemEditor` editor dispatch: wrapped in `{#key studio.selectedItemId}` to force remount on item change, ensuring `TextEditor` and `ImageEditor` always receive fresh props rather than stale initial values.
+> 6. `ImageEditor` `$effect`: changed from `if (src) loadImage(src)` to `if (src && ctx) loadImage(src)`, and removed the redundant `loadImage` call from `onMount` — prevents double-load and null-`ctx` race.
+> 7. `handleDelete` in `ItemTable`: now clears `studio.versions` and `studio.selectedVersionIds` when deleting the currently selected item, keeping state consistent.
+
 ---
 
 ## Files

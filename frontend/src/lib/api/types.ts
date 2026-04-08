@@ -72,6 +72,31 @@ export interface Invite {
   created_at: string;
 }
 
+export interface GameItem {
+  id: string;
+  name: string;
+  type: 'image' | 'text';
+  position: number;
+  payload_version: number;
+  current_version_id: string | null;
+  media_key?: string | null;
+  payload?: unknown;
+  thumbnail_url?: string | null;
+  version_number?: number | null;
+}
+
+export interface ItemVersion {
+  id: string;
+  item_id: string;
+  version_number: number;
+  media_key: string | null;
+  media_url?: string | null;
+  content?: string | null;
+  payload: unknown;
+  created_at: string;
+  deleted_at: string | null;
+}
+
 export interface ApiError {
   error: string;
   code: string;

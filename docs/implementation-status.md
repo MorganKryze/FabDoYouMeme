@@ -20,7 +20,7 @@ Master tracker. Check boxes as phases complete. Each phase links to a detailed s
 | 8   | Frontend — project setup + state layer + API client         | [08-frontend-setup.md](superpowers/plans/2026-04-03-08-frontend-setup.md)               | `[x]`  |
 | 9   | Frontend — auth routes (register, magic-link, verify)       | [09-frontend-auth.md](superpowers/plans/2026-04-03-09-frontend-auth.md)                 | `[x]`  |
 | 10  | Frontend — app routes (lobby, rooms, profile) + game plugin | [10-frontend-app.md](superpowers/plans/2026-04-03-10-frontend-app.md)                   | `[x]`  |
-| 11  | Frontend — studio                                           | [11-frontend-studio.md](superpowers/plans/2026-04-03-11-frontend-studio.md)             | `[ ]`  |
+| 11  | Frontend — studio                                           | [11-frontend-studio.md](superpowers/plans/2026-04-03-11-frontend-studio.md)             | `[x]`  |
 | 12  | Frontend — admin routes                                     | [12-frontend-admin.md](superpowers/plans/2026-04-03-12-frontend-admin.md)               | `[ ]`  |
 | 13  | CI pipelines + production checklist                         | [13-ci-production.md](superpowers/plans/2026-04-03-13-ci-production.md)                 | `[ ]`  |
 

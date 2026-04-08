@@ -1,23 +1,4 @@
-import type { Pack } from '$lib/api/types';
-
-interface Item {
-  id: string;
-  position: number;
-  payload_version: number;
-  current_version_id: string | null;
-  media_key?: string | null;
-  payload?: unknown;
-}
-
-interface ItemVersion {
-  id: string;
-  item_id: string;
-  version_number: number;
-  media_key: string | null;
-  payload: unknown;
-  created_at: string;
-  deleted_at: string | null;
-}
+import type { Pack, GameItem, ItemVersion } from '$lib/api/types';
 
 class StudioState {
   selectedPackId = $state<string | null>(null);
@@ -26,7 +7,7 @@ class StudioState {
   selectedVersionIds = $state<string[]>([]);
 
   packs = $state<Pack[]>([]);
-  items = $state<Item[]>([]);
+  items = $state<GameItem[]>([]);
   versions = $state<ItemVersion[]>([]);
 
   selectPack(packId: string) {
