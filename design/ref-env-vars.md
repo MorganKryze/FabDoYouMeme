@@ -32,8 +32,8 @@ All variables are loaded from `.env` (never committed to version control). Copy 
 | --------------- | -------- | ------- | ---------------------------------------- |
 | `SMTP_HOST`     | yes      | —       | SMTP server hostname                     |
 | `SMTP_PORT`     | no       | `587`   | SMTP port (587 = STARTTLS)               |
-| `SMTP_USERNAME` | yes      | —       | SMTP auth username                       |
-| `SMTP_PASSWORD` | yes      | —       | SMTP auth password                       |
+| `SMTP_USERNAME` | no       | —       | SMTP auth username (omit for unauthenticated servers like Mailpit) |
+| `SMTP_PASSWORD` | no       | —       | SMTP auth password (omit for unauthenticated servers like Mailpit) |
 | `SMTP_FROM`     | yes      | —       | From address, e.g. `noreply@example.com` |
 
 ## Auth & Session

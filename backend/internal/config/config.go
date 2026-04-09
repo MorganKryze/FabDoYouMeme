@@ -54,7 +54,6 @@ func Load() (*Config, error) {
 	required := []string{
 		"DATABASE_URL", "RUSTFS_ENDPOINT", "RUSTFS_ACCESS_KEY", "RUSTFS_SECRET_KEY",
 		"FRONTEND_URL", "BACKEND_URL", "SMTP_HOST", "SMTP_FROM",
-		"SMTP_USERNAME", "SMTP_PASSWORD",
 	}
 	for _, k := range required {
 		if os.Getenv(k) == "" {
