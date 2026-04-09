@@ -24,11 +24,12 @@ func HashToken(raw string) string {
 	return hex.EncodeToString(h[:])
 }
 
-func setSessionCookie(w http.ResponseWriter, token string, ttl time.Duration) {
+func setSessionCookie(w http.ResponseWriter, token string, ttl time.Duration, domain string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session",
 		Value:    token,
 		Path:     "/",
+		Domain:   domain,
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
@@ -36,11 +37,12 @@ func setSessionCookie(w http.ResponseWriter, token string, ttl time.Duration) {
 	})
 }
 
-func clearSessionCookie(w http.ResponseWriter) {
+func clearSessionCookie(w http.ResponseWriter, domain string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session",
 		Value:    "",
 		Path:     "/",
+		Domain:   domain,
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,

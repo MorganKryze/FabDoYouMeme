@@ -294,6 +294,21 @@ func (q *Queries) SetCurrentVersion(ctx context.Context, arg SetCurrentVersionPa
 	return i, err
 }
 
+const reorderItems = `-- name: ReorderItems :exec
+UPDATE game_items SET position = $2 WHERE id = $1 AND pack_id = $3
+`
+
+type ReorderItemsParams struct {
+	ID       uuid.UUID `json:"id"`
+	Position int32     `json:"position"`
+	PackID   uuid.UUID `json:"pack_id"`
+}
+
+func (q *Queries) ReorderItems(ctx context.Context, arg ReorderItemsParams) error {
+	_, err := q.db.Exec(ctx, reorderItems, arg.ID, arg.Position, arg.PackID)
+	return err
+}
+
 const softDeleteVersion = `-- name: SoftDeleteVersion :exec
 UPDATE game_item_versions SET deleted_at = now() WHERE id = $1
 `

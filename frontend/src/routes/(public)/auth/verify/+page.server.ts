@@ -2,6 +2,7 @@
 import { redirect, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { API_BASE } from '$lib/server/backend';
+import { parse as parseCookies } from 'cookie';
 
 export const load: PageServerLoad = async ({ url }) => {
   return {
@@ -36,11 +37,13 @@ export const actions: Actions = {
     // The backend sets the session cookie on its own response, but SvelteKit does not
     // automatically forward Set-Cookie headers from proxied fetches to the browser.
     // Parse the raw header and re-issue it via cookies.set() so the browser receives it.
-    const raw = res.headers.get('set-cookie') ?? '';
-    const valueMatch = raw.match(/^session=([^;]+)/);
-    const maxAgeMatch = raw.match(/[Mm]ax-[Aa]ge=(\d+)/);
-    if (valueMatch) {
-      cookies.set('session', valueMatch[1], {
+    const rawCookie = res.headers.get('set-cookie') ?? '';
+    const maxAgeMatch = rawCookie.match(/[Mm]ax-[Aa]ge=(\d+)/);
+    const parsed = parseCookies(rawCookie.split(';')[0]);
+    const sessionValue = parsed['session'];
+
+    if (sessionValue) {
+      cookies.set('session', sessionValue, {
         path: '/',
         httpOnly: true,
         secure: true,

@@ -25,12 +25,12 @@ func NewGameTypeHandler(pool *pgxpool.Pool, registry *game.Registry) *GameTypeHT
 // List handles GET /api/game-types.
 func (h *GameTypeHTTPHandler) List(w http.ResponseWriter, r *http.Request) {
 	if _, ok := middleware.GetSessionUser(r); !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
 	types, err := h.db.ListGameTypes(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Failed to list game types")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to list game types")
 		return
 	}
 	writeJSON(w, http.StatusOK, types)
@@ -39,13 +39,13 @@ func (h *GameTypeHTTPHandler) List(w http.ResponseWriter, r *http.Request) {
 // GetBySlug handles GET /api/game-types/:slug.
 func (h *GameTypeHTTPHandler) GetBySlug(w http.ResponseWriter, r *http.Request) {
 	if _, ok := middleware.GetSessionUser(r); !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
 	slug := chi.URLParam(r, "slug")
 	gt, err := h.db.GetGameTypeBySlug(r.Context(), slug)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "Game type not found")
+		writeError(w, r, http.StatusNotFound, "not_found", "Game type not found")
 		return
 	}
 	handler, ok := h.registry.Get(slug)

@@ -19,14 +19,31 @@ type verifyRequest struct {
 func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
 	var req verifyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Token == "" {
-		writeError(w, http.StatusBadRequest, "bad_request", "Invalid request body")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid request body")
 		return
 	}
 
 	tokenHash := HashToken(req.Token)
+
+	// Look up token first to return a specific error code.
+	rawToken, lookupErr := h.db.GetMagicLinkTokenByHash(r.Context(), tokenHash)
+	if lookupErr != nil {
+		writeError(w, r, http.StatusBadRequest, "token_not_found", "Token not found")
+		return
+	}
+	if rawToken.ExpiresAt.Before(time.Now().UTC()) {
+		writeError(w, r, http.StatusBadRequest, "token_expired", "Token has expired")
+		return
+	}
+	if rawToken.UsedAt.Valid {
+		writeError(w, r, http.StatusBadRequest, "token_used", "Token has already been used")
+		return
+	}
+
+	// Atomically mark used — prevents replay race.
 	token, err := h.db.ConsumeMagicLinkTokenAtomic(r.Context(), tokenHash)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "invalid_token", "Token is invalid, expired, or already used")
+		writeError(w, r, http.StatusBadRequest, "token_used", "Token has already been used")
 		return
 	}
 
@@ -35,11 +52,11 @@ func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
 		if h.log != nil {
 			h.log.Error("verify: get user failed", "error", err)
 		}
-		writeError(w, http.StatusInternalServerError, "internal_error", "Internal error")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Internal error")
 		return
 	}
 	if !user.IsActive {
-		writeError(w, http.StatusUnauthorized, "account_inactive", "Account is not active")
+		writeError(w, r, http.StatusForbidden, "user_inactive", "Account is not active")
 		return
 	}
 
@@ -52,7 +69,7 @@ func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
 
 		updated, err := h.db.ConfirmEmailChange(r.Context(), user.ID)
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "internal_error", "Email change failed")
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Email change failed")
 			return
 		}
 
@@ -60,7 +77,7 @@ func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
 			if h.log != nil {
 				h.log.Error("verify: delete sessions failed", "error", err)
 			}
-			writeError(w, http.StatusInternalServerError, "internal_error", "Session invalidation failed")
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Session invalidation failed")
 			return
 		}
 
@@ -78,14 +95,14 @@ func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
 		if h.log != nil {
 			h.log.Error("verify: unknown token purpose", "purpose", token.Purpose)
 		}
-		writeError(w, http.StatusInternalServerError, "internal_error", "Unknown token purpose")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Unknown token purpose")
 	}
 }
 
 func (h *Handler) createSessionAndRespond(w http.ResponseWriter, r *http.Request, user db.User) {
 	rawToken, err := GenerateRawToken()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Session creation failed")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Session creation failed")
 		return
 	}
 	sessionHash := HashToken(rawToken)
@@ -96,10 +113,10 @@ func (h *Handler) createSessionAndRespond(w http.ResponseWriter, r *http.Request
 		TokenHash: sessionHash,
 		ExpiresAt: expiresAt,
 	}); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Session creation failed")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Session creation failed")
 		return
 	}
 
-	setSessionCookie(w, rawToken, h.cfg.SessionTTL)
+	setSessionCookie(w, rawToken, h.cfg.SessionTTL, h.cfg.CookieDomain)
 	writeJSON(w, http.StatusOK, map[string]string{"user_id": user.ID.String()})
 }

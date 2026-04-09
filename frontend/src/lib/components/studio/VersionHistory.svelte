@@ -86,9 +86,12 @@
 
     {#if studio.selectedVersionIds.length === 2}
       <div class="px-4 py-2 border-t border-border">
-        <button type="button"
-          onclick={() => toast.show('Side-by-side comparison coming soon.', 'warning')}
-          class="w-full h-8 rounded-md bg-muted text-sm font-medium hover:bg-muted/80 transition-colors">
+        <button
+          type="button"
+          disabled
+          title="Side-by-side comparison coming soon"
+          class="w-full h-8 rounded-md bg-muted text-sm font-medium opacity-50 cursor-not-allowed"
+        >
           Compare v{studio.versions.find((v) => v.id === studio.selectedVersionIds[0])?.version_number}
           vs v{studio.versions.find((v) => v.id === studio.selectedVersionIds[1])?.version_number}
         </button>

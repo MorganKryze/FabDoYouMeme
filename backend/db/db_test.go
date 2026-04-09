@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/testutil"
@@ -153,7 +154,7 @@ func TestHardDeleteUser_ReplacesSubmissionsWithSentinel(t *testing.T) {
 		Code:       slug[:4],
 		GameTypeID: gt.ID,
 		PackID:     pack.ID,
-		HostID:     user.ID,
+		HostID:     pgtype.UUID{Bytes: user.ID, Valid: true},
 		Mode:       "multiplayer",
 		Config:     json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
 	})
@@ -419,7 +420,7 @@ func TestStartupCleanup_MarksPlayingAsFinished(t *testing.T) {
 			Code:       slug[:4],
 			GameTypeID: gt.ID,
 			PackID:     pack.ID,
-			HostID:     user.ID,
+			HostID:     pgtype.UUID{Bytes: user.ID, Valid: true},
 			Mode:       "multiplayer",
 			Config:     json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
 		})
@@ -433,7 +434,7 @@ func TestStartupCleanup_MarksPlayingAsFinished(t *testing.T) {
 		}
 
 		// Simulate crash-recovery startup cleanup.
-		if err := q.FinishCrashedRooms(ctx); err != nil {
+		if _, err := q.FinishCrashedRooms(ctx); err != nil {
 			t.Fatalf("FinishCrashedRooms: %v", err)
 		}
 
@@ -475,7 +476,7 @@ func TestStartupCleanup_ClosesStaleLobbies(t *testing.T) {
 		Code:       slug[:4],
 		GameTypeID: gt.ID,
 		PackID:     pack.ID,
-		HostID:     user.ID,
+		HostID:     pgtype.UUID{Bytes: user.ID, Valid: true},
 		Mode:       "multiplayer",
 		Config:     json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
 	})
@@ -494,7 +495,7 @@ func TestStartupCleanup_ClosesStaleLobbies(t *testing.T) {
 		t.Fatalf("backdate room: %v", err)
 	}
 
-	if err := q.FinishAbandonedLobbies(ctx); err != nil {
+	if _, err := q.FinishAbandonedLobbies(ctx); err != nil {
 		t.Fatalf("FinishAbandonedLobbies: %v", err)
 	}
 
@@ -519,7 +520,7 @@ func TestCreateRoom_StateIsLobby(t *testing.T) {
 			Code:       slug[:4],
 			GameTypeID: gt.ID,
 			PackID:     pack.ID,
-			HostID:     user.ID,
+			HostID:     pgtype.UUID{Bytes: user.ID, Valid: true},
 			Mode:       "multiplayer",
 			Config:     json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
 		})

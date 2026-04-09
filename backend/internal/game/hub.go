@@ -28,6 +28,53 @@ type graceExpiredMsg struct {
 	username string
 }
 
+// hubRoundPhase tracks the current phase of a round.
+type hubRoundPhase int
+
+const (
+	phaseIdle       hubRoundPhase = iota
+	phaseSubmitting               // accepting player submissions
+	phaseVoting                   // accepting votes
+)
+
+// roundCtrlMsg is the interface for all round lifecycle control messages.
+type roundCtrlMsg interface{ roundCtrl() }
+
+// roundCtrlAdvance signals runRounds to move to the next round (host-triggered).
+type roundCtrlAdvance struct{}
+
+func (roundCtrlAdvance) roundCtrl() {}
+
+// roundCtrlStartRound signals the hub to broadcast round_started.
+type roundCtrlStartRound struct {
+	roundID  uuid.UUID
+	itemID   uuid.UUID
+	payload  json.RawMessage
+	mediaURL string
+	endsAt   time.Time
+	duration time.Duration
+}
+
+func (roundCtrlStartRound) roundCtrl() {}
+
+// roundCtrlCloseSubmissions signals the hub to broadcast submissions_closed.
+type roundCtrlCloseSubmissions struct {
+	votingEndsAt time.Time
+	duration     time.Duration
+}
+
+func (roundCtrlCloseSubmissions) roundCtrl() {}
+
+// roundCtrlCloseVoting signals the hub to tally votes and broadcast vote_results.
+type roundCtrlCloseVoting struct{}
+
+func (roundCtrlCloseVoting) roundCtrl() {}
+
+// roundCtrlEndGame signals the hub to finish the room and broadcast game_ended.
+type roundCtrlEndGame struct{}
+
+func (roundCtrlEndGame) roundCtrl() {}
+
 // Hub manages one room's WebSocket connections and game lifecycle.
 // All state mutations happen in the main Run() goroutine — no locking needed
 // for internal state. Incoming connections are registered via a channel.
@@ -49,6 +96,14 @@ type Hub struct {
 	unregister   chan *connectedPlayer
 	incoming     chan playerMessage
 	graceExpired chan graceExpiredMsg
+	roundCtrl    chan roundCtrlMsg // round lifecycle signals from runRounds
+
+	// Round state — only accessed from Run() goroutine
+	roundPhase       hubRoundPhase
+	roundNum         int
+	currentRound     *db.Round
+	roundSubmissions map[string]Submission // userID → submission
+	roundVotes       map[string]Vote       // userID → vote
 }
 
 // connectedPlayer is hub-internal player state.
@@ -90,12 +145,16 @@ func NewHub(hc HubConfig) *Hub {
 		db:           hc.DB,
 		cfg:          hc.Cfg,
 		log:          hc.Log,
-		state:        HubLobby,
-		players:      make(map[string]*connectedPlayer),
-		register:     make(chan *connectedPlayer, 8),
-		unregister:   make(chan *connectedPlayer, 8),
-		incoming:     make(chan playerMessage, 64),
-		graceExpired: make(chan graceExpiredMsg, 16),
+		state:            HubLobby,
+		players:          make(map[string]*connectedPlayer),
+		register:         make(chan *connectedPlayer, 8),   // burst: ≤8 simultaneous joins before blocking
+		unregister:       make(chan *connectedPlayer, 8),   // burst: ≤8 simultaneous disconnects
+		incoming:         make(chan playerMessage, 64),     // 64 msgs queued before readPump blocks
+		graceExpired:     make(chan graceExpiredMsg, 16),   // 16 concurrent grace expirations
+		roundCtrl:        make(chan roundCtrlMsg, 8),       // round lifecycle signals from runRounds
+		roundPhase:       phaseIdle,
+		roundSubmissions: make(map[string]Submission),
+		roundVotes:       make(map[string]Vote),
 	}
 }
 
@@ -137,6 +196,9 @@ func (h *Hub) Run(ctx context.Context) {
 
 		case msg := <-h.graceExpired:
 			h.handleGraceExpired(ctx, msg)
+
+		case ctrl := <-h.roundCtrl:
+			h.handleRoundCtrl(ctx, ctrl)
 		}
 	}
 }
@@ -184,17 +246,14 @@ func (h *Hub) handleUnregister(p *connectedPlayer) {
 	h.broadcast(buildMessage("reconnecting", map[string]string{
 		"user_id": p.userID, "username": p.username,
 	}))
-	// Start grace window goroutine; it sends to h.graceExpired so that
-	// all state changes happen inside Run() — no cross-goroutine state access.
+	// time.AfterFunc avoids a goroutine leak: it uses an internal timer goroutine
+	// that exits after firing once. All state changes still happen inside Run()
+	// since the send is into a buffered channel read by Run().
 	userID, username := p.userID, p.username
 	grace := h.cfg.ReconnectGraceWindow
-	go func() {
-		time.Sleep(grace)
-		select {
-		case h.graceExpired <- graceExpiredMsg{userID: userID, username: username}:
-		default:
-		}
-	}()
+	time.AfterFunc(grace, func() {
+		h.graceExpired <- graceExpiredMsg{userID: userID, username: username}
+	})
 }
 
 func (h *Hub) handleGraceExpired(ctx context.Context, msg graceExpiredMsg) {
@@ -222,8 +281,36 @@ func (h *Hub) handleMessage(ctx context.Context, msg playerMessage) {
 		}
 		h.startGame(ctx)
 
+	case "reconnect":
+		if cp, ok := h.players[msg.player.userID]; ok && !cp.reconnecting {
+			h.safeSend(msg.player, buildMessage("room_state", h.buildRoomState()))
+		}
+
+	case "next_round":
+		if msg.player.userID != h.hostUserID {
+			h.safeSend(msg.player, buildMessage("error", map[string]string{
+				"code": "not_host", "message": "Only the host can advance rounds",
+			}))
+			return
+		}
+		select {
+		case h.roundCtrl <- roundCtrlAdvance{}:
+		default:
+		}
+
 	case "ping":
 		h.sendTo(msg.player, buildMessage("pong", nil))
+
+	case "system:kick":
+		var d struct {
+			TargetUserID string `json:"target_user_id"`
+		}
+		json.Unmarshal(msg.data, &d) //nolint:errcheck
+		if p, ok := h.players[d.TargetUserID]; ok {
+			h.safeSend(p, buildMessage("player_kicked", map[string]string{"user_id": d.TargetUserID}))
+			delete(h.players, d.TargetUserID)
+			h.broadcast(buildMessage("player_kicked", map[string]string{"user_id": d.TargetUserID}))
+		}
 
 	default:
 		// Game-type-specific messages are prefixed with the slug
@@ -235,6 +322,86 @@ func (h *Hub) handleMessage(ctx context.Context, msg playerMessage) {
 				"code": "unknown_message_type", "message": "Unknown message type",
 			}))
 		}
+	}
+}
+
+func (h *Hub) handleRoundCtrl(ctx context.Context, ctrl roundCtrlMsg) {
+	switch c := ctrl.(type) {
+	case roundCtrlAdvance:
+		// host-triggered advance — currently a no-op since runRounds owns timing
+		_ = c
+
+	case roundCtrlStartRound:
+		h.roundPhase = phaseSubmitting
+		h.roundNum++
+		h.roundSubmissions = make(map[string]Submission)
+		h.roundVotes = make(map[string]Vote)
+		h.currentRound = &db.Round{ID: c.roundID}
+		h.broadcast(buildMessage("round_started", map[string]any{
+			"round_number":     h.roundNum,
+			"ends_at":          c.endsAt.UTC().Format(time.RFC3339),
+			"duration_seconds": int(c.duration.Seconds()),
+			"item": map[string]any{
+				"payload":   c.payload,
+				"media_url": nilIfEmpty(c.mediaURL),
+			},
+		}))
+
+	case roundCtrlCloseSubmissions:
+		h.roundPhase = phaseVoting
+		submissions := submissionsMapToSlice(h.roundSubmissions)
+		handler, ok := h.registry.Get(h.gameTypeSlug)
+		if ok {
+			shown, err := handler.BuildSubmissionsShownPayload(submissions)
+			if err == nil {
+				h.broadcast(buildMessage("submissions_closed", map[string]any{
+					"submissions_shown": json.RawMessage(shown),
+					"ends_at":          c.votingEndsAt.UTC().Format(time.RFC3339),
+					"duration_seconds": int(c.duration.Seconds()),
+				}))
+				return
+			}
+		}
+		h.broadcast(buildMessage("submissions_closed", map[string]any{
+			"ends_at":          c.votingEndsAt.UTC().Format(time.RFC3339),
+			"duration_seconds": int(c.duration.Seconds()),
+		}))
+
+	case roundCtrlCloseVoting:
+		h.roundPhase = phaseIdle
+		handler, ok := h.registry.Get(h.gameTypeSlug)
+		if ok {
+			submissions := submissionsMapToSlice(h.roundSubmissions)
+			votes := votesMapToSlice(h.roundVotes)
+			scores := handler.CalculateRoundScores(submissions, votes)
+			for playerID, pts := range scores {
+				if _, err := h.db.UpdatePlayerScore(ctx, db.UpdatePlayerScoreParams{
+					RoomID: h.roomID,
+					UserID: playerID,
+					Score:  int32(pts),
+				}); err != nil && h.log != nil {
+					h.log.Error("hub: update player score", "error", err)
+				}
+			}
+			resultsPayload, err := handler.BuildVoteResultsPayload(submissions, votes, scores)
+			if err == nil {
+				leaderboard, _ := h.db.GetRoomLeaderboard(ctx, h.roomID)
+				h.broadcast(buildMessage("vote_results", map[string]any{
+					"results":     json.RawMessage(resultsPayload),
+					"leaderboard": leaderboard,
+				}))
+				return
+			}
+		}
+		h.broadcast(buildMessage("vote_results", nil))
+
+	case roundCtrlEndGame:
+		leaderboard, _ := h.db.GetRoomLeaderboard(ctx, h.roomID)
+		h.finishRoom(ctx, "game_complete")
+		h.broadcast(buildMessage("game_ended", map[string]any{
+			"reason":      "game_complete",
+			"leaderboard": leaderboard,
+		}))
 	}
 }
 
@@ -254,9 +421,121 @@ func (h *Hub) startGame(ctx context.Context) {
 	go h.runRounds(ctx)
 }
 
-func (h *Hub) runRounds(_ context.Context) {
-	// Rounds loop — simplified; full implementation in game type handler
-	// See design/04-protocol.md for complete round lifecycle
+func (h *Hub) runRounds(ctx context.Context) {
+	room, err := h.db.GetRoomByID(ctx, h.roomID)
+	if err != nil {
+		if h.log != nil {
+			h.log.Error("runRounds: get room", "error", err)
+		}
+		h.roundCtrl <- roundCtrlEndGame{}
+		return
+	}
+
+	var cfg struct {
+		RoundCount            int `json:"round_count"`
+		RoundDurationSeconds  int `json:"round_duration_seconds"`
+		VotingDurationSeconds int `json:"voting_duration_seconds"`
+	}
+	if room.Config != nil {
+		json.Unmarshal(room.Config, &cfg) //nolint:errcheck
+	}
+	if cfg.RoundCount == 0 {
+		cfg.RoundCount = 3
+	}
+	if cfg.RoundDurationSeconds == 0 {
+		cfg.RoundDurationSeconds = 60
+	}
+	if cfg.VotingDurationSeconds == 0 {
+		cfg.VotingDurationSeconds = 30
+	}
+
+	handler, hasHandler := h.registry.Get(h.gameTypeSlug)
+	var versions []int32
+	if hasHandler {
+		for _, v := range handler.SupportedPayloadVersions() {
+			versions = append(versions, int32(v))
+		}
+	}
+
+	roundDuration := time.Duration(cfg.RoundDurationSeconds) * time.Second
+	votingDuration := time.Duration(cfg.VotingDurationSeconds) * time.Second
+
+	for i := 0; i < cfg.RoundCount; i++ {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		// Fetch an unplayed item from the pack
+		items, err := h.db.GetRandomUnplayedItems(ctx, db.GetRandomUnplayedItemsParams{
+			PackID:   room.PackID,
+			Versions: versions,
+			RoomID:   h.roomID,
+		})
+		if err != nil || len(items) == 0 {
+			if h.log != nil {
+				h.log.Error("runRounds: get items", "error", err)
+			}
+			h.roundCtrl <- roundCtrlEndGame{}
+			return
+		}
+		item := items[0]
+
+		dbRound, err := h.db.CreateRound(ctx, db.CreateRoundParams{
+			RoomID: h.roomID,
+			ItemID: item.ID,
+		})
+		if err != nil {
+			if h.log != nil {
+				h.log.Error("runRounds: create round", "error", err)
+			}
+			h.roundCtrl <- roundCtrlEndGame{}
+			return
+		}
+
+		mediaURL := ""
+		if item.MediaKey != nil {
+			mediaURL = *item.MediaKey
+		}
+		endsAt := time.Now().Add(roundDuration)
+		h.roundCtrl <- roundCtrlStartRound{
+			roundID:  dbRound.ID,
+			itemID:   item.ID,
+			payload:  item.Payload,
+			mediaURL: mediaURL,
+			endsAt:   endsAt,
+			duration: roundDuration,
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(roundDuration):
+		}
+
+		votingEndsAt := time.Now().Add(votingDuration)
+		h.roundCtrl <- roundCtrlCloseSubmissions{
+			votingEndsAt: votingEndsAt,
+			duration:     votingDuration,
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(votingDuration):
+		}
+
+		h.roundCtrl <- roundCtrlCloseVoting{}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(3 * time.Second):
+		}
+	}
+
+	h.roundCtrl <- roundCtrlEndGame{}
 }
 
 func (h *Hub) finishRoom(ctx context.Context, reason string) {
@@ -271,14 +550,138 @@ func (h *Hub) finishRoom(ctx context.Context, reason string) {
 func (h *Hub) handleGameMessage(ctx context.Context, msg playerMessage) {
 	handler, ok := h.registry.Get(h.gameTypeSlug)
 	if !ok {
-		h.sendTo(msg.player, buildMessage("error", map[string]string{
-			"code": "unknown_game_type",
-		}))
+		h.safeSend(msg.player, buildMessage("error", map[string]string{"code": "unknown_game_type"}))
 		return
 	}
-	_ = handler
-	// Dispatch to handler methods based on msg.msgType suffix (submit/vote)
-	// Full implementation: Phase 7 wires this with the round and submission DB calls
+	suffix := msg.msgType[len(h.gameTypeSlug)+1:]
+	switch suffix {
+	case "submit":
+		if h.roundPhase != phaseSubmitting {
+			h.safeSend(msg.player, buildMessage("error", map[string]string{
+				"code": "submission_closed", "message": "Submission window is closed",
+			}))
+			return
+		}
+		if _, already := h.roundSubmissions[msg.player.userID]; already {
+			h.safeSend(msg.player, buildMessage("error", map[string]string{
+				"code": "already_submitted", "message": "You have already submitted",
+			}))
+			return
+		}
+		roundRef := Round{}
+		if h.currentRound != nil {
+			roundRef.ID = h.currentRound.ID
+		}
+		if err := handler.ValidateSubmission(roundRef, msg.data); err != nil {
+			h.safeSend(msg.player, buildMessage("error", map[string]string{
+				"code": "invalid_submission", "message": err.Error(),
+			}))
+			return
+		}
+		uid, _ := uuid.Parse(msg.player.userID)
+		sub, err := h.db.CreateSubmission(ctx, db.CreateSubmissionParams{
+			RoundID: h.currentRound.ID,
+			UserID:  uid,
+			Payload: msg.data,
+		})
+		if err != nil && h.log != nil {
+			h.log.Error("hub: create submission", "error", err)
+		}
+		h.roundSubmissions[msg.player.userID] = Submission{
+			ID:      sub.ID,
+			UserID:  uid,
+			Payload: msg.data,
+		}
+		h.safeSend(msg.player, buildMessage("submission_accepted", nil))
+
+	case "vote":
+		if h.roundPhase != phaseVoting {
+			h.safeSend(msg.player, buildMessage("error", map[string]string{
+				"code": "vote_closed", "message": "Voting window is closed",
+			}))
+			return
+		}
+		if _, already := h.roundVotes[msg.player.userID]; already {
+			h.safeSend(msg.player, buildMessage("error", map[string]string{
+				"code": "already_voted", "message": "You have already voted",
+			}))
+			return
+		}
+		var voteData struct {
+			SubmissionID string `json:"submission_id"`
+		}
+		if err := json.Unmarshal(msg.data, &voteData); err != nil {
+			h.safeSend(msg.player, buildMessage("error", map[string]string{
+				"code": "invalid_vote", "message": "Invalid vote payload",
+			}))
+			return
+		}
+		submissionID, _ := uuid.Parse(voteData.SubmissionID)
+		var targetSub *Submission
+		for _, s := range h.roundSubmissions {
+			if s.ID == submissionID {
+				cp := s
+				targetSub = &cp
+				break
+			}
+		}
+		if targetSub == nil {
+			h.safeSend(msg.player, buildMessage("error", map[string]string{
+				"code": "submission_not_found", "message": "Submission not found",
+			}))
+			return
+		}
+		voterID, _ := uuid.Parse(msg.player.userID)
+		roundRef := Round{}
+		if err := handler.ValidateVote(roundRef, *targetSub, voterID, msg.data); err != nil {
+			h.safeSend(msg.player, buildMessage("error", map[string]string{
+				"code": err.Error(), "message": "Invalid vote",
+			}))
+			return
+		}
+		_, err := h.db.CreateVote(ctx, db.CreateVoteParams{
+			SubmissionID: submissionID,
+			VoterID:      voterID,
+			Value:        json.RawMessage(`{"points":1}`),
+		})
+		if err != nil && h.log != nil {
+			h.log.Error("hub: create vote", "error", err)
+		}
+		h.roundVotes[msg.player.userID] = Vote{
+			SubmissionID: submissionID,
+			VoterID:      voterID,
+		}
+		h.safeSend(msg.player, buildMessage("vote_accepted", nil))
+
+	default:
+		h.safeSend(msg.player, buildMessage("error", map[string]string{"code": "unknown_message_type"}))
+	}
+}
+
+// Helper: submissionsMapToSlice converts the round submissions map to a slice.
+func submissionsMapToSlice(m map[string]Submission) []Submission {
+	out := make([]Submission, 0, len(m))
+	for _, s := range m {
+		out = append(out, s)
+	}
+	return out
+}
+
+// Helper: votesMapToSlice converts the round votes map to a slice.
+func votesMapToSlice(m map[string]Vote) []Vote {
+	out := make([]Vote, 0, len(m))
+	for _, v := range m {
+		out = append(out, v)
+	}
+	return out
+}
+
+// Helper: nilIfEmpty returns nil if s is empty, otherwise returns s.
+func nilIfEmpty(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 // readPump reads messages from a player's connection and forwards them to the hub.
@@ -324,22 +727,55 @@ func (h *Hub) writePump(p *connectedPlayer) {
 	}
 }
 
+// safeSend sends msg to p.send, recovering from a panic if the channel is closed.
+func (h *Hub) safeSend(p *connectedPlayer, msg []byte) {
+	defer func() {
+		if r := recover(); r != nil {
+			if h.log != nil {
+				h.log.Warn("hub: send to closed channel", "user_id", p.userID)
+			}
+		}
+	}()
+	select {
+	case p.send <- msg:
+	default:
+		// Slow consumer: drop message and log (A2-M1)
+		if h.log != nil {
+			h.log.Warn("hub: dropped message for slow consumer", "user_id", p.userID,
+				"msg_type", extractType(msg))
+		}
+	}
+}
+
+// extractType reads the "type" field from a JSON message for logging.
+func extractType(msg []byte) string {
+	var m struct{ Type string `json:"type"` }
+	if err := json.Unmarshal(msg, &m); err != nil {
+		return "unknown"
+	}
+	return m.Type
+}
+
 func (h *Hub) broadcast(msg []byte) {
 	for _, p := range h.players {
 		if !p.reconnecting {
-			select {
-			case p.send <- msg:
-			default:
-				// Slow consumer — drop message
-			}
+			h.safeSend(p, msg)
 		}
 	}
 }
 
 func (h *Hub) sendTo(p *connectedPlayer, msg []byte) {
-	select {
-	case p.send <- msg:
-	default:
+	h.safeSend(p, msg)
+}
+
+// KickPlayer sends a kick message to a target player, removing them from the hub.
+// It is safe to call from outside the Run goroutine (sends via the incoming channel).
+func (h *Hub) KickPlayer(userID string) {
+	data, _ := json.Marshal(map[string]string{"target_user_id": userID})
+	h.incoming <- playerMessage{
+		player:  &connectedPlayer{userID: "system"},
+		msgType: "system:kick",
+		data:    data,
 	}
 }
 

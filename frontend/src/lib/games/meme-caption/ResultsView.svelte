@@ -24,9 +24,9 @@
         <div class="flex items-center gap-2 text-xs text-muted-foreground mt-auto">
           <span class="font-medium text-foreground">{sub.username}</span>
           <span>·</span>
-          <span>{sub.vote_count ?? 0} vote{(sub.vote_count ?? 0) !== 1 ? 's' : ''}</span>
-          {#if (sub.score ?? 0) > 0}
-            <span class="ml-auto text-green-600 font-medium">+{sub.score} pts</span>
+          <span>{sub.votes_received ?? 0} vote{(sub.votes_received ?? 0) !== 1 ? 's' : ''}</span>
+          {#if (sub.points_awarded ?? 0) > 0}
+            <span class="ml-auto text-green-600 font-medium">+{sub.points_awarded} pts</span>
           {/if}
         </div>
       </div>
@@ -40,7 +40,7 @@
         <li class="flex items-center gap-3 text-sm py-1">
           <span class="w-5 text-right text-muted-foreground">{i + 1}.</span>
           <span class="flex-1">{entry.username}</span>
-          <span class="font-medium tabular-nums">{entry.score} pts</span>
+          <span class="font-medium tabular-nums">{entry.total_score} pts</span>
         </li>
       {/each}
     </ol>

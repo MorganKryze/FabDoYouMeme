@@ -44,6 +44,9 @@ SELECT COUNT(*) FROM users
 WHERE lower(username) LIKE lower('%' || sqlc.arg(search) || '%')
    OR lower(email)    LIKE lower('%' || sqlc.arg(search) || '%');
 
+-- Sentinel UUID: 00000000-0000-0000-0000-000000000001 (see auth.SentinelUserID in Go).
+-- Used to anonymize submissions/votes on hard-delete without breaking referential integrity.
+
 -- name: GetSentinelUser :one
 SELECT * FROM users WHERE id = '00000000-0000-0000-0000-000000000001';
 
@@ -88,4 +91,5 @@ JOIN rounds rnd ON s.round_id = rnd.id
 JOIN rooms r2 ON rnd.room_id = r2.id
 JOIN game_types gt ON r2.game_type_id = gt.id
 WHERE s.user_id = $1
+  AND r2.state = 'finished'
 ORDER BY s.created_at DESC;

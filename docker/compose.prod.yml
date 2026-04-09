@@ -5,6 +5,7 @@ services:
   frontend:
     image: ghcr.io/morgankryze/fabyoumeme-frontend:latest
     networks:
+      - project_network
       - pangolin
 
 networks:

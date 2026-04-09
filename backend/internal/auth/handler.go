@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
@@ -53,10 +54,13 @@ func (h *Handler) SessionLookupFn(ctx context.Context, tokenHash string) (string
 // sendMagicLinkToUser invalidates prior tokens of the same purpose,
 // generates a new one, persists its hash, and emails the raw token.
 func (h *Handler) sendMagicLinkToUser(ctx context.Context, user db.User, purpose string) error {
-	_ = h.db.InvalidatePendingTokens(ctx, db.InvalidatePendingTokensParams{
+	if err := h.db.InvalidatePendingTokens(ctx, db.InvalidatePendingTokensParams{
 		UserID:  user.ID,
 		Purpose: purpose,
-	})
+	}); err != nil && h.log != nil {
+		h.log.WarnContext(ctx, "sendMagicLink: failed to invalidate prior tokens",
+			"user_id", user.ID, "purpose", purpose, "error", err)
+	}
 
 	rawToken, err := GenerateRawToken()
 	if err != nil {
@@ -102,8 +106,14 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
-func writeError(w http.ResponseWriter, status int, code, message string) {
-	writeJSON(w, status, map[string]string{"error": message, "code": code})
+func writeError(w http.ResponseWriter, r *http.Request, status int, code, message string) {
+	body := map[string]string{"error": message, "code": code}
+	if r != nil {
+		if reqID := chiMiddleware.GetReqID(r.Context()); reqID != "" {
+			body["request_id"] = reqID
+		}
+	}
+	writeJSON(w, status, body)
 }
 
 func maskEmail(email string) string {

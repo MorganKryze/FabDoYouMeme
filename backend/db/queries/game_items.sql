@@ -39,6 +39,9 @@ UPDATE game_item_versions SET deleted_at = now() WHERE id = $1;
 -- name: HardDeleteVersion :exec
 DELETE FROM game_item_versions WHERE id = $1;
 
+-- name: ReorderItems :exec
+UPDATE game_items SET position = $2 WHERE id = $1 AND pack_id = $3;
+
 -- name: GetRandomUnplayedItems :many
 SELECT gi.*, giv.media_key, giv.payload, giv.id AS version_id
 FROM game_items gi

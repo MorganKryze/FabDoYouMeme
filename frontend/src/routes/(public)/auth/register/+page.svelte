@@ -7,6 +7,8 @@
 
   let smtpWarning = $derived(form?.warning === 'smtp_failure');
   let success = $derived(form?.success === true);
+  let consent = $state(form?.consent ?? false);
+  let ageAffirmation = $state(form?.age_affirmation ?? false);
 </script>
 
 <svelte:head>
@@ -87,7 +89,7 @@
         <input
           type="checkbox"
           name="consent"
-          value="true"
+          bind:checked={consent}
           class="mt-0.5 h-4 w-4 rounded border-input"
           required
         />
@@ -101,7 +103,7 @@
         <input
           type="checkbox"
           name="age_affirmation"
-          value="true"
+          bind:checked={ageAffirmation}
           class="mt-0.5 h-4 w-4 rounded border-input"
           required
         />

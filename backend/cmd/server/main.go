@@ -19,6 +19,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	migrations "github.com/MorganKryze/FabDoYouMeme/backend/db/migrations"
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
@@ -59,11 +60,17 @@ func main() {
 	queries := db.New(pool)
 
 	// ── Startup cleanup (idempotent) ─────────────────────────────────────────
-	if err := queries.FinishCrashedRooms(context.Background()); err != nil {
-		logger.Warn("startup: finish crashed rooms", "error", err)
+	if result, err := queries.FinishCrashedRooms(context.Background()); err != nil {
+		logger.Error("startup: finish crashed rooms", "error", err)
+	} else {
+		logger.Info("startup cleanup", "event", "room.crash_recovery",
+			"count", result.RowsAffected())
 	}
-	if err := queries.FinishAbandonedLobbies(context.Background()); err != nil {
-		logger.Warn("startup: finish abandoned lobbies", "error", err)
+	if result, err := queries.FinishAbandonedLobbies(context.Background()); err != nil {
+		logger.Error("startup: finish abandoned lobbies", "error", err)
+	} else {
+		logger.Info("startup cleanup", "event", "room.abandoned",
+			"count", result.RowsAffected())
 	}
 
 	// ── Email ────────────────────────────────────────────────────────────────
@@ -100,6 +107,8 @@ func main() {
 	authLimiter   := mw.NewRateLimiter(cfg.RateLimitAuthRPM, 60)
 	inviteLimiter := mw.NewRateLimiter(cfg.RateLimitInviteRPH, 3600)
 	globalLimiter := mw.NewRateLimiter(cfg.RateLimitGlobalRPM, 60)
+	roomLimiter   := mw.NewRateLimiter(cfg.RateLimitRoomsRPH, 3600)
+	uploadLimiter := mw.NewRateLimiter(cfg.RateLimitUploadsRPH, 3600)
 
 	// ── HTTP handlers ─────────────────────────────────────────────────────────
 	packHandler      := api.NewPackHandler(pool, cfg, store)
@@ -107,8 +116,8 @@ func main() {
 	assetHandler     := api.NewAssetHandler(pool, cfg, store)
 	gameTypeHandler  := api.NewGameTypeHandler(pool, registry)
 	adminHTTPHandler := api.NewAdminHandler(pool)
-	wsHandler        := api.NewWSHandler(manager)
-	healthHandler    := api.NewHealthHandler(pool)
+	wsHandler        := api.NewWSHandler(manager, cfg.AllowedOrigin)
+	healthHandler    := api.NewHealthHandler(pool, store)
 
 	// ── Router ───────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
@@ -116,11 +125,16 @@ func main() {
 	r.Use(mw.RequestID)
 	r.Use(mw.Logger(logger))
 	r.Use(mw.Session(authHandler.SessionLookupFn, logger))
+	r.Use(mw.Metrics)
 	r.Use(globalLimiter.Middleware)
 
 	// Health (no auth)
 	r.Get("/api/health", healthHandler.Liveness)
 	r.Get("/api/health/deep", healthHandler.Readiness)
+
+	// /api/metrics — MUST be IP-restricted at the reverse proxy or firewall level.
+	// Never expose this endpoint to the public internet.
+	r.Handle("/api/metrics", promhttp.Handler())
 
 	// Auth routes (rate-limited)
 	r.With(authLimiter.Middleware).Route("/api/auth", func(r chi.Router) {
@@ -164,18 +178,36 @@ func main() {
 		r.Patch("/{id}", packHandler.Update)
 		r.Delete("/{id}", packHandler.Delete)
 		r.With(mw.RequireAdmin).Patch("/{id}/status", packHandler.SetStatus)
+
+		// Items
+		r.Get("/{id}/items", packHandler.ListItems)
+		r.Post("/{id}/items", packHandler.CreateItem)
+		r.Patch("/{id}/items/reorder", packHandler.ReorderItems)
+		r.Patch("/{id}/items/{item_id}", packHandler.UpdateItem)
+		r.Delete("/{id}/items/{item_id}", packHandler.DeleteItem)
+
+		// Versions
+		r.Get("/{id}/items/{item_id}/versions", packHandler.ListVersions)
+		r.Post("/{id}/items/{item_id}/versions", packHandler.CreateVersion)
+		r.Post("/{id}/items/{item_id}/versions/{vid}/restore", packHandler.RestoreVersion)
+		r.Delete("/{id}/items/{item_id}/versions/{vid}", packHandler.SoftDeleteVersion)
+		r.Delete("/{id}/items/{item_id}/versions/{vid}/purge", packHandler.PurgeVersion)
 	})
 
 	// Assets
 	r.With(mw.RequireAuth).Route("/api/assets", func(r chi.Router) {
-		r.Post("/upload-url", assetHandler.UploadURL)
+		r.With(uploadLimiter.Middleware).Post("/upload-url", assetHandler.UploadURL)
 		r.Post("/download-url", assetHandler.DownloadURL)
 	})
 
 	// Rooms
 	r.With(mw.RequireAuth).Route("/api/rooms", func(r chi.Router) {
-		r.Post("/", roomHandler.Create)
+		r.With(roomLimiter.Middleware).Post("/", roomHandler.Create)
 		r.Get("/{code}", roomHandler.GetByCode)
+		r.Patch("/{code}/config", roomHandler.UpdateConfig)
+		r.Post("/{code}/leave", roomHandler.Leave)
+		r.Post("/{code}/kick", roomHandler.Kick)
+		r.Get("/{code}/leaderboard", roomHandler.Leaderboard)
 	})
 
 	// WebSocket
@@ -203,6 +235,7 @@ func main() {
 
 	<-quit
 	logger.Info("shutting down")
+	manager.Shutdown() // Notify WS clients before closing listeners
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {

@@ -24,18 +24,18 @@ type patchMeRequest struct {
 func (h *Handler) PatchMe(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.GetSessionUser(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
 	userID, err := uuid.Parse(u.UserID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Invalid session")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Invalid session")
 		return
 	}
 
 	var req patchMeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "Invalid JSON body")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid JSON body")
 		return
 	}
 
@@ -47,10 +47,10 @@ func (h *Handler) PatchMe(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-				writeError(w, http.StatusConflict, "username_taken", "That username is already taken")
+				writeError(w, r, http.StatusConflict, "username_taken", "That username is already taken")
 				return
 			}
-			writeError(w, http.StatusInternalServerError, "internal_error", "Update failed")
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Update failed")
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{
@@ -67,14 +67,14 @@ func (h *Handler) PatchMe(w http.ResponseWriter, r *http.Request) {
 			PendingEmail: req.Email,
 		})
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "internal_error", "Update failed")
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Update failed")
 			return
 		}
 		if sendErr := h.sendMagicLinkToUser(r.Context(), updated, "email_change"); sendErr != nil {
 			if h.log != nil {
 				h.log.Error("patch me: email change magic link", "error", sendErr)
 			}
-			writeError(w, http.StatusInternalServerError, "smtp_failure", "Failed to send verification email")
+			writeError(w, r, http.StatusInternalServerError, "smtp_failure", "Failed to send verification email")
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{
@@ -83,7 +83,7 @@ func (h *Handler) PatchMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeError(w, http.StatusBadRequest, "bad_request", "Provide username or email to update")
+	writeError(w, r, http.StatusBadRequest, "bad_request", "Provide username or email to update")
 }
 
 type historyRoom struct {
@@ -101,12 +101,12 @@ type historyRoom struct {
 func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.GetSessionUser(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
 	userID, err := uuid.Parse(u.UserID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Invalid session")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Invalid session")
 		return
 	}
 
@@ -129,7 +129,7 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 		Off:    offset,
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Failed to load history")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to load history")
 		return
 	}
 
@@ -196,18 +196,18 @@ type exportGameHistory struct {
 func (h *Handler) GetExport(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.GetSessionUser(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
 	userID, err := uuid.Parse(u.UserID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Invalid session")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Invalid session")
 		return
 	}
 
 	user, err := h.db.GetUserByID(r.Context(), userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Failed to load user")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to load user")
 		return
 	}
 

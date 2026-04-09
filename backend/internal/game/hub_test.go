@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/api"
@@ -82,7 +83,7 @@ func newHubEnv(t *testing.T) *hubEnv {
 		Code:       code,
 		GameTypeID: gt.ID,
 		PackID:     pack.ID,
-		HostID:     host.ID,
+		HostID:     pgtype.UUID{Bytes: host.ID, Valid: true},
 		Mode:       "multiplayer",
 		Config:     json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
 	})
@@ -101,7 +102,7 @@ func newHubEnv(t *testing.T) *hubEnv {
 	manager := game.NewManager(registry, q, cfg, slog.Default())
 	manager.GetOrCreate(ctx, room.Code, room.ID, gt.Slug, host.ID.String())
 
-	wsHandler := api.NewWSHandler(manager)
+	wsHandler := api.NewWSHandler(manager, "") // empty allowedOrigin: test uses no Origin header
 	r := chi.NewRouter()
 	r.Get("/ws/{code}", func(w http.ResponseWriter, req *http.Request) {
 		userID := req.Header.Get("X-Test-User-ID")

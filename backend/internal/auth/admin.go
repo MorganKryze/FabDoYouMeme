@@ -14,39 +14,40 @@ import (
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
 )
 
-const sentinelUserID = "00000000-0000-0000-0000-000000000001"
+// sentinelUserID is the package-local alias for SentinelUserID, used for guard checks.
+const sentinelUserID = SentinelUserID
 
 // DeleteUser handles DELETE /api/admin/users/:id.
 // Runs the 5-step hard-delete protocol in a single transaction.
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	adminUser, ok := middleware.GetSessionUser(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
 
 	targetID := chi.URLParam(r, "id")
 	targetUUID, err := uuid.Parse(targetID)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "Invalid user ID")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid user ID")
 		return
 	}
 
 	// Guard: cannot delete the sentinel user
 	if targetID == sentinelUserID {
-		writeError(w, http.StatusConflict, "cannot_delete_sentinel", "The sentinel user cannot be deleted")
+		writeError(w, r, http.StatusConflict, "cannot_delete_sentinel", "The sentinel user cannot be deleted")
 		return
 	}
 
 	// Guard: cannot delete yourself
 	if targetID == adminUser.UserID {
-		writeError(w, http.StatusConflict, "cannot_delete_self", "Cannot delete your own account")
+		writeError(w, r, http.StatusConflict, "cannot_delete_self", "Cannot delete your own account")
 		return
 	}
 
 	tx, err := h.pool.Begin(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Transaction failed")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Transaction failed")
 		return
 	}
 	defer tx.Rollback(r.Context())
@@ -56,7 +57,7 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	// Step 1: Capture PII before deletion (audit trail requires it)
 	target, err := q.GetUserByID(r.Context(), targetUUID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "user_not_found", "User not found")
+		writeError(w, r, http.StatusNotFound, "user_not_found", "User not found")
 		return
 	}
 
@@ -75,7 +76,7 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		if h.log != nil {
 			h.log.Error("delete user: audit log", "error", err)
 		}
-		writeError(w, http.StatusInternalServerError, "internal_error", "Audit log failed")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Audit log failed")
 		return
 	}
 
@@ -89,15 +90,22 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		h.log.Error("delete user: votes sentinel", "error", err)
 	}
 
+	// Step 4b: Explicitly invalidate all sessions before hard delete.
+	// Although sessions cascade-delete with the user, explicit deletion closes
+	// the window where GetSessionByTokenHash (INNER JOIN) could race with deletion.
+	if err := q.DeleteAllUserSessions(r.Context(), targetUUID); err != nil && h.log != nil {
+		h.log.Error("delete user: delete sessions", "error", err)
+	}
+
 	// Step 5: Delete user — cascades: sessions, magic_link_tokens, room_players
 	//           sets NULL on: invites.created_by, audit_logs.admin_id, game_packs.owner_id
 	if err := q.HardDeleteUser(r.Context(), targetUUID); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Delete failed")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Delete failed")
 		return
 	}
 
 	if err := tx.Commit(r.Context()); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Transaction commit failed")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Transaction commit failed")
 		return
 	}
 

@@ -2,12 +2,15 @@
 package api
 
 import (
+	"crypto/rand"
 	"encoding/json"
-	"math/rand"
+	"fmt"
+	"math/big"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
@@ -31,7 +34,7 @@ func NewRoomHandler(pool *pgxpool.Pool, cfg *config.Config, manager *game.Manage
 func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.GetSessionUser(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
 	var req struct {
@@ -41,36 +44,57 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Config     json.RawMessage `json:"config"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "Invalid JSON")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid JSON")
 		return
 	}
 	gameTypeID, err := uuid.Parse(req.GameTypeID)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "Invalid game_type_id")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid game_type_id")
 		return
 	}
 	packID, err := uuid.Parse(req.PackID)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "Invalid pack_id")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid pack_id")
 		return
 	}
-	if req.Mode == "" {
+	// Validate config JSON structure if provided
+	var roomCfgValidate struct {
+		RoundCount            int `json:"round_count"`
+		RoundDurationSeconds  int `json:"round_duration_seconds"`
+		VotingDurationSeconds int `json:"voting_duration_seconds"`
+	}
+	if req.Config != nil {
+		if err := json.Unmarshal(req.Config, &roomCfgValidate); err != nil {
+			writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid room config JSON")
+			return
+		}
+	}
+
+	// Validate mode
+	switch req.Mode {
+	case "":
 		req.Mode = "multiplayer"
+	case "multiplayer", "solo":
+		// valid
+	default:
+		writeError(w, r, http.StatusBadRequest, "bad_request",
+			fmt.Sprintf("invalid mode %q: must be multiplayer or solo", req.Mode))
+		return
 	}
 
 	// Check game type exists and solo support
 	gameType, err := h.db.GetGameTypeByID(r.Context(), gameTypeID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "Game type not found")
+		writeError(w, r, http.StatusNotFound, "not_found", "Game type not found")
 		return
 	}
 	handler, ok := h.manager.Registry().Get(gameType.Slug)
 	if !ok {
-		writeError(w, http.StatusUnprocessableEntity, "unknown_game_type", "Game type handler not registered")
+		writeError(w, r, http.StatusUnprocessableEntity, "unknown_game_type", "Game type handler not registered")
 		return
 	}
 	if req.Mode == "solo" && !handler.SupportsSolo() {
-		writeError(w, http.StatusUnprocessableEntity, "solo_mode_not_supported", "This game type does not support solo mode")
+		writeError(w, r, http.StatusUnprocessableEntity, "solo_mode_not_supported", "This game type does not support solo mode")
 		return
 	}
 
@@ -80,7 +104,7 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 		PackID: packID, Versions: int32SliceToI32Arr(versions),
 	})
 	if err != nil || count == 0 {
-		writeError(w, http.StatusUnprocessableEntity, "pack_no_supported_items", "Pack has no items compatible with this game type")
+		writeError(w, r, http.StatusUnprocessableEntity, "pack_no_supported_items", "Pack has no items compatible with this game type")
 		return
 	}
 
@@ -93,11 +117,11 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 		roomCfg.RoundCount = 10
 	}
 	if int64(roomCfg.RoundCount) > count {
-		writeError(w, http.StatusUnprocessableEntity, "pack_insufficient_items", "Pack does not have enough items for the requested round count")
+		writeError(w, r, http.StatusUnprocessableEntity, "pack_insufficient_items", "Pack does not have enough items for the requested round count")
 		return
 	}
 
-	hostID, _ := uuid.Parse(u.UserID)
+	hostUUID, _ := uuid.Parse(u.UserID)
 	roomConfig := req.Config
 	if roomConfig == nil {
 		roomConfig = json.RawMessage(`{"round_duration_seconds":60,"voting_duration_seconds":30,"round_count":10}`)
@@ -106,12 +130,12 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Code:       generateRoomCode(),
 		GameTypeID: gameTypeID,
 		PackID:     packID,
-		HostID:     hostID,
+		HostID:     pgtype.UUID{Bytes: hostUUID, Valid: true},
 		Mode:       req.Mode,
 		Config:     roomConfig,
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Failed to create room")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to create room")
 		return
 	}
 	writeJSON(w, http.StatusCreated, room)
@@ -121,12 +145,12 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *RoomHandler) GetByCode(w http.ResponseWriter, r *http.Request) {
 	_, ok := middleware.GetSessionUser(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
 	room, err := h.db.GetRoomByCode(r.Context(), chi.URLParam(r, "code"))
 	if err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "Room not found")
+		writeError(w, r, http.StatusNotFound, "not_found", "Room not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, room)
@@ -136,7 +160,11 @@ func generateRoomCode() string {
 	const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 	b := make([]byte, 4)
 	for i := range b {
-		b[i] = chars[rand.Intn(len(chars))]
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
+		if err != nil {
+			panic("crypto/rand unavailable: " + err.Error())
+		}
+		b[i] = chars[n.Int64()]
 	}
 	return string(b)
 }

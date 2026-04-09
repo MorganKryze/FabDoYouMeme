@@ -1,17 +1,31 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/api"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/testutil"
 )
 
+// stubStorage is a no-op Storage stub for health checks.
+type stubStorage struct{}
+
+func (s *stubStorage) PresignUpload(_ context.Context, _ string, _ time.Duration) (string, error) {
+	return "", nil
+}
+func (s *stubStorage) PresignDownload(_ context.Context, _ string, _ time.Duration) (string, error) {
+	return "", nil
+}
+func (s *stubStorage) Delete(_ context.Context, _ string) error { return nil }
+func (s *stubStorage) Probe(_ context.Context) error            { return nil }
+
 func newHealthHandler() *api.HealthHandler {
-	return api.NewHealthHandler(testutil.Pool())
+	return api.NewHealthHandler(testutil.Pool(), &stubStorage{})
 }
 
 func TestHealth_Liveness(t *testing.T) {

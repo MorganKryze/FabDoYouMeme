@@ -32,7 +32,7 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		Search: &q, Lim: int32(limit), Off: int32(offset),
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Failed to list users")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to list users")
 		return
 	}
 	total, _ := h.db.CountUsers(r.Context(), &q)
@@ -47,7 +47,7 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	targetID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "Invalid user ID")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid user ID")
 		return
 	}
 	var req struct {
@@ -55,7 +55,7 @@ func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		IsActive *bool   `json:"is_active,omitempty"`
 	}
 	if decodeErr := decodeJSON(r, &req); decodeErr != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "Invalid JSON")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid JSON")
 		return
 	}
 	if req.Role != nil {
@@ -63,7 +63,7 @@ func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 			ID: targetID, Role: *req.Role,
 		})
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "internal_error", "Update failed")
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Update failed")
 			return
 		}
 		writeJSON(w, http.StatusOK, user)
@@ -74,13 +74,13 @@ func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 			ID: targetID, IsActive: *req.IsActive,
 		})
 		if err != nil {
-			writeError(w, http.StatusInternalServerError, "internal_error", "Update failed")
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Update failed")
 			return
 		}
 		writeJSON(w, http.StatusOK, user)
 		return
 	}
-	writeError(w, http.StatusBadRequest, "bad_request", "Provide role or is_active to update")
+	writeError(w, r, http.StatusBadRequest, "bad_request", "Provide role or is_active to update")
 }
 
 // ListInvites handles GET /api/admin/invites.
@@ -90,7 +90,7 @@ func (h *AdminHandler) ListInvites(w http.ResponseWriter, r *http.Request) {
 		Lim: int32(limit), Off: int32(offset),
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Failed to list invites")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to list invites")
 		return
 	}
 	total, _ := h.db.CountInvites(r.Context())
@@ -104,7 +104,7 @@ func (h *AdminHandler) ListInvites(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.GetSessionUser(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
 	var req struct {
@@ -115,11 +115,11 @@ func (h *AdminHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt       *string `json:"expires_at,omitempty"`
 	}
 	if decodeErr := decodeJSON(r, &req); decodeErr != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "Invalid JSON")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid JSON")
 		return
 	}
 	if req.Token == "" {
-		writeError(w, http.StatusBadRequest, "bad_request", "token is required")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "token is required")
 		return
 	}
 
@@ -128,7 +128,7 @@ func (h *AdminHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 	if req.ExpiresAt != nil && *req.ExpiresAt != "" {
 		t, err := time.Parse(time.RFC3339, *req.ExpiresAt)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "bad_request", "expires_at must be RFC3339")
+			writeError(w, r, http.StatusBadRequest, "bad_request", "expires_at must be RFC3339")
 			return
 		}
 		expiresAt = pgtype.Timestamptz{Time: t, Valid: true}
@@ -144,7 +144,7 @@ func (h *AdminHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt:       expiresAt,
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Failed to create invite")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to create invite")
 		return
 	}
 	writeJSON(w, http.StatusCreated, invite)
@@ -154,11 +154,11 @@ func (h *AdminHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) DeleteInvite(w http.ResponseWriter, r *http.Request) {
 	inviteID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "Invalid invite ID")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid invite ID")
 		return
 	}
 	if err := h.db.DeleteInvite(r.Context(), inviteID); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Delete failed")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Delete failed")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -174,22 +174,25 @@ func (h *AdminHandler) ListNotifications(w http.ResponseWriter, r *http.Request)
 		Off:        int32(offset),
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Failed to list notifications")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to list notifications")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"data": notifications})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"data":        notifications,
+		"next_cursor": nextCursor(len(notifications), limit, offset),
+	})
 }
 
 // MarkNotificationRead handles PATCH /api/admin/notifications/:id.
 func (h *AdminHandler) MarkNotificationRead(w http.ResponseWriter, r *http.Request) {
 	notifID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "Invalid notification ID")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid notification ID")
 		return
 	}
 	n, err := h.db.MarkNotificationRead(r.Context(), notifID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Update failed")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Update failed")
 		return
 	}
 	writeJSON(w, http.StatusOK, n)

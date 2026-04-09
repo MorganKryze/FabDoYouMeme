@@ -34,10 +34,10 @@ DELETE FROM room_players WHERE room_id = $1 AND user_id = $2;
 -- name: UpdatePlayerScore :one
 UPDATE room_players SET score = score + $3 WHERE room_id = $1 AND user_id = $2 RETURNING *;
 
--- name: FinishCrashedRooms :exec
+-- name: FinishCrashedRooms :execresult
 UPDATE rooms SET state = 'finished', finished_at = now() WHERE state = 'playing';
 
--- name: FinishAbandonedLobbies :exec
+-- name: FinishAbandonedLobbies :execresult
 UPDATE rooms SET state = 'finished', finished_at = now()
 WHERE state = 'lobby' AND created_at < now() - interval '24 hours';
 
@@ -74,3 +74,14 @@ WHERE s.round_id = $1;
 SELECT v.* FROM votes v
 JOIN submissions s ON v.submission_id = s.id
 WHERE s.round_id = $1 AND v.voter_id = $2;
+
+-- name: GetRoomByID :one
+SELECT * FROM rooms WHERE id = $1;
+
+-- name: GetRoomLeaderboard :many
+SELECT u.id AS user_id, u.username, rp.score,
+       RANK() OVER (ORDER BY rp.score DESC) AS rank
+FROM room_players rp
+JOIN users u ON rp.user_id = u.id
+WHERE rp.room_id = $1
+ORDER BY rp.score DESC;

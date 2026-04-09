@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -30,6 +31,19 @@ func (s *stubEmail) SendMagicLinkEmailChange(_ context.Context, _ string, _ auth
 }
 func (s *stubEmail) SendEmailChangedNotification(_ context.Context, _ string, _ auth.EmailChangedNotificationData) error {
 	return nil
+}
+
+// failingSender is an EmailSender that always returns an error — used to test SMTP failure paths.
+type failingSender struct{}
+
+func (s *failingSender) SendMagicLinkLogin(_ context.Context, _ string, _ auth.LoginEmailData) error {
+	return fmt.Errorf("smtp: connection refused")
+}
+func (s *failingSender) SendMagicLinkEmailChange(_ context.Context, _ string, _ auth.EmailChangeData) error {
+	return fmt.Errorf("smtp: connection refused")
+}
+func (s *failingSender) SendEmailChangedNotification(_ context.Context, _ string, _ auth.EmailChangedNotificationData) error {
+	return fmt.Errorf("smtp: connection refused")
 }
 
 func newTestHandler(t *testing.T) (*auth.Handler, *db.Queries) {
@@ -146,6 +160,13 @@ func TestRegister_DuplicateEmailReturns201(t *testing.T) {
 	if rec2.Code != http.StatusCreated {
 		t.Errorf("duplicate email: want 201 (no enumeration), got %d", rec2.Code)
 	}
+	var dupResp map[string]string
+	if err := json.NewDecoder(rec2.Body).Decode(&dupResp); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if dupResp["user_id"] != "" {
+		t.Errorf("expected empty user_id on duplicate email, got %q", dupResp["user_id"])
+	}
 }
 
 func TestRegister_EmailMismatch(t *testing.T) {
@@ -212,6 +233,46 @@ func TestRegister_InviteExhausted(t *testing.T) {
 	json.NewDecoder(rec2.Body).Decode(&resp)
 	if resp["code"] != "invalid_invite" {
 		t.Errorf("want invalid_invite, got %s", resp["code"])
+	}
+}
+
+func TestRegister_SMTPFailureReturns201WithWarning(t *testing.T) {
+	pool := testutil.Pool()
+	cfg := &config.Config{
+		FrontendURL:      "http://localhost:3000",
+		MagicLinkBaseURL: "http://localhost:3000",
+		MagicLinkTTL:     15 * time.Minute,
+		SessionTTL:       720 * time.Hour,
+	}
+	h := auth.New(pool, cfg, &failingSender{}, nil)
+	q := db.New(pool)
+
+	slug := testutil.SeedName(t)
+	restrictedEmail := "smtp_fail_" + slug + "@test.com"
+	invite, err := q.CreateInvite(context.Background(), db.CreateInviteParams{
+		Token:           "SMTPFAIL_" + slug,
+		MaxUses:         1,
+		RestrictedEmail: &restrictedEmail,
+	})
+	if err != nil {
+		t.Fatalf("create restricted invite: %v", err)
+	}
+
+	body := fmt.Sprintf(`{"invite_token":%q,"username":"smtpfail_%s","email":%q,"consent":true,"age_affirmation":true}`,
+		invite.Token, slug, restrictedEmail)
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+	h.Register(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Errorf("want 201 even on SMTP failure, got %d — body: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]string
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if resp["warning"] != "smtp_failure" {
+		t.Errorf("expected warning=smtp_failure, got %q", resp["warning"])
 	}
 }
 

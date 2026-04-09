@@ -1,4 +1,5 @@
 import type { GameType, Player, LeaderboardEntry, Submission, Round, WsMessage } from '$lib/api/types';
+import { toast } from './toast.svelte';
 
 type RoomPhase = 'idle' | 'countdown' | 'submitting' | 'voting' | 'results';
 type RoomStatus = 'lobby' | 'playing' | 'finished';
@@ -13,15 +14,20 @@ class RoomState {
   submissions = $state<Submission[]>([]);
   leaderboard = $state<LeaderboardEntry[]>([]);
   endReason = $state<string | null>(null);
+  hostUserId = $state<string | null>(null);
 
   hasSubmitted = $state(false);
   hasVoted = $state(false);
 
-  init(data: { code: string; game_type: GameType; state: string; players: Player[] }): void {
+  init(data: { code: string; game_type: GameType; state: string; players: Player[]; host_id?: string }): void {
     this.code = data.code;
     this.gameType = data.game_type;
     this.state = data.state as RoomStatus;
-    this.players = data.players;
+    this.hostUserId = data.host_id ?? null;
+    this.players = (data.players ?? []).map(p => ({
+      ...p,
+      is_host: p.user_id === this.hostUserId
+    }));
   }
 
   handleMessage(msg: WsMessage) {
@@ -29,7 +35,7 @@ class RoomState {
       case 'player_joined': {
         const d = msg.data as Player;
         if (!this.players.find(p => p.user_id === d.user_id)) {
-          this.players = [...this.players, d];
+          this.players = [...this.players, { ...d, is_host: d.user_id === this.hostUserId }];
         }
         break;
       }
@@ -72,9 +78,24 @@ class RoomState {
         break;
       }
       case 'room_state': {
-        const d = msg.data as { state: RoomStatus; players: Player[] };
+        const d = msg.data as { state: RoomStatus; players: Player[]; host_id?: string };
         this.state = d.state;
-        this.players = d.players;
+        if (d.host_id) this.hostUserId = d.host_id;
+        this.players = (d.players ?? []).map(p => ({
+          ...p,
+          is_host: p.user_id === this.hostUserId
+        }));
+        break;
+      }
+      case 'error': {
+        const d = msg.data as { code: string; message?: string };
+        toast.show(d.message ?? d.code ?? 'An error occurred', 'error');
+        if (d.code === 'submission_closed' || d.code === 'already_submitted') {
+          this.hasSubmitted = true;
+        }
+        if (d.code === 'vote_closed' || d.code === 'already_voted') {
+          this.hasVoted = true;
+        }
         break;
       }
     }
@@ -90,6 +111,7 @@ class RoomState {
     this.submissions = [];
     this.leaderboard = [];
     this.endReason = null;
+    this.hostUserId = null;
     this.hasSubmitted = false;
     this.hasVoted = false;
   }

@@ -142,7 +142,6 @@ export interface LeaderboardEntry {
   user_id: string;
   username: string;
   total_score: number;
-  score: number;
   rank: number;
 }
 
@@ -150,8 +149,12 @@ export interface Round {
   round_number: number;
   ends_at: string;
   duration_seconds: number;
-  text_prompt?: string;
-  media_url?: string;
+  item: {
+    payload: unknown;
+    media_url?: string | null;
+  };
+  text_prompt?: string;   // backward compat
+  media_url?: string;     // backward compat
 }
 
 export interface Submission {
@@ -159,6 +162,6 @@ export interface Submission {
   user_id: string;
   username: string;
   caption: string;
-  vote_count?: number;
-  score?: number;
+  votes_received?: number;
+  points_awarded?: number;
 }

@@ -85,5 +85,14 @@ func (s *S3Storage) Delete(ctx context.Context, key string) error {
 	return nil
 }
 
+// Probe checks that the bucket is accessible by calling HeadBucket.
+func (s *S3Storage) Probe(ctx context.Context) error {
+	_, err := s.client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(s.bucket)})
+	if err != nil {
+		return fmt.Errorf("storage probe: %w", err)
+	}
+	return nil
+}
+
 // Compile-time interface check
 var _ Storage = (*S3Storage)(nil)

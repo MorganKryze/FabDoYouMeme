@@ -1,13 +1,18 @@
 import type { PageServerLoad } from './$types';
+import { API_BASE } from '$lib/server/backend';
+
+interface AdminStats {
+  active_rooms: number;
+  total_users: number;
+  total_packs: number;
+  pending_invites: number;
+}
 
 export const load: PageServerLoad = async ({ fetch }) => {
-  const [statsRes, auditRes] = await Promise.all([
-    fetch('/api/admin/stats'),
-    fetch('/api/admin/audit-log?limit=10')
-  ]);
-
-  const stats = statsRes.ok ? await statsRes.json() : null;
-  const auditLog = auditRes.ok ? await auditRes.json() : [];
-
-  return { stats, auditLog };
+  const notifRes = await fetch(`${API_BASE}/api/admin/notifications?unread=true&limit=1`);
+  const notifData = notifRes.ok ? await notifRes.json() : { total: 0 };
+  return {
+    unreadCount: notifData.total ?? 0,
+    stats: null as AdminStats | null,
+  };
 };

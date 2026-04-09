@@ -10,5 +10,8 @@ RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 COPY --from=builder /app/server .
 COPY internal/email/templates ./internal/email/templates
+# Create unprivileged user
+RUN addgroup -S appgroup && adduser -S -G appgroup -u 1000 appuser
+USER appuser
 EXPOSE 8080
 CMD ["./server"]

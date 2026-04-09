@@ -17,6 +17,13 @@
 
   let countdown = $state<number | null>(null);
   let countdownInterval: ReturnType<typeof setInterval> | null = null;
+  let prefersReducedMotion = $state(false);
+
+  $effect(() => {
+    if (typeof window !== 'undefined') {
+      prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    }
+  });
 
   function startCountdown() {
     countdown = 3;
@@ -25,7 +32,6 @@
       if (countdown <= 0) {
         clearInterval(countdownInterval!);
         countdown = null;
-        room.phase = 'submitting';
       } else {
         countdown--;
       }
@@ -60,7 +66,10 @@
   <!-- Countdown overlay -->
   {#if countdown !== null}
     <div class="fixed inset-0 bg-background/90 z-40 flex items-center justify-center">
-      <div class="text-9xl font-black animate-bounce tabular-nums" aria-live="assertive">
+      <div
+        class="text-9xl font-black tabular-nums {prefersReducedMotion ? '' : 'animate-bounce'}"
+        aria-live="assertive"
+      >
         {countdown > 0 ? countdown : 'GO!'}
       </div>
     </div>
@@ -126,7 +135,7 @@
               {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`}
             </span>
             <span class="flex-1 text-left font-medium">{entry.username}</span>
-            <span class="text-muted-foreground">{entry.score} pts</span>
+            <span class="text-muted-foreground">{entry.total_score} pts</span>
           </li>
         {/each}
       </ol>

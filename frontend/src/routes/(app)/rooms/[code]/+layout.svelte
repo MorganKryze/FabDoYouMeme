@@ -7,6 +7,16 @@
 
   let { children, data }: { children: any; data: LayoutData } = $props();
 
+  let copied = $state(false);
+  let copyTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  async function copyRoomCode() {
+    await navigator.clipboard.writeText(data.room.code);
+    copied = true;
+    if (copyTimeout) clearTimeout(copyTimeout);
+    copyTimeout = setTimeout(() => { copied = false; }, 2000);
+  }
+
   onMount(() => {
     room.init(data.room);
     ws.connect(data.room.code);
@@ -27,11 +37,11 @@
       <span class="font-mono font-bold text-lg">{data.room.code}</span>
       <button
         type="button"
-        onclick={() => navigator.clipboard.writeText(data.room.code)}
+        onclick={copyRoomCode}
         class="text-xs text-muted-foreground hover:text-foreground transition-colors"
         title="Copy room code"
       >
-        Copy
+        {copied ? 'Copied!' : 'Copy'}
       </button>
     </div>
 

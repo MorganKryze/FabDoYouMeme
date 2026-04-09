@@ -2,11 +2,14 @@
 package api
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -32,7 +35,7 @@ func NewPackHandler(pool *pgxpool.Pool, cfg *config.Config, store storage.Storag
 func (h *PackHandler) Create(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.GetSessionUser(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
 	var req struct {
@@ -42,18 +45,18 @@ func (h *PackHandler) Create(w http.ResponseWriter, r *http.Request) {
 		IsOfficial  bool   `json:"is_official"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "Invalid JSON")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid JSON")
 		return
 	}
 	if req.Name == "" {
-		writeError(w, http.StatusBadRequest, "bad_request", "name is required")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "name is required")
 		return
 	}
 	if req.Visibility == "" {
 		req.Visibility = "private"
 	}
 	if req.IsOfficial && u.Role != "admin" {
-		writeError(w, http.StatusForbidden, "forbidden", "Only admins can create official packs")
+		writeError(w, r, http.StatusForbidden, "forbidden", "Only admins can create official packs")
 		return
 	}
 	ownerID, _ := uuid.Parse(u.UserID)
@@ -65,7 +68,7 @@ func (h *PackHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Visibility:  req.Visibility,
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Failed to create pack")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to create pack")
 		return
 	}
 	writeJSON(w, http.StatusCreated, pack)
@@ -75,7 +78,7 @@ func (h *PackHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *PackHandler) List(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.GetSessionUser(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
 	limit, offset := parsePagination(r)
@@ -95,7 +98,7 @@ func (h *PackHandler) List(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Failed to list packs")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to list packs")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -108,22 +111,22 @@ func (h *PackHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *PackHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.GetSessionUser(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
 	packID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "Invalid pack ID")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid pack ID")
 		return
 	}
 	pack, err := h.db.GetPackByID(r.Context(), packID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "Pack not found")
+		writeError(w, r, http.StatusNotFound, "not_found", "Pack not found")
 		return
 	}
 	ownerID, _ := uuid.Parse(u.UserID)
 	if u.Role != "admin" && (!pack.OwnerID.Valid || pack.OwnerID.Bytes != ownerID) {
-		writeError(w, http.StatusForbidden, "forbidden", "Access denied")
+		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
 	writeJSON(w, http.StatusOK, pack)
@@ -133,22 +136,22 @@ func (h *PackHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 func (h *PackHandler) Update(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.GetSessionUser(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
 	packID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "Invalid pack ID")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid pack ID")
 		return
 	}
 	pack, err := h.db.GetPackByID(r.Context(), packID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "Pack not found")
+		writeError(w, r, http.StatusNotFound, "not_found", "Pack not found")
 		return
 	}
 	ownerID, _ := uuid.Parse(u.UserID)
 	if u.Role != "admin" && (!pack.OwnerID.Valid || pack.OwnerID.Bytes != ownerID) {
-		writeError(w, http.StatusForbidden, "forbidden", "Access denied")
+		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
 	var req struct {
@@ -171,7 +174,7 @@ func (h *PackHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Visibility:  req.Visibility,
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Update failed")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Update failed")
 		return
 	}
 	// Notify admin when pack becomes public
@@ -190,26 +193,26 @@ func (h *PackHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *PackHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.GetSessionUser(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
 	packID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "Invalid pack ID")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid pack ID")
 		return
 	}
 	pack, err := h.db.GetPackByID(r.Context(), packID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "Pack not found")
+		writeError(w, r, http.StatusNotFound, "not_found", "Pack not found")
 		return
 	}
 	ownerID, _ := uuid.Parse(u.UserID)
 	if u.Role != "admin" && (!pack.OwnerID.Valid || pack.OwnerID.Bytes != ownerID) {
-		writeError(w, http.StatusForbidden, "forbidden", "Access denied")
+		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
 	if err := h.db.SoftDeletePack(r.Context(), packID); err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Delete failed")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Delete failed")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -219,20 +222,20 @@ func (h *PackHandler) Delete(w http.ResponseWriter, r *http.Request) {
 func (h *PackHandler) SetStatus(w http.ResponseWriter, r *http.Request) {
 	packID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "Invalid pack ID")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid pack ID")
 		return
 	}
 	var req struct{ Status string `json:"status"` }
 	json.NewDecoder(r.Body).Decode(&req)
 	if req.Status != "active" && req.Status != "flagged" && req.Status != "banned" {
-		writeError(w, http.StatusBadRequest, "bad_request", "status must be active, flagged, or banned")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "status must be active, flagged, or banned")
 		return
 	}
 	updated, err := h.db.SetPackStatus(r.Context(), db.SetPackStatusParams{
 		ID: packID, Status: req.Status,
 	})
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Update failed")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Update failed")
 		return
 	}
 	writeJSON(w, http.StatusOK, updated)
@@ -247,6 +250,26 @@ func strPtr(s string) *string {
 	return &s
 }
 
+// cursor is the opaque pagination token, base64-encoded JSON.
+type cursor struct {
+	CreatedAt time.Time `json:"created_at"`
+	ID        string    `json:"id"`
+}
+
+func encodeCursor(c cursor) string {
+	b, _ := json.Marshal(c)
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+func decodeCursor(s string) (cursor, error) {
+	b, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return cursor{}, err
+	}
+	var c cursor
+	return c, json.Unmarshal(b, &c)
+}
+
 func parsePagination(r *http.Request) (limit, offset int) {
 	limit = 50
 	offset = 0
@@ -256,19 +279,24 @@ func parsePagination(r *http.Request) (limit, offset int) {
 		}
 	}
 	if c := r.URL.Query().Get("after"); c != "" {
-		if v, err := strconv.Atoi(c); err == nil && v > 0 {
+		if decoded, err := decodeCursor(c); err == nil {
+			if v, err := strconv.Atoi(decoded.ID); err == nil {
+				offset = v
+			}
+		} else if v, err := strconv.Atoi(c); err == nil {
+			// Fallback: accept plain integer offset for backwards compatibility
 			offset = v
 		}
 	}
 	return
 }
 
-func nextCursor(count, limit, offset int) *string {
+func nextCursor(count, limit, offset int) string {
 	if count < limit {
-		return nil
+		return ""
 	}
-	s := strconv.Itoa(offset + count)
-	return &s
+	c := cursor{CreatedAt: time.Now(), ID: strconv.Itoa(offset + count)}
+	return encodeCursor(c)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
@@ -277,6 +305,12 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	json.NewEncoder(w).Encode(v)
 }
 
-func writeError(w http.ResponseWriter, status int, code, message string) {
-	writeJSON(w, status, map[string]string{"error": message, "code": code})
+func writeError(w http.ResponseWriter, r *http.Request, status int, code, message string) {
+	body := map[string]string{"error": message, "code": code}
+	if r != nil {
+		if reqID := chiMiddleware.GetReqID(r.Context()); reqID != "" {
+			body["request_id"] = reqID
+		}
+	}
+	writeJSON(w, status, body)
 }

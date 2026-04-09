@@ -23,6 +23,17 @@ DELETE FROM magic_link_tokens WHERE expires_at < now() AND used_at IS NULL;
 DELETE FROM magic_link_tokens
 WHERE used_at IS NOT NULL AND used_at < now() - interval '7 days';
 
+-- name: GetMagicLinkTokenByHash :one
+-- Used to inspect token state before consuming — allows returning distinct error codes.
+SELECT * FROM magic_link_tokens WHERE token_hash = $1;
+
+-- ConsumeMagicLinkTokenAtomic is the ONLY query that should be used in production
+-- for token consumption. It marks the token used in a single atomic UPDATE, preventing
+-- the race condition where two concurrent requests consume the same token.
+--
+-- ConsumeMagicLinkToken (non-atomic) is retained only for reference; never call it
+-- from application code.
+
 -- name: ConsumeMagicLinkTokenAtomic :one
 UPDATE magic_link_tokens
 SET used_at = NOW()

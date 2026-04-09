@@ -20,16 +20,26 @@
   });
 
   async function downloadExport() {
-    const res = await fetch('/api/users/me/export');
-    if (!res.ok) { toast.show('Failed to export data. Try again.', 'error'); return; }
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'fabyoumeme-export.json';
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.show('Your data export is ready.', 'success');
+    try {
+      const res = await fetch('/api/users/me/export');
+      if (!res.ok) throw new Error(`Export failed: ${res.status}`);
+      let blob: Blob;
+      try {
+        blob = await res.blob();
+      } catch {
+        toast.show('Could not prepare download file. Try again.', 'error');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'my-fabyoumeme-data.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.show('Your data export is ready.', 'success');
+    } catch {
+      toast.show('Export failed. Please try again.', 'error');
+    }
   }
 </script>
 

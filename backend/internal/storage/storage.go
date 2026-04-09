@@ -19,6 +19,10 @@ type Storage interface {
 
 	// Delete removes the object at key. Non-fatal if key does not exist.
 	Delete(ctx context.Context, key string) error
+
+	// Probe checks connectivity to the storage backend.
+	// Returns nil if the bucket is reachable.
+	Probe(ctx context.Context) error
 }
 
 // ObjectKey returns the canonical storage key for an item version.

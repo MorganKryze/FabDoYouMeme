@@ -254,6 +254,7 @@ JOIN rounds rnd ON s.round_id = rnd.id
 JOIN rooms r2 ON rnd.room_id = r2.id
 JOIN game_types gt ON r2.game_type_id = gt.id
 WHERE s.user_id = $1
+  AND r2.state = 'finished'
 ORDER BY s.created_at DESC
 `
 

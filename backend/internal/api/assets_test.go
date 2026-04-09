@@ -52,20 +52,20 @@ func uploadURLRequest(t *testing.T, mime string, sizeBytes int64, previewBase64 
 	return req
 }
 
-func TestUploadURL_InvalidMIME_NoPreview(t *testing.T) {
-	// Allowlist-only check: disallowed MIME without preview bytes → 422 invalid_mime_type
+func TestUploadURL_MissingPreviewBytes_Returns400(t *testing.T) {
+	// preview_bytes is now required — omitting it should return 400 bad_request
 	h := newAssetHandler(t)
-	req := uploadURLRequest(t, "application/pdf", 512, "")
+	req := uploadURLRequest(t, "image/png", 512, "")
 	rec := httptest.NewRecorder()
 	h.UploadURL(rec, req)
 
-	if rec.Code != http.StatusUnprocessableEntity {
-		t.Errorf("want 422, got %d", rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("want 400, got %d", rec.Code)
 	}
 	var resp map[string]string
 	json.NewDecoder(rec.Body).Decode(&resp)
-	if resp["code"] != "invalid_mime_type" {
-		t.Errorf("want invalid_mime_type, got %s", resp["code"])
+	if resp["code"] != "bad_request" {
+		t.Errorf("want bad_request, got %s", resp["code"])
 	}
 }
 

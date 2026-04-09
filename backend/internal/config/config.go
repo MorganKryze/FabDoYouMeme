@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -28,6 +29,8 @@ type Config struct {
 	SessionTTL           time.Duration
 	SessionRenewInterval time.Duration
 
+	CookieDomain string
+
 	SeedAdminEmail string
 	LogLevel       string
 
@@ -38,6 +41,7 @@ type Config struct {
 	WSPingInterval       time.Duration
 
 	MaxUploadSizeBytes int64
+	AllowedOrigin      string
 
 	RateLimitAuthRPM    int
 	RateLimitInviteRPH  int
@@ -50,6 +54,7 @@ func Load() (*Config, error) {
 	required := []string{
 		"DATABASE_URL", "RUSTFS_ENDPOINT", "RUSTFS_ACCESS_KEY", "RUSTFS_SECRET_KEY",
 		"FRONTEND_URL", "BACKEND_URL", "SMTP_HOST", "SMTP_FROM",
+		"SMTP_USERNAME", "SMTP_PASSWORD",
 	}
 	for _, k := range required {
 		if os.Getenv(k) == "" {
@@ -74,6 +79,11 @@ func Load() (*Config, error) {
 		SeedAdminEmail:   os.Getenv("SEED_ADMIN_EMAIL"),
 		LogLevel:         getEnv("LOG_LEVEL", "info"),
 	}
+
+	if u, err := url.Parse(cfg.FrontendURL); err == nil {
+		cfg.CookieDomain = u.Hostname()
+	}
+	cfg.AllowedOrigin = cfg.FrontendURL
 
 	var err error
 	if cfg.SMTPPort, err = getEnvInt("SMTP_PORT", 587); err != nil {

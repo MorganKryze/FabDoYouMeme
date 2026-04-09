@@ -10,9 +10,12 @@
 
   const MAX_CHARS = 300;
   const deadline = $derived(Date.parse(round.ends_at));
-  let timerMs = $state(0);
+  const totalMs = $derived(round.duration_seconds * 1000);
+  const mountedExpired = $derived(deadline <= Date.now());
+  let timerMs = $state(Math.max(0, deadline - Date.now()));
 
   $effect(() => {
+    if (mountedExpired) return;
     const tick = () => {
       timerMs = Math.max(0, deadline - Date.now());
       if (timerMs > 0) requestAnimationFrame(tick);
@@ -20,13 +23,9 @@
     requestAnimationFrame(tick);
   });
 
-  const progressPct = $derived(
-    round.duration_seconds > 0
-      ? (timerMs / (round.duration_seconds * 1000)) * 100
-      : 0
-  );
+  const progressPct = $derived(totalMs > 0 ? (timerMs / totalMs) * 100 : 0);
   const secondsLeft = $derived(Math.ceil(timerMs / 1000));
-  const isExpired = $derived(timerMs <= 0);
+  const isExpired = $derived(timerMs <= 0 || mountedExpired);
 
   function submit() {
     if (submitted || isExpired || caption.trim().length === 0) return;
@@ -37,21 +36,34 @@
 
 <div class="flex flex-col gap-6">
   <!-- Timer -->
-  <div class="flex items-center gap-3">
-    <div class="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-      <div
-        class="h-full bg-primary transition-none rounded-full"
-        style="width: {progressPct}%"
-      ></div>
+  {#if mountedExpired}
+    <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+      Submission window has closed.
     </div>
-    <span class="text-sm tabular-nums font-medium w-10 text-right">{secondsLeft}s</span>
-    <span class="text-sm text-muted-foreground">Round {round.round_number}</span>
-  </div>
+  {:else}
+    <div class="flex items-center gap-3">
+      <div
+        class="flex-1 h-2 rounded-full bg-muted overflow-hidden"
+        role="progressbar"
+        aria-valuenow={secondsLeft}
+        aria-valuemin={0}
+        aria-valuemax={round.duration_seconds}
+        aria-label="Time remaining"
+      >
+        <div
+          class="h-full bg-primary transition-none rounded-full"
+          style="width: {progressPct}%"
+        ></div>
+      </div>
+      <span class="text-sm tabular-nums font-medium w-10 text-right">{secondsLeft}s</span>
+      <span class="text-sm text-muted-foreground">Round {round.round_number}</span>
+    </div>
+  {/if}
 
   <!-- Media prompt (if present) -->
-  {#if round.media_url}
+  {#if round.item?.media_url ?? round.media_url}
     <img
-      src={round.media_url}
+      src={round.item?.media_url ?? round.media_url}
       alt="Round prompt"
       class="w-full aspect-video object-cover rounded-lg border border-border"
     />

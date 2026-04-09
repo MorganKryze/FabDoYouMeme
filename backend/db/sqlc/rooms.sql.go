@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -46,7 +47,7 @@ type CreateRoomParams struct {
 	Code       string          `json:"code"`
 	GameTypeID uuid.UUID       `json:"game_type_id"`
 	PackID     uuid.UUID       `json:"pack_id"`
-	HostID     uuid.UUID       `json:"host_id"`
+	HostID     pgtype.UUID     `json:"host_id"`
 	Mode       string          `json:"mode"`
 	Config     json.RawMessage `json:"config"`
 }
@@ -166,23 +167,21 @@ func (q *Queries) EndRound(ctx context.Context, id uuid.UUID) (Round, error) {
 	return i, err
 }
 
-const finishAbandonedLobbies = `-- name: FinishAbandonedLobbies :exec
+const finishAbandonedLobbies = `-- name: FinishAbandonedLobbies :execresult
 UPDATE rooms SET state = 'finished', finished_at = now()
 WHERE state = 'lobby' AND created_at < now() - interval '24 hours'
 `
 
-func (q *Queries) FinishAbandonedLobbies(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, finishAbandonedLobbies)
-	return err
+func (q *Queries) FinishAbandonedLobbies(ctx context.Context) (pgconn.CommandTag, error) {
+	return q.db.Exec(ctx, finishAbandonedLobbies)
 }
 
-const finishCrashedRooms = `-- name: FinishCrashedRooms :exec
+const finishCrashedRooms = `-- name: FinishCrashedRooms :execresult
 UPDATE rooms SET state = 'finished', finished_at = now() WHERE state = 'playing'
 `
 
-func (q *Queries) FinishCrashedRooms(ctx context.Context) error {
-	_, err := q.db.Exec(ctx, finishCrashedRooms)
-	return err
+func (q *Queries) FinishCrashedRooms(ctx context.Context) (pgconn.CommandTag, error) {
+	return q.db.Exec(ctx, finishCrashedRooms)
 }
 
 const getCurrentRound = `-- name: GetCurrentRound :one
@@ -215,7 +214,7 @@ type GetRoomByCodeRow struct {
 	Code         string             `json:"code"`
 	GameTypeID   uuid.UUID          `json:"game_type_id"`
 	PackID       uuid.UUID          `json:"pack_id"`
-	HostID       uuid.UUID          `json:"host_id"`
+	HostID       pgtype.UUID        `json:"host_id"`
 	Mode         string             `json:"mode"`
 	State        string             `json:"state"`
 	Config       json.RawMessage    `json:"config"`
@@ -470,6 +469,69 @@ func (q *Queries) UpdatePlayerScore(ctx context.Context, arg UpdatePlayerScorePa
 		&i.JoinedAt,
 	)
 	return i, err
+}
+
+const getRoomByID = `-- name: GetRoomByID :one
+SELECT id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at FROM rooms WHERE id = $1
+`
+
+func (q *Queries) GetRoomByID(ctx context.Context, id uuid.UUID) (Room, error) {
+	row := q.db.QueryRow(ctx, getRoomByID, id)
+	var i Room
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.GameTypeID,
+		&i.PackID,
+		&i.HostID,
+		&i.Mode,
+		&i.State,
+		&i.Config,
+		&i.CreatedAt,
+		&i.FinishedAt,
+	)
+	return i, err
+}
+
+const getRoomLeaderboard = `-- name: GetRoomLeaderboard :many
+SELECT u.id AS user_id, u.username, rp.score,
+       RANK() OVER (ORDER BY rp.score DESC) AS rank
+FROM room_players rp
+JOIN users u ON rp.user_id = u.id
+WHERE rp.room_id = $1
+ORDER BY rp.score DESC
+`
+
+type GetRoomLeaderboardRow struct {
+	UserID   uuid.UUID `json:"user_id"`
+	Username string    `json:"username"`
+	Score    int32     `json:"score"`
+	Rank     int64     `json:"rank"`
+}
+
+func (q *Queries) GetRoomLeaderboard(ctx context.Context, roomID uuid.UUID) ([]GetRoomLeaderboardRow, error) {
+	rows, err := q.db.Query(ctx, getRoomLeaderboard, roomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetRoomLeaderboardRow
+	for rows.Next() {
+		var i GetRoomLeaderboardRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Username,
+			&i.Score,
+			&i.Rank,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateRoomConfig = `-- name: UpdateRoomConfig :one

@@ -55,6 +55,7 @@
         const item = await uploadImageItem(studio.selectedPackId!, file.name.replace(/\.[^.]+$/, ''), file);
         studio.items = [...studio.items, item];
       } catch {
+        uploadProgress = null;
         toast.show(`Failed to upload ${file.name}.`, 'error');
       }
     }

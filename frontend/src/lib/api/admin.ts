@@ -10,8 +10,15 @@ export const adminApi = {
       `/api/admin/users?${q}`
     );
   },
-  updateUser: (id: string, body: { role?: string; is_active?: boolean }) =>
-    api.patch<User>(`/api/admin/users/${id}`, body),
+  updateUser: (
+    id: string,
+    body: {
+      role?: 'player' | 'admin';
+      is_active?: boolean;
+      email?: string;
+      username?: string;
+    }
+  ) => api.patch<User>(`/api/admin/users/${id}`, body),
   deleteUser: (id: string) => api.delete<void>(`/api/admin/users/${id}`),
 
   listInvites: (params?: { after?: string }) => {

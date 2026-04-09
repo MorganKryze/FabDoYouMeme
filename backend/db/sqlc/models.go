@@ -99,7 +99,7 @@ type Room struct {
 	Code       string             `json:"code"`
 	GameTypeID uuid.UUID          `json:"game_type_id"`
 	PackID     uuid.UUID          `json:"pack_id"`
-	HostID     uuid.UUID          `json:"host_id"`
+	HostID     pgtype.UUID        `json:"host_id"`
 	Mode       string             `json:"mode"`
 	State      string             `json:"state"`
 	Config     json.RawMessage    `json:"config"`

@@ -33,6 +33,19 @@
           </a>
         </li>
       {/each}
+      <li>
+        <a
+          href="/admin/notifications"
+          class="relative flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        >
+          Notifications
+          {#if data.unreadNotifications > 0}
+            <span class="absolute top-1 right-2 h-4 w-4 rounded-full bg-red-500 text-xs text-white flex items-center justify-center leading-none">
+              {data.unreadNotifications > 9 ? '9+' : data.unreadNotifications}
+            </span>
+          {/if}
+        </a>
+      </li>
     </ul>
 
     <div class="mt-auto px-4 pt-4 border-t border-border">

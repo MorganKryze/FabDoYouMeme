@@ -5,6 +5,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -83,4 +84,22 @@ func (m *Manager) ActiveCount() int {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return len(m.hubs)
+}
+
+// Shutdown broadcasts "server_restarting" to all active hubs and waits briefly
+// for messages to flush before connections are torn down.
+func (m *Manager) Shutdown() {
+	m.mu.RLock()
+	hubs := make([]*Hub, 0, len(m.hubs))
+	for _, h := range m.hubs {
+		hubs = append(hubs, h)
+	}
+	m.mu.RUnlock()
+
+	for _, h := range hubs {
+		h.broadcast(buildMessage("server_restarting", map[string]string{
+			"message": "Server is restarting. Please reconnect in a few moments.",
+		}))
+	}
+	time.Sleep(1 * time.Second)
 }

@@ -34,7 +34,7 @@ func NewAssetHandler(pool *pgxpool.Pool, cfg *config.Config, store storage.Stora
 func (h *AssetHandler) UploadURL(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.GetSessionUser(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
 	var req struct {
@@ -47,51 +47,46 @@ func (h *AssetHandler) UploadURL(w http.ResponseWriter, r *http.Request) {
 		PreviewBytes  string `json:"preview_bytes"` // base64-encoded first ~512 bytes for magic byte validation
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "Invalid JSON")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid JSON")
 		return
 	}
 
 	// Size check
 	if req.SizeBytes > h.cfg.MaxUploadSizeBytes {
-		writeError(w, http.StatusUnprocessableEntity, "file_too_large",
+		writeError(w, r, http.StatusUnprocessableEntity, "file_too_large",
 			fmt.Sprintf("File exceeds maximum size of %d bytes", h.cfg.MaxUploadSizeBytes))
 		return
 	}
 
-	// MIME validation
-	if req.PreviewBytes != "" {
-		sample, err := base64.StdEncoding.DecodeString(req.PreviewBytes)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "bad_request", "preview_bytes must be base64-encoded")
-			return
-		}
-		if err := storage.ValidateMIME(req.MIMEType, sample); err != nil {
-			writeError(w, http.StatusUnprocessableEntity, "invalid_mime_type", err.Error())
-			return
-		}
-	} else {
-		// Allowlist-only check when no preview bytes provided
-		allowed := map[string]bool{"image/jpeg": true, "image/png": true, "image/webp": true}
-		if !allowed[req.MIMEType] {
-			writeError(w, http.StatusUnprocessableEntity, "invalid_mime_type", "MIME type not allowed")
-			return
-		}
+	// MIME validation — preview_bytes is required for magic byte check
+	if req.PreviewBytes == "" {
+		writeError(w, r, http.StatusBadRequest, "bad_request", "preview_bytes is required for MIME validation")
+		return
+	}
+	sample, err := base64.StdEncoding.DecodeString(req.PreviewBytes)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, "bad_request", "preview_bytes must be base64-encoded")
+		return
+	}
+	if err := storage.ValidateMIME(req.MIMEType, sample); err != nil {
+		writeError(w, r, http.StatusUnprocessableEntity, "invalid_mime_type", err.Error())
+		return
 	}
 
 	// Authorization: admin or pack owner
 	packID, err := uuid.Parse(req.PackID)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "Invalid pack_id")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid pack_id")
 		return
 	}
 	pack, err := h.db.GetPackByID(r.Context(), packID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "not_found", "Pack not found")
+		writeError(w, r, http.StatusNotFound, "not_found", "Pack not found")
 		return
 	}
 	ownerID, _ := uuid.Parse(u.UserID)
 	if u.Role != "admin" && (!pack.OwnerID.Valid || pack.OwnerID.Bytes != ownerID) {
-		writeError(w, http.StatusForbidden, "forbidden", "Access denied")
+		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
 
@@ -99,7 +94,7 @@ func (h *AssetHandler) UploadURL(w http.ResponseWriter, r *http.Request) {
 	key := storage.ObjectKey(req.PackID, req.ItemID, req.VersionNumber, sanitizeFilename(req.Filename))
 	uploadURL, err := h.storage.PresignUpload(r.Context(), key, 15*time.Minute)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Failed to generate upload URL")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to generate upload URL")
 		return
 	}
 
@@ -113,17 +108,17 @@ func (h *AssetHandler) UploadURL(w http.ResponseWriter, r *http.Request) {
 func (h *AssetHandler) DownloadURL(w http.ResponseWriter, r *http.Request) {
 	_, ok := middleware.GetSessionUser(r)
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
 	var req struct{ MediaKey string `json:"media_key"` }
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.MediaKey == "" {
-		writeError(w, http.StatusBadRequest, "bad_request", "media_key is required")
+		writeError(w, r, http.StatusBadRequest, "bad_request", "media_key is required")
 		return
 	}
 	downloadURL, err := h.storage.PresignDownload(r.Context(), req.MediaKey, 15*time.Minute)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "Failed to generate download URL")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to generate download URL")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"download_url": downloadURL})

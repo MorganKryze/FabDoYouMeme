@@ -49,7 +49,9 @@ export const actions: Actions = {
         invite_token,
         username,
         email,
-        error: ERROR_MESSAGES[code] ?? 'Registration failed. Please try again.'
+        error: ERROR_MESSAGES[code] ?? 'Registration failed. Please try again.',
+        consent: data.get('consent') === 'on',
+        age_affirmation: data.get('age_affirmation') === 'on',
       });
     }
 

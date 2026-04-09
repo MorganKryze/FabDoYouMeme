@@ -1,7 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import type { ActionData, PageData } from './$types';
-  import type { Pack } from '$lib/api/types';
+  import type { Pack, PaginatedResponse } from '$lib/api/types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -13,6 +13,7 @@
   let roundDuration = $state(60);
   let votingDuration = $state(30);
   let loadingPacks = $state(false);
+  let currentAbortController: AbortController | null = null;
 
   const selectedGameType = $derived(
     data.gameTypes.find((gt) => gt.id === selectedGameTypeId) ?? null
@@ -20,11 +21,18 @@
 
   async function loadPacks() {
     if (!selectedGameTypeId) return;
+    currentAbortController?.abort();
+    currentAbortController = new AbortController();
+    const signal = currentAbortController.signal;
     loadingPacks = true;
     try {
-      const res = await fetch(`/api/packs?game_type_id=${selectedGameTypeId}`);
-      packs = res.ok ? await res.json() : [];
+      const res = await fetch(`/api/packs?game_type_id=${selectedGameTypeId}`, { signal });
+      if (!res.ok) { packs = []; return; }
+      const body: PaginatedResponse<Pack> = await res.json();
+      packs = body.data ?? [];
       selectedPackId = packs[0]?.id ?? '';
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') { packs = []; }
     } finally {
       loadingPacks = false;
     }

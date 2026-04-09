@@ -61,9 +61,9 @@ export async function deleteItem(
 
 export async function reorderItems(
   packId: string,
-  orderedIds: string[]
+  positions: { id: string; position: number }[]
 ): Promise<void> {
-  return api.patch<void>(`/api/packs/${packId}/items/reorder`, { ordered_ids: orderedIds });
+  return api.patch<void>(`/api/packs/${packId}/items/reorder`, { positions });
 }
 
 // ── Upload flow ────────────────────────────────────────────────────────────

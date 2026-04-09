@@ -2,9 +2,14 @@
   import '../../app.css';
   import Toast from '$lib/components/Toast.svelte';
   import { ws } from '$lib/state/ws.svelte';
+  import { user } from '$lib/state/user.svelte';
   import type { LayoutData } from './$types';
 
   let { children, data }: { children: any; data: LayoutData } = $props();
+
+  $effect(() => {
+    user.setFrom(data.user);
+  });
 
   const statusDot: Record<string, string> = {
     connected: 'bg-green-500 opacity-0 group-hover:opacity-100',
