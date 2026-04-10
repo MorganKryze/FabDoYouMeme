@@ -1,4 +1,4 @@
-# ref — Architectural Decision Records
+# Architectural Decisions
 
 ADR-style record of non-obvious architectural decisions. Each entry explains what was decided, why alternatives were rejected, and the consequences.
 

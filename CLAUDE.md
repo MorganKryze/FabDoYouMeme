@@ -7,7 +7,7 @@ Guidance for Claude Code working in this repository.
 **FabDoYouMeme** — GPLv3, self-hosted, invite-only multi-game platform (meme caption, match, vote). Runs on a single machine via Docker Compose. Reverse proxy is pre-existing and assumed to route `/api/*` to backend, `/*` to frontend.
 
 GitHub: `github.com/MorganKryze/FabDoYouMeme`
-Status: **pre-implementation** — no source code yet. `design/` is the authoritative architecture reference.
+Status: **implemented** — source code is complete. `docs/` is the authoritative documentation reference.
 
 ---
 
@@ -60,7 +60,7 @@ FabDoYouMeme/
 │   │   └── routes/              # SvelteKit file-based routing
 │   ├── Dockerfile
 │   └── package.json
-├── design/                      # architecture reference (see below)
+├── docs/                        # documentation (see below)
 ├── docker-compose.yml
 ├── docker-compose.override.yml  # dev overrides (Mailpit, volume mounts)
 └── CLAUDE.md
@@ -68,22 +68,22 @@ FabDoYouMeme/
 
 ---
 
-## Design Docs
+## Docs
 
-| File                           | Contents                                                                |
-| ------------------------------ | ----------------------------------------------------------------------- |
-| `design/00-index.md`           | Index + quick-reference flows                                           |
-| `design/01-overview.md`        | Goals, tech stack rationale, repo structure                             |
-| `design/02-identity.md`        | Auth flow, invite system, session management, rate limits               |
-| `design/03-data.md`            | PostgreSQL schema, indexes, RustFS storage, asset lifecycle             |
-| `design/04-protocol.md`        | REST endpoints, WebSocket protocol, game type handler interface         |
-| `design/05-frontend.md`        | SvelteKit routing, state architecture, UX flows, accessibility          |
-| `design/06-operations.md`      | Docker Compose, migrations, backups, CI, logging, Prometheus metrics    |
-| `design/ref-error-codes.md`    | Canonical `snake_case` error code table (REST + WebSocket)              |
-| `design/ref-env-vars.md`       | All environment variables: name, default, required, description         |
-| `design/ref-decisions.md`      | ADR-style decisions: why no JWT, why chi, why sentinel UUID, etc.       |
-| `design/ref-gdpr.md`           | GDPR compliance: lawful basis, ROPA-lite, rights, DPA, breach procedure |
-| `design/ref-privacy-policy.md` | Art. 13(1) Privacy Policy stub template for operator to complete        |
+| File                                      | Contents                                                                |
+| ----------------------------------------- | ----------------------------------------------------------------------- |
+| `docs/overview.md`                        | Goals, tech stack rationale, key design decisions                       |
+| `docs/architecture.md`                    | System components, DB schema, storage, middleware, startup behaviour    |
+| `docs/auth-and-identity.md`               | Auth flow, invite system, session management, security controls         |
+| `docs/game-engine.md`                     | Room/round lifecycle, WebSocket hub, game type handler interface        |
+| `docs/api.md`                             | REST endpoints, WebSocket protocol, error model                         |
+| `docs/frontend.md`                        | SvelteKit routing, Svelte 5 state singletons, game plugin architecture  |
+| `docs/self-hosting.md`                    | Prerequisites, first boot, all environment variables                    |
+| `docs/operations.md`                      | Monitoring, logs, backups, CI, production checklist                     |
+| `docs/reference/error-codes.md`           | Canonical `snake_case` error code table (REST + WebSocket)              |
+| `docs/reference/decisions.md`             | ADR-001–ADR-010: why no JWT, why chi, why sentinel UUID, etc.           |
+| `docs/reference/gdpr.md`                  | GDPR compliance: lawful basis, ROPA-lite, rights, DPA, breach procedure |
+| `docs/reference/privacy-policy.md`        | Art. 13(1) Privacy Policy stub template for operator to complete        |
 
 ---
 
@@ -142,10 +142,10 @@ open http://localhost:8025
 - **`sqlc` workflow**: never write Go DB code by hand; write SQL in `backend/db/queries/`, run `sqlc generate`, use the generated types
 - **Game handler registry**: adding a new game type requires only implementing `GameTypeHandler` and calling `Register()` in `main.go` — no schema or protocol changes
 - **RustFS is external**: it lives in a separate Docker stack on `pangolin` network; the backend communicates via `RUSTFS_ENDPOINT`
-- **Rate limits are in-memory**: per-process only; if multi-instance is ever added, externalize to Redis (see ADR-005 in `ref-decisions.md`)
+- **Rate limits are in-memory**: per-process only; if multi-instance is ever added, externalize to Redis (see ADR-005 in `docs/reference/decisions.md`)
 - **`/api/metrics` must be IP-restricted**: never expose Prometheus endpoint to the internet
 - **Startup cleanup**: on every start, the backend marks `playing` rooms as `finished` (crash recovery) and closes stale `lobby` rooms older than 24h — both are idempotent
-- **GDPR**: registration requires `consent: true` + `age_affirmation: true`; `users.consent_at` is set once and never changed; hard-delete replaces both `submissions.user_id` AND `votes.voter_id` with the sentinel UUID before deleting the user row; game data purged after 2 years; audit log PII anonymized after 3 years — see `ref-gdpr.md`
+- **GDPR**: registration requires `consent: true` + `age_affirmation: true`; `users.consent_at` is set once and never changed; hard-delete replaces both `submissions.user_id` AND `votes.voter_id` with the sentinel UUID before deleting the user row; game data purged after 2 years; audit log PII anonymized after 3 years — see `docs/reference/gdpr.md`
 
 ---
 

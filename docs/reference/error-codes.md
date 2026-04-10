@@ -1,18 +1,19 @@
-# ref — Error Codes
+# Error Codes
 
-Canonical reference for every `snake_case` error code emitted by the system. All REST error responses use the shape `{ "error": "human message", "code": "snake_case_code" }`. WebSocket error frames use `{ "type": "error", "data": { "code": "snake_case_code", "message": "..." } }`.
+Canonical reference for every `snake_case` error code emitted by the system.
 
-All endpoint-specific codes link back here. Do not define error codes inline in other docs — add them here first.
+- **REST** errors use: `{ "error": "human message", "code": "snake_case_code", "request_id": "..." }`
+- **WebSocket** errors use: `{ "type": "error", "data": { "code": "snake_case_code", "message": "..." } }`
 
 ---
 
-## REST Error Codes
+## REST error codes
 
 | Code                       | HTTP | Emitted by                                       | Meaning                                                                                                                    |
 | -------------------------- | ---- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | `consent_required`         | 400  | `POST /api/auth/register`                        | `consent` field is missing or not `true` — user must explicitly accept the privacy policy                                  |
 | `age_affirmation_required` | 400  | `POST /api/auth/register`                        | `age_affirmation` field is missing or not `true` — user must confirm they are 16+                                          |
-| `invalid_invite`           | 400  | `POST /api/auth/register`                        | Token does not exist, is expired, or is exhausted — deliberately generic to prevent enumeration oracle                     |
+| `invalid_invite`           | 400  | `POST /api/auth/register`                        | Token does not exist, is expired, or is exhausted — deliberately generic to prevent enumeration                            |
 | `email_mismatch`           | 400  | `POST /api/auth/register`                        | Invite has `restricted_email` and provided email does not match                                                            |
 | `username_taken`           | 409  | `POST /api/auth/register`, `PATCH /api/users/me` | Username already in use by another account                                                                                 |
 | `token_expired`            | 400  | `POST /api/auth/verify`                          | Magic link token past its TTL                                                                                              |
@@ -27,18 +28,17 @@ All endpoint-specific codes link back here. Do not define error codes inline in 
 | `magic_bytes_mismatch`     | 422  | `POST /api/assets/upload-url`                    | File magic bytes do not match declared MIME type                                                                           |
 | `upload_too_large`         | 422  | `POST /api/assets/upload-url`                    | `size_bytes` exceeds `MAX_UPLOAD_SIZE_BYTES`                                                                               |
 | `pack_insufficient_items`  | 422  | `POST /api/rooms`                                | Pack has compatible items but fewer than `config.round_count`                                                              |
-| `pack_no_supported_items`  | 422  | `POST /api/rooms`                                | Pack has zero items with a `payload_version` supported by the chosen game type handler                                     |
+| `pack_no_supported_items`  | 422  | `POST /api/rooms`                                | Pack has zero items with a `payload_version` supported by the chosen game type                                             |
 | `solo_mode_not_supported`  | 422  | `POST /api/rooms`                                | `mode='solo'` requested but `game_types.supports_solo = false`                                                             |
-| `room_not_lobby`           | 409  | `PATCH /api/rooms/:code/config`                  | Room state is not `lobby`; config is locked during play                                                                    |
+| `room_not_lobby`           | 409  | `PATCH /api/rooms/:code/config`                  | Room state is not `lobby`; config is locked once the game starts                                                           |
 | `positions_invalid`        | 422  | `PATCH /api/packs/:id/items/reorder`             | Positions array does not cover all items, contains duplicates, does not start at 1, or contains item IDs from another pack |
-| `rate_limited`             | 429  | Rate-limit middleware                            | Too many requests — see `02-identity.md` for per-route limits                                                              |
+| `rate_limited`             | 429  | Rate-limit middleware                            | Too many requests — see [self-hosting.md](../self-hosting.md) for per-route limits                                         |
 
 ### Special: smtp_failure (201 + warning)
 
-When `POST /api/auth/register` is used with a `restricted_email` invite and SMTP fails to deliver the auto-sent magic link, the response is:
+When `POST /api/auth/register` is used with a `restricted_email` invite and SMTP fails to deliver the auto-sent magic link, the response is `201 Created` with a `warning` field:
 
 ```json
-201 Created
 {
   "user_id": "uuid",
   "warning": "smtp_failure",
@@ -46,13 +46,13 @@ When `POST /api/auth/register` is used with a `restricted_email` invite and SMTP
 }
 ```
 
-The user record **is** created and the invite slot **is** consumed. The user must request a magic link manually once SMTP is restored. Rolling back user creation is not done — it would allow the same invite slot to be re-used by a different person, creating a race condition.
+The user record **is** created and the invite slot **is** consumed. The user must request a magic link manually once SMTP is restored. User creation is not rolled back — doing so would release the invite slot for re-use by a different person, creating a race condition.
 
 ---
 
-## WebSocket Error Codes
+## WebSocket error codes
 
-Sent as `{ "type": "error", "data": { "code": "...", "message": "..." } }` to the originating connection.
+Sent to the originating connection as `{ "type": "error", "data": { "code": "...", "message": "..." } }`.
 
 | Code                   | Emitted by                   | Meaning                                                                                    |
 | ---------------------- | ---------------------------- | ------------------------------------------------------------------------------------------ |

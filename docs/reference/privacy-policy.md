@@ -1,20 +1,20 @@
-# ref — Privacy Policy Template
+# Privacy Policy Template
 
-This document is a **stub template** for the Privacy Policy served at `/privacy`. It must be completed by the operator before inviting the first users. All `[PLACEHOLDER]` fields must be replaced with real content.
+This is a stub template for the Privacy Policy served at `/privacy`. It must be completed by the operator before inviting the first users. All `[PLACEHOLDER]` fields must be replaced with real content.
 
 GDPR Art. 13(1) requires this information to be provided at the time personal data is collected (i.e., at registration). The consent checkbox on the registration page links here — incomplete content is a compliance failure.
 
 ---
 
-## 1. Controller Identity (Art. 13(1)(a))
+## 1. Controller identity (Art. 13(1)(a))
 
-**Data controller**: [OPERATOR NAME]
-**Contact email**: [OPERATOR EMAIL — used for erasure and access requests]
-**Hosted at**: [DEPLOYMENT URL, e.g. https://meme.example.com]
+**Data controller:** [OPERATOR NAME]  
+**Contact email:** [OPERATOR EMAIL — used for erasure and access requests]  
+**Hosted at:** [DEPLOYMENT URL, e.g. https://meme.example.com]
 
 ---
 
-## 2. Purposes and Lawful Bases (Art. 13(1)(c))
+## 2. Purposes and lawful bases (Art. 13(1)(c))
 
 | Purpose                           | Data used                              | Lawful basis                        |
 | --------------------------------- | -------------------------------------- | ----------------------------------- |
@@ -26,7 +26,7 @@ GDPR Art. 13(1) requires this information to be provided at the time personal da
 
 ---
 
-## 3. Categories of Personal Data Collected (Art. 13(1))
+## 3. Categories of personal data collected
 
 - **Email address** — used to send authentication links; not shared with other players
 - **Username** — displayed in-game and on leaderboards; visible to all players in a room
@@ -37,7 +37,7 @@ GDPR Art. 13(1) requires this information to be provided at the time personal da
 
 ---
 
-## 4. Data Retention (Art. 13(2)(a))
+## 4. Data retention (Art. 13(2)(a))
 
 | Data                                      | Retained for                                                  |
 | ----------------------------------------- | ------------------------------------------------------------- |
@@ -50,9 +50,7 @@ GDPR Art. 13(1) requires this information to be provided at the time personal da
 
 ---
 
-## 5. Your Rights (Art. 13(2)(b))
-
-You have the following rights under GDPR:
+## 5. Your rights (Art. 13(2)(b))
 
 | Right                            | How to exercise                                      |
 | -------------------------------- | ---------------------------------------------------- |
@@ -65,18 +63,18 @@ You have the following rights under GDPR:
 
 ---
 
-## 6. How to Lodge a Complaint (Art. 13(2)(d))
+## 6. How to lodge a complaint (Art. 13(2)(d))
 
 If you believe your data is being processed unlawfully, you have the right to lodge a complaint with your national data protection authority:
 
-- **France**: CNIL — <https://www.cnil.fr>
-- **Germany**: BfDI — <https://www.bfdi.bund.de>
-- **UK**: ICO — <https://ico.org.uk>
-- **Other EU/EEA**: <https://edpb.europa.eu/about-edpb/about-edpb/members_en>
+- **France:** CNIL — <https://www.cnil.fr>
+- **Germany:** BfDI — <https://www.bfdi.bund.de>
+- **UK:** ICO — <https://ico.org.uk>
+- **Other EU/EEA:** <https://edpb.europa.eu/about-edpb/about-edpb/members_en>
 
 ---
 
-## 7. Minimum Age (Art. 8)
+## 7. Minimum age (Art. 8)
 
 This platform is intended for users aged **16 and above**. By registering, you confirm that you meet this requirement. If you are under 16, parental consent must be obtained — contact [OPERATOR EMAIL].
 
@@ -94,7 +92,7 @@ No tracking, analytics, or advertising cookies are used. No third-party cookies 
 
 ---
 
-## 9. Data Processors (Art. 28)
+## 9. Data processors (Art. 28)
 
 Your email address is transmitted to our email provider to send authentication links:
 
@@ -106,11 +104,11 @@ All other data is stored on-premises and not shared with third parties.
 
 ---
 
-## 10. Backup Disclosure
+## 10. Backup disclosure
 
 Database backups are retained for 7 days for disaster recovery. If you request erasure, your data is deleted from the live database immediately, but may persist in backups for up to 7 days. This is permitted under GDPR Art. 17(3)(b) (legitimate interest — incident recovery).
 
 ---
 
-_Last updated: [DATE]_
+_Last updated: [DATE]_  
 _Version: 1.0_
