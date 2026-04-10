@@ -2,10 +2,13 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
 	"time"
+
+	"github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
 )
 
 type Config struct {
@@ -48,6 +51,11 @@ type Config struct {
 	RateLimitRoomsRPH   int
 	RateLimitUploadsRPH int
 	RateLimitGlobalRPM  int
+
+	// TrustedProxies is the parsed CIDR allowlist consumed by
+	// middleware.ClientIP. Empty means "treat all connections as direct" —
+	// the safe default for deployments without a reverse proxy.
+	TrustedProxies []*net.IPNet
 }
 
 func Load() (*Config, error) {
@@ -129,6 +137,14 @@ func Load() (*Config, error) {
 	}
 	if cfg.RateLimitGlobalRPM, err = getEnvInt("RATE_LIMIT_GLOBAL_RPM", 100); err != nil {
 		return nil, fmt.Errorf("RATE_LIMIT_GLOBAL_RPM: %w", err)
+	}
+
+	// TRUSTED_PROXIES is comma-separated CIDR ranges or bare IPs (the latter
+	// are promoted to /32 or /128). Required only when running behind a
+	// reverse proxy that forwards X-Forwarded-For — without it, ClientIP
+	// falls back to r.RemoteAddr, which is the safe direct-connection mode.
+	if cfg.TrustedProxies, err = middleware.ParseTrustedProxies(os.Getenv("TRUSTED_PROXIES")); err != nil {
+		return nil, fmt.Errorf("TRUSTED_PROXIES: %w", err)
 	}
 	return cfg, nil
 }

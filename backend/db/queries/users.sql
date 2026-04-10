@@ -68,7 +68,7 @@ SELECT
   r.finished_at,
   rp.score,
   r.id AS room_id,
-  (SELECT COUNT(*) FROM room_players rp2 WHERE rp2.room_id = r.id AND rp2.score > rp.score) + 1 AS rank,
+  ((SELECT COUNT(*) FROM room_players rp2 WHERE rp2.room_id = r.id AND rp2.score > rp.score) + 1)::bigint AS rank,
   (SELECT COUNT(*) FROM room_players rp3 WHERE rp3.room_id = r.id) AS player_count
 FROM room_players rp
 JOIN rooms r ON rp.room_id = r.id

@@ -11,7 +11,7 @@ import (
 
 func TestRateLimit_BlocksExcess(t *testing.T) {
 	// 1 request per minute — first should pass, second should be blocked
-	rl := middleware.NewRateLimiter(1, 60, clock.Real{}) // 1 req per 60 seconds burst=1
+	rl := middleware.NewRateLimiter(1, 60, clock.Real{}, nil) // 1 req per 60 seconds burst=1, no trusted proxies
 	handler := rl.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))

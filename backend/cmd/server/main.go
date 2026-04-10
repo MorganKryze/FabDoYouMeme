@@ -105,14 +105,19 @@ func main() {
 	registry.Register(memecaption.New())
 
 	// ── Game manager ──────────────────────────────────────────────────────────
-	manager := game.NewManager(registry, queries, cfg, logger, clk)
+	// context.Background() is the correct parent: hubs outlive individual
+	// requests and are only killed when manager.Shutdown() cancels the
+	// derived server-scoped context in the signal handler below.
+	manager := game.NewManager(context.Background(), registry, queries, cfg, logger, clk)
 
 	// ── Rate limiters ─────────────────────────────────────────────────────────
-	authLimiter   := mw.NewRateLimiter(cfg.RateLimitAuthRPM, 60, clk)
-	inviteLimiter := mw.NewRateLimiter(cfg.RateLimitInviteRPH, 3600, clk)
-	globalLimiter := mw.NewRateLimiter(cfg.RateLimitGlobalRPM, 60, clk)
-	roomLimiter   := mw.NewRateLimiter(cfg.RateLimitRoomsRPH, 3600, clk)
-	uploadLimiter := mw.NewRateLimiter(cfg.RateLimitUploadsRPH, 3600, clk)
+	// All limiters share cfg.TrustedProxies so the per-IP bucket key is the
+	// real client (via ClientIP) rather than the reverse proxy's address.
+	authLimiter   := mw.NewRateLimiter(cfg.RateLimitAuthRPM, 60, clk, cfg.TrustedProxies)
+	inviteLimiter := mw.NewRateLimiter(cfg.RateLimitInviteRPH, 3600, clk, cfg.TrustedProxies)
+	globalLimiter := mw.NewRateLimiter(cfg.RateLimitGlobalRPM, 60, clk, cfg.TrustedProxies)
+	roomLimiter   := mw.NewRateLimiter(cfg.RateLimitRoomsRPH, 3600, clk, cfg.TrustedProxies)
+	uploadLimiter := mw.NewRateLimiter(cfg.RateLimitUploadsRPH, 3600, clk, cfg.TrustedProxies)
 
 	// ── HTTP handlers ─────────────────────────────────────────────────────────
 	packHandler      := api.NewPackHandler(pool, cfg, store)
@@ -137,8 +142,11 @@ func main() {
 	r.Get("/api/health/deep", healthHandler.Readiness)
 
 	// /api/metrics — restricted to private IP ranges (loopback + RFC-1918).
-	// Never expose this endpoint to the public internet.
-	r.With(mw.RequirePrivateIP).Handle("/api/metrics", promhttp.Handler())
+	// Never expose this endpoint to the public internet. RequirePrivateIP
+	// uses ClientIP under the hood so the gate works behind a reverse proxy
+	// (where r.RemoteAddr would otherwise always look private and let
+	// everything through).
+	r.With(mw.RequirePrivateIP(cfg.TrustedProxies)).Handle("/api/metrics", promhttp.Handler())
 
 	// Auth routes (rate-limited)
 	r.With(authLimiter.Middleware).Route("/api/auth", func(r chi.Router) {

@@ -33,8 +33,11 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	roomCode := chi.URLParam(r, "code")
-	hub, hubOK := h.manager.Get(roomCode)
-	if !hubOK {
+	hub, err := h.manager.GetOrLoad(r.Context(), roomCode)
+	if err != nil {
+		// Room lookup failed OR the room exists but is finished. Both map to
+		// 404 at the HTTP layer — we do not leak the distinction between
+		// "never existed" and "already ended" to unauthenticated observers.
 		writeError(w, r, http.StatusNotFound, "room_not_found", "No active hub for this room")
 		return
 	}

@@ -104,9 +104,20 @@ func (h *AssetHandler) UploadURL(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// DownloadURL handles POST /api/assets/download-url (admin/owner preview only).
+// DownloadURL handles POST /api/assets/download-url.
+//
+// Authorization (P1.4 / finding 5.A): a caller may download a media_key iff
+//
+//   - they are an admin, OR
+//   - the media belongs to a pack they own, OR
+//   - the media belongs to a public + active pack.
+//
+// The pack-side checks are pushed into a single sqlc query (CanUserDownloadMedia)
+// so the predicate is atomic — there's no TOCTOU window between an existence
+// check and the response. Pre-fix any logged-in user could download any
+// media_key they could see or guess.
 func (h *AssetHandler) DownloadURL(w http.ResponseWriter, r *http.Request) {
-	_, ok := middleware.GetSessionUser(r)
+	u, ok := middleware.GetSessionUser(r)
 	if !ok {
 		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
@@ -116,6 +127,28 @@ func (h *AssetHandler) DownloadURL(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "media_key is required")
 		return
 	}
+
+	if u.Role != "admin" {
+		uid, err := uuid.Parse(u.UserID)
+		if err != nil {
+			writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
+			return
+		}
+		mediaKey := req.MediaKey
+		allowed, err := h.db.CanUserDownloadMedia(r.Context(), db.CanUserDownloadMediaParams{
+			MediaKey: &mediaKey,
+			UserID:   uid,
+		})
+		if err != nil {
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Authorization check failed")
+			return
+		}
+		if !allowed {
+			writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
+			return
+		}
+	}
+
 	downloadURL, err := h.storage.PresignDownload(r.Context(), req.MediaKey, 15*time.Minute)
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to generate download URL")

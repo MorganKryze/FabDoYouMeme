@@ -3,6 +3,8 @@ package game
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -14,38 +16,70 @@ import (
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/config"
 )
 
+// ErrRoomFinished is returned by GetOrLoad when the room exists but is in
+// the "finished" state — joining it is never valid and must 404 at the API
+// boundary rather than spin up a ghost hub.
+var ErrRoomFinished = errors.New("room is finished")
+
 // Manager tracks all active hubs (one per active room).
-// The REST API creates a hub when a WS connection arrives for a room that has no hub.
+//
+// Hubs are created lazily: the WebSocket upgrade handler calls GetOrLoad,
+// which reads the room row from the database and, for any non-finished room,
+// constructs a Hub and runs it in a goroutine. The hub goroutine is scoped to
+// Manager.serverCtx (NOT the HTTP request context) so that request cancellation
+// does not kill the hub, while Manager.Shutdown can cancel every hub in one
+// shot by cancelling serverCtx.
 type Manager struct {
-	mu       sync.RWMutex
-	hubs     map[string]*Hub // roomCode → Hub
+	mu   sync.RWMutex
+	hubs map[string]*Hub // roomCode → Hub
+
 	registry *Registry
 	db       *db.Queries
 	cfg      *config.Config
 	log      *slog.Logger
 	clock    clock.Clock
+
+	// serverCtx scopes every hub's Run goroutine to the server's lifetime.
+	// Cancelled by Shutdown so all hubs exit their select-loops cleanly.
+	serverCtx    context.Context
+	serverCancel context.CancelFunc
 }
 
-func NewManager(registry *Registry, queries *db.Queries, cfg *config.Config, log *slog.Logger, clk clock.Clock) *Manager {
+func NewManager(parent context.Context, registry *Registry, queries *db.Queries, cfg *config.Config, log *slog.Logger, clk clock.Clock) *Manager {
 	if clk == nil {
 		clk = clock.Real{}
 	}
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithCancel(parent)
 	return &Manager{
-		hubs:     make(map[string]*Hub),
-		registry: registry,
-		db:       queries,
-		cfg:      cfg,
-		log:      log,
-		clock:    clk,
+		hubs:         make(map[string]*Hub),
+		registry:     registry,
+		db:           queries,
+		cfg:          cfg,
+		log:          log,
+		clock:        clk,
+		serverCtx:    ctx,
+		serverCancel: cancel,
 	}
 }
 
 // GetOrCreate returns the hub for roomCode, creating it if it does not exist.
 // roomID, gameTypeSlug, and hostUserID are only used when creating a new hub.
+//
+// The ctx parameter is retained for API compatibility with existing test and
+// REST handler call sites, but the hub's Run goroutine is scoped to
+// Manager.serverCtx — not to ctx — so a request-scoped cancellation cannot
+// inadvertently terminate an in-flight game.
 func (m *Manager) GetOrCreate(ctx context.Context, roomCode string, roomID uuid.UUID, gameTypeSlug, hostUserID string) *Hub {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.createLocked(roomCode, roomID, gameTypeSlug, hostUserID)
+}
 
+// createLocked does the actual hub construction; caller must already hold m.mu.
+func (m *Manager) createLocked(roomCode string, roomID uuid.UUID, gameTypeSlug, hostUserID string) *Hub {
 	if h, ok := m.hubs[roomCode]; ok {
 		return h
 	}
@@ -63,14 +97,51 @@ func (m *Manager) GetOrCreate(ctx context.Context, roomCode string, roomID uuid.
 	})
 	m.hubs[roomCode] = h
 
+	runCtx := m.serverCtx
 	go func() {
-		h.Run(ctx)
+		h.Run(runCtx)
 		m.mu.Lock()
 		delete(m.hubs, roomCode)
 		m.mu.Unlock()
 	}()
 
 	return h
+}
+
+// GetOrLoad returns the hub for roomCode, lazy-loading it from the database
+// if no goroutine is currently running one. It is the canonical entry point
+// from the WebSocket upgrade handler and is what fixes the production 404.
+//
+// The DB lookup uses the caller's ctx (typically r.Context()) so a request
+// cancellation aborts the lookup cleanly, but the hub goroutine itself is
+// scoped to Manager.serverCtx inside createLocked. Finished rooms return
+// ErrRoomFinished — callers map this to HTTP 404 at the API boundary.
+func (m *Manager) GetOrLoad(ctx context.Context, roomCode string) (*Hub, error) {
+	// Fast path — hub already running. No DB round trip.
+	m.mu.RLock()
+	if h, ok := m.hubs[roomCode]; ok {
+		m.mu.RUnlock()
+		return h, nil
+	}
+	m.mu.RUnlock()
+
+	// Slow path — hydrate from the rooms table.
+	row, err := m.db.GetRoomByCode(ctx, roomCode)
+	if err != nil {
+		return nil, fmt.Errorf("lookup room %s: %w", roomCode, err)
+	}
+	if row.State == "finished" {
+		return nil, ErrRoomFinished
+	}
+
+	hostUserID := ""
+	if row.HostID.Valid {
+		hostUserID = uuid.UUID(row.HostID.Bytes).String()
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.createLocked(row.Code, row.ID, row.GameTypeSlug, hostUserID), nil
 }
 
 // Get returns the hub for roomCode, or (nil, false) if no hub is running.
@@ -93,8 +164,12 @@ func (m *Manager) ActiveCount() int {
 	return len(m.hubs)
 }
 
-// Shutdown broadcasts "server_restarting" to all active hubs and waits briefly
-// for messages to flush before connections are torn down.
+// Shutdown broadcasts "server_restarting" to every active hub, sleeps for one
+// second so the messages flush through each hub's writePump, then cancels
+// serverCtx — which causes every hub's Run() loop to return and each hub
+// goroutine to exit. Without the cancel, the hub goroutines would continue
+// running after srv.Shutdown() returned, which was the root cause of 4.C in
+// the review ("manager.Shutdown() doesn't cancel hubs, magic sleep").
 func (m *Manager) Shutdown() {
 	m.mu.RLock()
 	hubs := make([]*Hub, 0, len(m.hubs))
@@ -109,4 +184,5 @@ func (m *Manager) Shutdown() {
 		}))
 	}
 	m.clock.Sleep(1 * time.Second)
+	m.serverCancel()
 }

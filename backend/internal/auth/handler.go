@@ -43,17 +43,26 @@ func New(pool *pgxpool.Pool, cfg *config.Config, email EmailSender, log *slog.Lo
 }
 
 // SessionLookupFn satisfies middleware.SessionLookupFn.
+//
+// The renewal cadence is bounded by cfg.SessionRenewInterval: we only write a
+// new expires_at when it would extend the row by at least that interval. On a
+// busy authenticated API this turns hundreds of UPDATE statements per user
+// into at most one per interval, without needing a dedicated last_renewed_at
+// column — the extension delta itself tells us how long it has been since the
+// previous renewal.
 func (h *Handler) SessionLookupFn(ctx context.Context, tokenHash string) (string, string, string, string, bool, error) {
 	row, err := h.db.GetSessionByTokenHash(ctx, tokenHash)
 	if err != nil {
 		return "", "", "", "", false, err
 	}
 	newExpiry := h.clock.Now().Add(h.cfg.SessionTTL)
-	if _, err := h.db.RenewSession(ctx, db.RenewSessionParams{
-		ID:        row.ID,
-		ExpiresAt: newExpiry,
-	}); err != nil && h.log != nil {
-		h.log.WarnContext(ctx, "session renewal failed", "err", err)
+	if h.cfg.SessionRenewInterval <= 0 || newExpiry.Sub(row.ExpiresAt) >= h.cfg.SessionRenewInterval {
+		if _, err := h.db.RenewSession(ctx, db.RenewSessionParams{
+			ID:        row.ID,
+			ExpiresAt: newExpiry,
+		}); err != nil && h.log != nil {
+			h.log.WarnContext(ctx, "session renewal failed", "err", err)
+		}
 	}
 	return row.UID.String(), row.Username, row.Email, row.Role, row.IsActive, nil
 }

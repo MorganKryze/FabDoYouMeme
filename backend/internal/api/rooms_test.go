@@ -30,7 +30,7 @@ func newRoomHandler(t *testing.T) (*api.RoomHandler, *db.Queries) {
 	registry.Register(memecaption.New())
 	q := db.New(pool)
 	cfg := &config.Config{}
-	manager := game.NewManager(registry, q, cfg, slog.Default(), clock.Real{})
+	manager := game.NewManager(context.Background(), registry, q, cfg, slog.Default(), clock.Real{})
 	return api.NewRoomHandler(pool, cfg, manager), q
 }
 

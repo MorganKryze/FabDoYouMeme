@@ -106,6 +106,11 @@ type Hub struct {
 	currentRound     *db.Round
 	roundSubmissions map[string]Submission // userID → submission
 	roundVotes       map[string]Vote       // userID → vote
+
+	// roundsCancel aborts the runRounds goroutine spawned in startGame.
+	// It is set by startGame and cleared by finishRoom. Accessed only from
+	// the Run() goroutine, so no mutex is needed despite the function type.
+	roundsCancel context.CancelFunc
 }
 
 // connectedPlayer is hub-internal player state.
@@ -426,7 +431,25 @@ func (h *Hub) startGame(ctx context.Context) {
 	h.broadcast(buildMessage("game_started", map[string]any{
 		"player_count": len(h.players),
 	}))
-	go h.runRounds(ctx)
+	// Derive a child context scoped to the round loop. finishRoom cancels
+	// it so runRounds stops emitting roundCtrl messages into a hub that is
+	// already "finished" (host disconnect, early termination, etc.).
+	roundsCtx, cancel := context.WithCancel(ctx)
+	h.roundsCancel = cancel
+	go h.runRounds(roundsCtx)
+}
+
+// sendRoundCtrl forwards a round lifecycle message to the Run goroutine while
+// respecting the round loop's context. Returning false means the context was
+// cancelled (finishRoom was called elsewhere) and the caller must exit
+// immediately without touching any more hub state.
+func (h *Hub) sendRoundCtrl(ctx context.Context, msg roundCtrlMsg) bool {
+	select {
+	case h.roundCtrl <- msg:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
 
 func (h *Hub) runRounds(ctx context.Context) {
@@ -435,7 +458,7 @@ func (h *Hub) runRounds(ctx context.Context) {
 		if h.log != nil {
 			h.log.Error("runRounds: get room", "error", err)
 		}
-		h.roundCtrl <- roundCtrlEndGame{}
+		h.sendRoundCtrl(ctx, roundCtrlEndGame{})
 		return
 	}
 
@@ -485,7 +508,7 @@ func (h *Hub) runRounds(ctx context.Context) {
 			if h.log != nil {
 				h.log.Error("runRounds: get items", "error", err)
 			}
-			h.roundCtrl <- roundCtrlEndGame{}
+			h.sendRoundCtrl(ctx, roundCtrlEndGame{})
 			return
 		}
 		item := items[0]
@@ -498,7 +521,7 @@ func (h *Hub) runRounds(ctx context.Context) {
 			if h.log != nil {
 				h.log.Error("runRounds: create round", "error", err)
 			}
-			h.roundCtrl <- roundCtrlEndGame{}
+			h.sendRoundCtrl(ctx, roundCtrlEndGame{})
 			return
 		}
 
@@ -507,13 +530,15 @@ func (h *Hub) runRounds(ctx context.Context) {
 			mediaURL = *item.MediaKey
 		}
 		endsAt := h.clock.Now().Add(roundDuration)
-		h.roundCtrl <- roundCtrlStartRound{
+		if !h.sendRoundCtrl(ctx, roundCtrlStartRound{
 			roundID:  dbRound.ID,
 			itemID:   item.ID,
 			payload:  item.Payload,
 			mediaURL: mediaURL,
 			endsAt:   endsAt,
 			duration: roundDuration,
+		}) {
+			return
 		}
 
 		select {
@@ -523,9 +548,11 @@ func (h *Hub) runRounds(ctx context.Context) {
 		}
 
 		votingEndsAt := h.clock.Now().Add(votingDuration)
-		h.roundCtrl <- roundCtrlCloseSubmissions{
+		if !h.sendRoundCtrl(ctx, roundCtrlCloseSubmissions{
 			votingEndsAt: votingEndsAt,
 			duration:     votingDuration,
+		}) {
+			return
 		}
 
 		select {
@@ -534,7 +561,9 @@ func (h *Hub) runRounds(ctx context.Context) {
 		case <-h.clock.After(votingDuration):
 		}
 
-		h.roundCtrl <- roundCtrlCloseVoting{}
+		if !h.sendRoundCtrl(ctx, roundCtrlCloseVoting{}) {
+			return
+		}
 
 		select {
 		case <-ctx.Done():
@@ -543,10 +572,19 @@ func (h *Hub) runRounds(ctx context.Context) {
 		}
 	}
 
-	h.roundCtrl <- roundCtrlEndGame{}
+	h.sendRoundCtrl(ctx, roundCtrlEndGame{})
 }
 
 func (h *Hub) finishRoom(ctx context.Context, reason string) {
+	// Cancel the round loop before touching anything else. This is called
+	// from three paths — host grace expiry, normal game completion, and
+	// error branches inside handleRoundCtrl — so the cancel must be the
+	// single point of truth. runRounds' next <-ctx.Done() check returns
+	// immediately, preventing ghost roundCtrl messages after game_ended.
+	if h.roundsCancel != nil {
+		h.roundsCancel()
+		h.roundsCancel = nil
+	}
 	if _, err := h.db.SetRoomState(ctx, db.SetRoomStateParams{
 		ID: h.roomID, State: "finished",
 	}); err != nil {

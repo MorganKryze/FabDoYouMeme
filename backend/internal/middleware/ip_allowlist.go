@@ -21,21 +21,26 @@ func mustParseCIDR(s string) *net.IPNet {
 	return n
 }
 
-// RequirePrivateIP blocks requests from public IP addresses.
-// Use this to protect internal-only endpoints such as /api/metrics.
-func RequirePrivateIP(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		host, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			host = r.RemoteAddr
-		}
-		ip := net.ParseIP(host)
-		for _, n := range allowedNets {
-			if n.Contains(ip) {
-				next.ServeHTTP(w, r)
-				return
+// RequirePrivateIP blocks requests whose originating client IP is not in the
+// loopback or RFC-1918 private ranges. Use it to protect internal-only
+// endpoints such as /api/metrics.
+//
+// trustedProxies is the same allowlist passed to ClientIP — without it the
+// middleware would compare the proxy's address (always private) instead of
+// the real client's address (which is what we actually want to gate on).
+// Pre-fix this was finding 5.B's "fully open or fully closed" bug.
+func RequirePrivateIP(trustedProxies []*net.IPNet) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			host := ClientIP(r, trustedProxies)
+			ip := net.ParseIP(host)
+			for _, n := range allowedNets {
+				if n.Contains(ip) {
+					next.ServeHTTP(w, r)
+					return
+				}
 			}
-		}
-		http.Error(w, "forbidden", http.StatusForbidden)
-	})
+			http.Error(w, "forbidden", http.StatusForbidden)
+		})
+	}
 }
