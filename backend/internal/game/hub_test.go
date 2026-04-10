@@ -182,7 +182,10 @@ func newHubEnvWith(t *testing.T, opts hubEnvOpts) *hubEnv {
 		manager.GetOrCreate(ctx, room.Code, room.ID, gt.Slug, host.ID.String())
 	}
 
-	wsHandler := api.NewWSHandler(manager, "") // empty allowedOrigin: test uses no Origin header
+	// Passing [""] means the empty Origin (no header set by the test dialer)
+	// normalizes to "" and matches — same semantic as the old empty-string
+	// constructor argument before P2.6.
+	wsHandler := api.NewWSHandler(manager, []string{""})
 	r := chi.NewRouter()
 	r.Get("/ws/{code}", func(w http.ResponseWriter, req *http.Request) {
 		userID := req.Header.Get("X-Test-User-ID")

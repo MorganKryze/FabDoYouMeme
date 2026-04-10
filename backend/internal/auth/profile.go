@@ -40,6 +40,10 @@ func (h *Handler) PatchMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Username != nil {
+		if err := ValidateUsername(*req.Username); err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_username", err.Error())
+			return
+		}
 		updated, err := h.db.UpdateUserUsername(r.Context(), db.UpdateUserUsernameParams{
 			ID:       userID,
 			Username: *req.Username,
@@ -62,6 +66,10 @@ func (h *Handler) PatchMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.Email != nil {
+		if err := ValidateEmail(*req.Email); err != nil {
+			writeError(w, r, http.StatusBadRequest, "invalid_email", err.Error())
+			return
+		}
 		updated, err := h.db.SetPendingEmail(r.Context(), db.SetPendingEmailParams{
 			ID:           userID,
 			PendingEmail: req.Email,

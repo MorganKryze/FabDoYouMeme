@@ -243,6 +243,19 @@ func (h *Hub) handleRegister(p *connectedPlayer) {
 		return
 	}
 
+	// Reject the join once the handler's per-room cap is reached. MaxPlayers==0
+	// means "no explicit cap" — current behaviour for handlers that haven't
+	// wired in a limit yet. Finding 3.D in the 2026-04-10 review.
+	if handler, ok := h.registry.Get(h.gameTypeSlug); ok {
+		if cap := handler.MaxPlayers(); cap > 0 && len(h.players) >= cap {
+			writeWS(p.conn, buildMessage("error", map[string]string{
+				"code": "room_full", "message": "Room is full",
+			}))
+			p.conn.Close()
+			return
+		}
+	}
+
 	h.players[p.userID] = p
 	h.broadcast(buildMessage("player_joined", map[string]string{
 		"user_id": p.userID, "username": p.username,
@@ -815,13 +828,23 @@ func (h *Hub) sendTo(p *connectedPlayer, msg []byte) {
 }
 
 // KickPlayer sends a kick message to a target player, removing them from the hub.
-// It is safe to call from outside the Run goroutine (sends via the incoming channel).
-func (h *Hub) KickPlayer(userID string) {
+// It is safe to call from outside the Run goroutine (sends via the incoming
+// channel). The context bounds the send: if h.incoming is saturated because
+// the Run loop is stuck on a slow DB write, the caller's ctx deadline (the
+// HTTP request ctx in practice) interrupts the send instead of leaking the
+// goroutine. Finding 4.B in the 2026-04-10 review. Returns ctx.Err() when
+// the context fires; a nil return means the message was enqueued.
+func (h *Hub) KickPlayer(ctx context.Context, userID string) error {
 	data, _ := json.Marshal(map[string]string{"target_user_id": userID})
-	h.incoming <- playerMessage{
+	select {
+	case h.incoming <- playerMessage{
 		player:  &connectedPlayer{userID: "system"},
 		msgType: "system:kick",
 		data:    data,
+	}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

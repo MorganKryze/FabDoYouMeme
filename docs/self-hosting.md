@@ -76,9 +76,10 @@ All variables come from `.env`. Never commit this file.
 
 | Variable       | Required | Default | Description                                                                                              |
 | -------------- | -------- | ------- | -------------------------------------------------------------------------------------------------------- |
-| `FRONTEND_URL` | yes      | —       | Full public URL, e.g. `https://meme.example.com` — used for CORS, cookie domain, and magic link base URL |
-| `BACKEND_URL`  | yes      | —       | Full API URL, e.g. `https://meme.example.com/api`                                                        |
-| `BACKEND_PORT` | no       | `8080`  | Backend HTTP listen port                                                                                 |
+| `FRONTEND_URL`        | yes      | —       | Full public URL, e.g. `https://meme.example.com` — used for CORS, cookie domain, and magic link base URL              |
+| `BACKEND_URL`         | yes      | —       | Full API URL, e.g. `https://meme.example.com/api`                                                                     |
+| `BACKEND_PORT`        | no       | `8080`  | Backend HTTP listen port                                                                                              |
+| `TRUSTED_WS_ORIGINS`  | no       | —       | Comma-separated extra origins accepted by the WebSocket upgrader (in addition to `FRONTEND_URL`). Trailing slashes are normalized. Example: `https://admin.meme.example.com,https://mobile.meme.example.com` |
 
 ### Email / SMTP
 

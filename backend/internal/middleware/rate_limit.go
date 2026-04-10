@@ -19,6 +19,8 @@ type RateLimiter struct {
 	burst          int
 	clock          clock.Clock
 	trustedProxies []*net.IPNet
+	stop           chan struct{}
+	done           chan struct{}
 }
 
 type rateLimiterEntry struct {
@@ -42,24 +44,50 @@ func NewRateLimiter(requestsPerPeriod int, periodSeconds int, clk clock.Clock, t
 		burst:          requestsPerPeriod,
 		clock:          clk,
 		trustedProxies: trustedProxies,
+		stop:           make(chan struct{}),
+		done:           make(chan struct{}),
 	}
 	go rl.evictLoop()
 	return rl
 }
 
+// Stop signals the eviction goroutine to exit and blocks until it has
+// returned. Safe to call once; subsequent calls are no-ops. Callers should
+// invoke Stop on every RateLimiter during server shutdown so the ticker
+// goroutine does not outlive the process under embedded-server scenarios or
+// across test runs (finding 4.A in the 2026-04-10 review).
+func (rl *RateLimiter) Stop() {
+	select {
+	case <-rl.stop:
+		// already stopped
+		return
+	default:
+	}
+	close(rl.stop)
+	<-rl.done
+}
+
 // evictLoop removes entries that have been idle for more than 1 hour.
+// It returns when Stop() is called; the done channel is closed on exit so
+// Stop can synchronise on the goroutine having actually returned.
 func (rl *RateLimiter) evictLoop() {
+	defer close(rl.done)
 	ticker := rl.clock.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
-	for range ticker.C() {
-		cutoff := rl.clock.Now().Add(-1 * time.Hour)
-		rl.mu.Lock()
-		for ip, entry := range rl.clients {
-			if entry.lastSeen.Before(cutoff) {
-				delete(rl.clients, ip)
+	for {
+		select {
+		case <-rl.stop:
+			return
+		case <-ticker.C():
+			cutoff := rl.clock.Now().Add(-1 * time.Hour)
+			rl.mu.Lock()
+			for ip, entry := range rl.clients {
+				if entry.lastSeen.Before(cutoff) {
+					delete(rl.clients, ip)
+				}
 			}
+			rl.mu.Unlock()
 		}
-		rl.mu.Unlock()
 	}
 }
 

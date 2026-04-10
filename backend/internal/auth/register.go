@@ -35,6 +35,16 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, "age_affirmation_required", "You must confirm you are at least 16 years old")
 		return
 	}
+	// Shape-validate before touching the DB or consuming the invite. A
+	// malformed username/email must not cost an invite slot.
+	if err := ValidateUsername(req.Username); err != nil {
+		writeError(w, r, http.StatusBadRequest, "invalid_username", err.Error())
+		return
+	}
+	if err := ValidateEmail(req.Email); err != nil {
+		writeError(w, r, http.StatusBadRequest, "invalid_email", err.Error())
+		return
+	}
 
 	invite, err := h.db.GetInviteByToken(r.Context(), req.InviteToken)
 	if err != nil || req.InviteToken == "" {

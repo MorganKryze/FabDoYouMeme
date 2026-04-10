@@ -54,6 +54,35 @@ jobs:
         working-directory: backend
         run: go vet ./...
 
+      # ADR-011 lint — the session cookie's SameSite attribute must stay
+      # Strict. This is the project's only CSRF defense, and relaxing it
+      # (even to Lax) is a silent opening of every authenticated endpoint.
+      # Any new PR that introduces a SameSite value other than
+      # http.SameSiteStrictMode in tokens.go fails CI here. If a future
+      # decision ever intentionally relaxes this, supersede ADR-011 first.
+      - name: Lint SameSite=Strict on session cookie (ADR-011)
+        working-directory: backend
+        run: |
+          set -euo pipefail
+          file=internal/auth/tokens.go
+          if [ ! -f "$file" ]; then
+            echo "::error::$file missing — ADR-011 lint cannot run"
+            exit 1
+          fi
+          total=$(grep -c 'SameSite:' "$file" || true)
+          strict=$(grep -c 'SameSite: http\.SameSiteStrictMode' "$file" || true)
+          if [ "$total" = "0" ]; then
+            echo "::error::$file sets no SameSite on the session cookie — ADR-011 requires http.SameSiteStrictMode"
+            exit 1
+          fi
+          if [ "$total" != "$strict" ]; then
+            echo "::error::ADR-011 violation — every SameSite on the session cookie in $file must be http.SameSiteStrictMode"
+            echo "SameSite lines found:"
+            grep -n 'SameSite:' "$file" || true
+            exit 1
+          fi
+          echo "ADR-011 lint OK — $strict/$total SameSite lines are Strict in $file"
+
       - name: Install golang-migrate
         run: go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
 

@@ -48,6 +48,14 @@ type GameTypeHandler interface {
 	// SupportsSolo returns true if solo mode (single player) is supported.
 	SupportsSolo() bool
 
+	// MaxPlayers is the per-room upper bound on simultaneous players. Return
+	// 0 for "no explicit cap" (the hub will allow unlimited joins). Implemented
+	// per finding 3.D in the 2026-04-10 review — handlers must express their
+	// own caps so the hub can reject joins in handleRegister before we touch
+	// h.players. For game types where the cap varies per room config, pick the
+	// absolute maximum; runtime config should tighten it further if needed.
+	MaxPlayers() int
+
 	// ValidateSubmission checks that the submission payload is valid for this game type and round.
 	ValidateSubmission(round Round, payload json.RawMessage) error
 

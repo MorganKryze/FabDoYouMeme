@@ -24,6 +24,13 @@ func (h *Handler) Slug() string                    { return "meme-caption" }
 func (h *Handler) SupportedPayloadVersions() []int { return []int{1} }
 func (h *Handler) SupportsSolo() bool              { return false }
 
+// MaxPlayers caps rooms at 12 concurrent players. The UI is designed around
+// 4–12-player lobbies; beyond that the caption/vote cycle becomes unwieldy
+// and the room_state broadcast payload starts to bloat. Setting the cap in
+// the handler (rather than relying on game_types.config) lets the hub short
+// circuit registration before allocating player state.
+func (h *Handler) MaxPlayers() int { return 12 }
+
 type submitPayload struct {
 	Caption string `json:"caption"`
 }

@@ -117,15 +117,15 @@ Grouped by the order they should be tackled. Each item lists: finding ID(s), eff
 
 | #    | Done | Title                                                                  | Finding  | Effort | Files                                                                   | Acceptance                                  |
 | ---- | ---- | ---------------------------------------------------------------------- | -------- | ------ | ----------------------------------------------------------------------- | ------------------------------------------- |
-| P2.1 | ☐    | Add `Stop()` to `RateLimiter` and call on shutdown                     | 4.A      | 0.25d  | `middleware/rate_limit.go`, `cmd/server/main.go`                        | `goleak` check in CI passes                 |
-| P2.2 | ☐    | `KickPlayer(ctx)` with select/timeout, update call site                | 4.B      | 0.25d  | `game/hub.go`, `api/room_actions.go`                                    | `TestHub_KickPlayerRespectsContext`         |
-| P2.3 | ☐    | Enforce `max_players` in `handleRegister` via handler interface        | 3.D      | 0.5d   | `game/hub.go`, `game/registry.go`, `game/types/meme_caption/handler.go` | `TestHub_RejectJoinWhenFull`                |
-| P2.4 | ☐    | Add state/host guards to `Leave`; host-leaves-closes-room              | 3.E      | 0.5d   | `api/room_actions.go`                                                   | `TestAPI_LeaveRejectsPlaying`               |
-| P2.5 | ☐    | Add finished-state guard to `Leaderboard`                              | 3.F      | 0.1d   | `api/room_actions.go`                                                   | `TestAPI_LeaderboardRejectsUnfinished`      |
-| P2.6 | ☐    | Normalize WS `CheckOrigin` — trim trailing slash, support list         | 5.C      | 0.25d  | `api/ws.go`, `config.go`                                                | `TestWS_CheckOriginNormalizesTrailingSlash` |
-| P2.7 | ☐    | Add ADR-011 for SameSite CSRF stance + lint rule for `SameSite=Strict` | 5.D      | 0.5d   | `docs/reference/decisions.md`, `.github/workflows/backend.yml`          | lint fails if SameSite relaxed              |
-| P2.8 | ☐    | Fail-loud on bad `FRONTEND_URL`; bounds-check all duration/int env     | 4.D, 4.E | 0.5d   | `config/config.go`                                                      | `TestConfig_LoadRejects*` table             |
-| P2.9 | ☐    | Validate username + email in Go before DB write                        | 5.E      | 0.25d  | `auth/register.go`, `auth/profile.go`                                   | `TestAuth_ValidateUsernameTable`            |
+| P2.1 | ✅   | Add `Stop()` to `RateLimiter` and call on shutdown                     | 4.A      | 0.25d  | `middleware/rate_limit.go`, `cmd/server/main.go`                        | `goleak` check in CI passes                 |
+| P2.2 | ✅   | `KickPlayer(ctx)` with select/timeout, update call site                | 4.B      | 0.25d  | `game/hub.go`, `api/room_actions.go`                                    | `TestHub_KickPlayerRespectsContext`         |
+| P2.3 | ✅   | Enforce `max_players` in `handleRegister` via handler interface        | 3.D      | 0.5d   | `game/hub.go`, `game/registry.go`, `game/types/meme_caption/handler.go` | `TestHub_RejectJoinWhenFull`                |
+| P2.4 | ✅   | Add state/host guards to `Leave`; host-leaves-closes-room              | 3.E      | 0.5d   | `api/room_actions.go`                                                   | `TestAPI_LeaveRejectsPlaying`               |
+| P2.5 | ✅   | Add finished-state guard to `Leaderboard`                              | 3.F      | 0.1d   | `api/room_actions.go`                                                   | `TestAPI_LeaderboardRejectsUnfinished`      |
+| P2.6 | ✅   | Normalize WS `CheckOrigin` — trim trailing slash, support list         | 5.C      | 0.25d  | `api/ws.go`, `config.go`                                                | `TestWS_CheckOriginNormalizesTrailingSlash` |
+| P2.7 | ✅   | Add ADR-011 for SameSite CSRF stance + lint rule for `SameSite=Strict` | 5.D      | 0.5d   | `docs/reference/decisions.md`, `.github/workflows/backend.yml`          | lint fails if SameSite relaxed              |
+| P2.8 | ✅   | Fail-loud on bad `FRONTEND_URL`; bounds-check all duration/int env     | 4.D, 4.E | 0.5d   | `config/config.go`                                                      | `TestConfig_LoadRejects*` table             |
+| P2.9 | ✅   | Validate username + email in Go before DB write                        | 5.E      | 0.25d  | `auth/register.go`, `auth/profile.go`                                   | `TestAuth_ValidateUsernameTable`            |
 
 ### P3 — Nice-to-have robustness & observability
 

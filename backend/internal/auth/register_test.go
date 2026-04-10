@@ -60,6 +60,20 @@ func newTestHandler(t *testing.T) (*auth.Handler, *db.Queries) {
 	return h, db.New(pool)
 }
 
+// shortUser returns a username derived from t.Name() but capped to fit
+// inside the 30-character limit enforced by auth.ValidateUsername (P2.9).
+// The prefix lets a single test mint distinguishable usernames (bob_, bob2_)
+// without colliding across tests sharing the same DB.
+func shortUser(t *testing.T, prefix string) string {
+	t.Helper()
+	slug := testutil.SeedName(t)
+	max := 30 - len(prefix)
+	if len(slug) > max {
+		slug = slug[:max]
+	}
+	return prefix + slug
+}
+
 func seedInvite(t *testing.T, q *db.Queries) db.Invite {
 	t.Helper()
 	// Use a unique token per test to avoid collisions when multiple tests in this
@@ -109,7 +123,7 @@ func TestRegister_AgeAffirmationRequired(t *testing.T) {
 
 func TestRegister_InvalidInvite(t *testing.T) {
 	h, _ := newTestHandler(t)
-	body := `{"invite_token":"NO_SUCH","username":"u","email":"u@example.com","consent":true,"age_affirmation":true}`
+	body := `{"invite_token":"NO_SUCH","username":"user","email":"u@example.com","consent":true,"age_affirmation":true}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 	h.Register(rec, req)
@@ -147,14 +161,14 @@ func TestRegister_DuplicateEmailReturns201(t *testing.T) {
 	h, q := newTestHandler(t)
 	invite := seedInvite(t, q)
 	slug := testutil.SeedName(t)
-	body := `{"invite_token":"` + invite.Token + `","username":"bob_` + slug + `","email":"bob_` + slug + `@test.com","consent":true,"age_affirmation":true}`
+	body := `{"invite_token":"` + invite.Token + `","username":"` + shortUser(t, "bob_") + `","email":"bob_` + slug + `@test.com","consent":true,"age_affirmation":true}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 	h.Register(rec, req)
 	if rec.Code != http.StatusCreated {
-		t.Fatalf("first register: want 201, got %d", rec.Code)
+		t.Fatalf("first register: want 201, got %d — body: %s", rec.Code, rec.Body.String())
 	}
-	body2 := `{"invite_token":"` + invite.Token + `","username":"bob2_` + slug + `","email":"bob_` + slug + `@test.com","consent":true,"age_affirmation":true}`
+	body2 := `{"invite_token":"` + invite.Token + `","username":"` + shortUser(t, "bob2_") + `","email":"bob_` + slug + `@test.com","consent":true,"age_affirmation":true}`
 	req2 := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBufferString(body2))
 	rec2 := httptest.NewRecorder()
 	h.Register(rec2, req2)
@@ -219,12 +233,12 @@ func TestRegister_InviteExhausted(t *testing.T) {
 		return rec.Code
 	}
 
-	if code := register("user1_"+slug, "user1_"+slug+"@test.com"); code != http.StatusCreated {
+	if code := register(shortUser(t, "u1_"), "user1_"+slug+"@test.com"); code != http.StatusCreated {
 		t.Fatalf("first register: want 201, got %d", code)
 	}
 	// Second registration exhausts the invite.
 	rec2 := httptest.NewRecorder()
-	body2 := `{"invite_token":"` + invite.Token + `","username":"user2_` + slug + `","email":"user2_` + slug + `@test.com","consent":true,"age_affirmation":true}`
+	body2 := `{"invite_token":"` + invite.Token + `","username":"` + shortUser(t, "u2_") + `","email":"user2_` + slug + `@test.com","consent":true,"age_affirmation":true}`
 	req2 := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBufferString(body2))
 	h.Register(rec2, req2)
 	if rec2.Code != http.StatusBadRequest {
@@ -259,8 +273,8 @@ func TestRegister_SMTPFailureReturns201WithWarning(t *testing.T) {
 		t.Fatalf("create restricted invite: %v", err)
 	}
 
-	body := fmt.Sprintf(`{"invite_token":%q,"username":"smtpfail_%s","email":%q,"consent":true,"age_affirmation":true}`,
-		invite.Token, slug, restrictedEmail)
+	body := fmt.Sprintf(`{"invite_token":%q,"username":%q,"email":%q,"consent":true,"age_affirmation":true}`,
+		invite.Token, shortUser(t, "sf_"), restrictedEmail)
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 	h.Register(rec, req)
@@ -286,8 +300,10 @@ func TestRegister_UsernameTaken(t *testing.T) {
 	inv2 := db.CreateInviteParams{Token: "INV2_" + slug, MaxUses: 5}
 	invite2, _ := q.CreateInvite(context.Background(), inv2)
 
-	// First registration with username "taken_<slug>".
-	body1 := `{"invite_token":"` + invite1.Token + `","username":"taken_` + slug + `","email":"first_` + slug + `@test.com","consent":true,"age_affirmation":true}`
+	// Both registrations reuse the same username — point of the test is to
+	// prove the second one hits 409 username_taken.
+	takenUsername := shortUser(t, "tk_")
+	body1 := `{"invite_token":"` + invite1.Token + `","username":"` + takenUsername + `","email":"first_` + slug + `@test.com","consent":true,"age_affirmation":true}`
 	req1 := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBufferString(body1))
 	rec1 := httptest.NewRecorder()
 	h.Register(rec1, req1)
@@ -296,7 +312,7 @@ func TestRegister_UsernameTaken(t *testing.T) {
 	}
 
 	// Second registration with same username → 409 username_taken.
-	body2 := `{"invite_token":"` + invite2.Token + `","username":"taken_` + slug + `","email":"second_` + slug + `@test.com","consent":true,"age_affirmation":true}`
+	body2 := `{"invite_token":"` + invite2.Token + `","username":"` + takenUsername + `","email":"second_` + slug + `@test.com","consent":true,"age_affirmation":true}`
 	req2 := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBufferString(body2))
 	rec2 := httptest.NewRecorder()
 	h.Register(rec2, req2)

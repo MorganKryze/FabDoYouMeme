@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
@@ -44,7 +45,13 @@ type Config struct {
 	WSPingInterval       time.Duration
 
 	MaxUploadSizeBytes int64
-	AllowedOrigin      string
+
+	// AllowedOrigins is the normalized set of origins accepted by the
+	// WebSocket upgrader. Each entry has whitespace and trailing slashes
+	// stripped. Seeded from FRONTEND_URL and the optional comma-separated
+	// TRUSTED_WS_ORIGINS env var — see finding 5.C in the 2026-04-10 review
+	// for why exact-match on a single string was fragile.
+	AllowedOrigins []string
 
 	RateLimitAuthRPM    int
 	RateLimitInviteRPH  int
@@ -87,12 +94,21 @@ func Load() (*Config, error) {
 		LogLevel:         getEnv("LOG_LEVEL", "info"),
 	}
 
-	if u, err := url.Parse(cfg.FrontendURL); err == nil {
-		cfg.CookieDomain = u.Hostname()
+	// Fail-loud on bad FRONTEND_URL (finding 4.D). url.Parse accepts almost
+	// anything — most notably a bare hostname like "meme.example.com" parses
+	// successfully but yields Hostname()=="", silently leaving CookieDomain
+	// empty and breaking cross-subdomain login. The explicit scheme+host
+	// check catches both url.Parse errors and the silent-zero cases.
+	u, err := url.Parse(cfg.FrontendURL)
+	if err != nil {
+		return nil, fmt.Errorf("FRONTEND_URL is not a valid URL: %w", err)
 	}
-	cfg.AllowedOrigin = cfg.FrontendURL
+	if u.Scheme == "" || u.Hostname() == "" {
+		return nil, fmt.Errorf("FRONTEND_URL must include a scheme and host, got %q", cfg.FrontendURL)
+	}
+	cfg.CookieDomain = u.Hostname()
+	cfg.AllowedOrigins = buildAllowedOrigins(cfg.FrontendURL, os.Getenv("TRUSTED_WS_ORIGINS"))
 
-	var err error
 	if cfg.SMTPPort, err = getEnvInt("SMTP_PORT", 587); err != nil {
 		return nil, fmt.Errorf("SMTP_PORT: %w", err)
 	}
@@ -146,7 +162,64 @@ func Load() (*Config, error) {
 	if cfg.TrustedProxies, err = middleware.ParseTrustedProxies(os.Getenv("TRUSTED_PROXIES")); err != nil {
 		return nil, fmt.Errorf("TRUSTED_PROXIES: %w", err)
 	}
+
+	if err := cfg.validateBounds(); err != nil {
+		return nil, err
+	}
 	return cfg, nil
+}
+
+// validateBounds rejects out-of-range duration/int config values (finding
+// 4.E). Negative or zero durations silently break core flows — e.g.
+// SESSION_TTL=0 logs users out before their verify response returns, and
+// WS_RATE_LIMIT=0 panics `rate.Every`. The bounds here are intentionally
+// generous: the goal is to reject obviously broken misconfigurations, not
+// to second-guess the operator.
+func (cfg *Config) validateBounds() error {
+	durationBound := func(name string, v, min, max time.Duration) error {
+		if v < min || v > max {
+			return fmt.Errorf("%s=%v must be between %v and %v", name, v, min, max)
+		}
+		return nil
+	}
+	intBound := func(name string, v, min, max int) error {
+		if v < min || v > max {
+			return fmt.Errorf("%s=%d must be between %d and %d", name, v, min, max)
+		}
+		return nil
+	}
+	int64Bound := func(name string, v, min, max int64) error {
+		if v < min || v > max {
+			return fmt.Errorf("%s=%d must be between %d and %d", name, v, min, max)
+		}
+		return nil
+	}
+
+	checks := []error{
+		durationBound("MAGIC_LINK_TTL", cfg.MagicLinkTTL, 30*time.Second, 24*time.Hour),
+		durationBound("SESSION_TTL", cfg.SessionTTL, 1*time.Minute, 365*24*time.Hour),
+		durationBound("SESSION_RENEW_INTERVAL", cfg.SessionRenewInterval, 1*time.Minute, 24*time.Hour),
+		durationBound("RECONNECT_GRACE_WINDOW", cfg.ReconnectGraceWindow, 1*time.Second, 10*time.Minute),
+		durationBound("WS_READ_DEADLINE", cfg.WSReadDeadline, 5*time.Second, 10*time.Minute),
+		durationBound("WS_PING_INTERVAL", cfg.WSPingInterval, 1*time.Second, 5*time.Minute),
+
+		intBound("SMTP_PORT", cfg.SMTPPort, 1, 65535),
+		intBound("WS_RATE_LIMIT", cfg.WSRateLimit, 1, 10000),
+		intBound("RATE_LIMIT_AUTH_RPM", cfg.RateLimitAuthRPM, 1, 100000),
+		intBound("RATE_LIMIT_INVITE_VALIDATION_RPH", cfg.RateLimitInviteRPH, 1, 100000),
+		intBound("RATE_LIMIT_ROOMS_RPH", cfg.RateLimitRoomsRPH, 1, 100000),
+		intBound("RATE_LIMIT_UPLOADS_RPH", cfg.RateLimitUploadsRPH, 1, 100000),
+		intBound("RATE_LIMIT_GLOBAL_RPM", cfg.RateLimitGlobalRPM, 1, 100000),
+
+		int64Bound("WS_READ_LIMIT_BYTES", cfg.WSReadLimitBytes, 64, 1_048_576),
+		int64Bound("MAX_UPLOAD_SIZE_BYTES", cfg.MaxUploadSizeBytes, 1, 104_857_600),
+	}
+	for _, e := range checks {
+		if e != nil {
+			return e
+		}
+	}
+	return nil
 }
 
 func getEnv(key, fallback string) string {
@@ -178,4 +251,35 @@ func getEnvDuration(key string, fallback time.Duration) (time.Duration, error) {
 		return fallback, nil
 	}
 	return time.ParseDuration(v)
+}
+
+// NormalizeOrigin trims surrounding whitespace and a single trailing slash so
+// that exact-match comparison in the WS upgrader tolerates the browser
+// variants noted in finding 5.C. Exported so ws.go and tests share one rule.
+func NormalizeOrigin(s string) string {
+	return strings.TrimRight(strings.TrimSpace(s), "/")
+}
+
+// buildAllowedOrigins derives the WS origin allowlist from FRONTEND_URL plus
+// an optional comma-separated TRUSTED_WS_ORIGINS override. Duplicates and
+// blank entries are dropped so callers can iterate without guarding.
+func buildAllowedOrigins(frontendURL, extraCSV string) []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0, 2)
+	add := func(s string) {
+		n := NormalizeOrigin(s)
+		if n == "" {
+			return
+		}
+		if _, dup := seen[n]; dup {
+			return
+		}
+		seen[n] = struct{}{}
+		out = append(out, n)
+	}
+	add(frontendURL)
+	for _, piece := range strings.Split(extraCSV, ",") {
+		add(piece)
+	}
+	return out
 }

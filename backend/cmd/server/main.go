@@ -121,11 +121,11 @@ func main() {
 
 	// ── HTTP handlers ─────────────────────────────────────────────────────────
 	packHandler      := api.NewPackHandler(pool, cfg, store)
-	roomHandler      := api.NewRoomHandler(pool, cfg, manager)
+	roomHandler      := api.NewRoomHandler(pool, cfg, manager, logger)
 	assetHandler     := api.NewAssetHandler(pool, cfg, store)
 	gameTypeHandler  := api.NewGameTypeHandler(pool, registry)
 	adminHTTPHandler := api.NewAdminHandler(pool)
-	wsHandler        := api.NewWSHandler(manager, cfg.AllowedOrigin)
+	wsHandler        := api.NewWSHandler(manager, cfg.AllowedOrigins)
 	healthHandler    := api.NewHealthHandler(pool, store)
 
 	// ── Router ───────────────────────────────────────────────────────────────
@@ -253,6 +253,14 @@ func main() {
 	if err := srv.Shutdown(ctx); err != nil {
 		logger.Error("shutdown error", "error", err)
 	}
+	// Tear down rate-limiter eviction loops after HTTP has drained so no
+	// late request reaches a stopped limiter. Each Stop() blocks until its
+	// goroutine returns, giving goleak-based tests a clean exit.
+	authLimiter.Stop()
+	inviteLimiter.Stop()
+	globalLimiter.Stop()
+	roomLimiter.Stop()
+	uploadLimiter.Stop()
 	logger.Info("server stopped")
 }
 

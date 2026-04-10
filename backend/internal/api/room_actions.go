@@ -52,6 +52,12 @@ func (h *RoomHandler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 // Leave handles POST /api/rooms/{code}/leave.
+//
+// Contract (docs/api.md): "Leave the room (lobby only; host leaving closes
+// the room)". Finding 3.E in the 2026-04-10 review pointed out that the
+// previous implementation enforced neither the lobby-only gate nor the
+// host-closes-room semantics. This version does both so the documented state
+// machine is actually observed.
 func (h *RoomHandler) Leave(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.GetSessionUser(r)
 	if !ok {
@@ -63,7 +69,26 @@ func (h *RoomHandler) Leave(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, "not_found", "Room not found")
 		return
 	}
+	if room.State != "lobby" {
+		writeError(w, r, http.StatusConflict, "room_not_in_lobby",
+			"Leave is only available while the room is in lobby state")
+		return
+	}
 	userID, _ := uuid.Parse(u.UserID)
+
+	isHost := room.HostID.Valid && room.HostID.Bytes == userID
+	if isHost {
+		// Host-leaves-closes-room: flip the row to 'finished' before removing
+		// players so concurrent joins stop immediately. RemoveRoomPlayer
+		// cleanup then drops the host row too.
+		if _, err := h.db.SetRoomState(r.Context(), db.SetRoomStateParams{
+			ID:    room.ID,
+			State: "finished",
+		}); err != nil {
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to close room")
+			return
+		}
+	}
 	if err := h.db.RemoveRoomPlayer(r.Context(), db.RemoveRoomPlayerParams{
 		RoomID: room.ID,
 		UserID: userID,
@@ -110,14 +135,26 @@ func (h *RoomHandler) Kick(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to kick player")
 		return
 	}
-	// Notify connected WS clients
+	// Notify connected WS clients. The DB row was already removed above, so
+	// failure to enqueue here is recoverable — the player will be treated as
+	// a non-member on their next WS message. We still bound the send with
+	// the request context to avoid stalling the HTTP goroutine on a saturated
+	// hub (finding 4.B).
 	if hub, ok := h.manager.Get(room.Code); ok {
-		hub.KickPlayer(req.UserID)
+		if err := hub.KickPlayer(r.Context(), req.UserID); err != nil && h.log != nil {
+			h.log.Warn("kick did not reach hub", "room", room.Code, "user_id", req.UserID, "err", err)
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
 // Leaderboard handles GET /api/rooms/{code}/leaderboard.
+//
+// Contract (docs/api.md): "Final leaderboard (finished rooms only)". Finding
+// 3.F in the 2026-04-10 review called out that the pre-fix handler returned
+// a live score snapshot during a playing round, leaking signal to voters
+// mid-round. The 409 matches the error model used elsewhere for state
+// mismatches (see UpdateConfig's room_not_in_lobby).
 func (h *RoomHandler) Leaderboard(w http.ResponseWriter, r *http.Request) {
 	_, ok := middleware.GetSessionUser(r)
 	if !ok {
@@ -127,6 +164,11 @@ func (h *RoomHandler) Leaderboard(w http.ResponseWriter, r *http.Request) {
 	room, err := h.db.GetRoomByCode(r.Context(), chi.URLParam(r, "code"))
 	if err != nil {
 		writeError(w, r, http.StatusNotFound, "not_found", "Room not found")
+		return
+	}
+	if room.State != "finished" {
+		writeError(w, r, http.StatusConflict, "room_not_finished",
+			"Leaderboard is only available after the game ends")
 		return
 	}
 	leaderboard, err := h.db.GetRoomLeaderboard(r.Context(), room.ID)

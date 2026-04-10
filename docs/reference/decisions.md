@@ -125,3 +125,22 @@ The contradictory note in the pre-redesign `04-api.md` ("backend sets user_id = 
 **Decision**: two-pass update. No schema changes. Both passes run in a single transaction.
 
 **Consequences**: simpler than deferred constraints and equally correct. The shift-by-10000 trick is a one-liner in SQL. Deferred constraints require an `ALTER TABLE` and add per-transaction overhead. The two-pass approach is also more portable if the DB engine changes.
+
+---
+
+## ADR-011 — `SameSite=Strict` as the Sole CSRF Defense
+
+**Status**: Accepted
+
+**Context**: the server does not implement CSRF tokens, double-submit cookies, or `Origin`-header checks on state-changing REST endpoints. The only barrier against cross-site request forgery is the `SameSite=Strict` attribute on the `session` cookie set in `backend/internal/auth/tokens.go`. The 2026-04-10 review (finding 5.D) flagged this as a HIGH-severity concern because the defense is browser-enforced, invisible on the server side, and one small relaxation (e.g. lowering to `SameSite=Lax` to fix magic-link UX) silently opens the entire authenticated API to CSRF.
+
+**Decision**: `SameSite=Strict` is the canonical CSRF control for the `session` cookie and **must not be relaxed**. Concretely:
+
+1. Every `http.Cookie{Name: "session", ...}` in the backend sets `SameSite: http.SameSiteStrictMode`. There is no "Lax" or "None" variant.
+2. CI enforces this invariant with a grep-based lint step in `.github/workflows/backend.yml` that fails the build if `SameSite:` appears on a session-cookie line with any value other than `http.SameSiteStrictMode`. The rule lives next to the file it protects (`backend/internal/auth/tokens.go`) so a reviewer seeing a cookie diff will see the lint failure in the same PR.
+3. Magic-link UX constraints that "need" cross-site cookie flow are solved at the _link_ layer (server-side handoff that re-issues the cookie on the canonical domain), never by weakening `SameSite`.
+4. Double-submit-cookie CSRF tokens remain a documented _future enhancement_ for defense-in-depth against non-conforming browsers, but are explicitly out of scope for the current deployment model (modern evergreen browsers only, self-hosted, known player base).
+
+**Consequences**: the session cookie cannot be sent on any cross-site request — including clicks on external links that land on authenticated endpoints — which is the intended behavior. Users coming from an external email client that does not open the same-origin browser session must re-authenticate via magic link, which is acceptable at this scale. A future change that relaxes `SameSite` (for any reason) will fail CI and require an explicit ADR supersession of this one, preventing a quiet regression. Contributors proposing double-submit-cookie tokens should write a new ADR that supersedes this one rather than editing it in place, so the audit trail remains intact.
+
+**Related**: finding 5.D in `docs/review/2026-04-10/05-security.md`.

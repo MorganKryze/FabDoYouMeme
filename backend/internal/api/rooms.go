@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math/big"
 	"net/http"
 
@@ -24,10 +25,11 @@ type RoomHandler struct {
 	db      *db.Queries
 	cfg     *config.Config
 	manager *game.Manager
+	log     *slog.Logger
 }
 
-func NewRoomHandler(pool *pgxpool.Pool, cfg *config.Config, manager *game.Manager) *RoomHandler {
-	return &RoomHandler{db: db.New(pool), cfg: cfg, manager: manager}
+func NewRoomHandler(pool *pgxpool.Pool, cfg *config.Config, manager *game.Manager, log *slog.Logger) *RoomHandler {
+	return &RoomHandler{db: db.New(pool), cfg: cfg, manager: manager, log: log}
 }
 
 // Create handles POST /api/rooms.
