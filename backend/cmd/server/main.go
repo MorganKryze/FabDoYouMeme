@@ -132,9 +132,9 @@ func main() {
 	r.Get("/api/health", healthHandler.Liveness)
 	r.Get("/api/health/deep", healthHandler.Readiness)
 
-	// /api/metrics — MUST be IP-restricted at the reverse proxy or firewall level.
+	// /api/metrics — restricted to private IP ranges (loopback + RFC-1918).
 	// Never expose this endpoint to the public internet.
-	r.Handle("/api/metrics", promhttp.Handler())
+	r.With(mw.RequirePrivateIP).Handle("/api/metrics", promhttp.Handler())
 
 	// Auth routes (rate-limited)
 	r.With(authLimiter.Middleware).Route("/api/auth", func(r chi.Router) {

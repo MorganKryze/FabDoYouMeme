@@ -1,0 +1,48 @@
+# .github/workflows/frontend.yml
+name: Frontend CI
+
+on:
+  push:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/frontend.yml'
+  pull_request:
+    paths:
+      - 'frontend/**'
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Type check
+        working-directory: frontend
+        run: npm run check
+
+      - name: Build
+        working-directory: frontend
+        env:
+          PUBLIC_API_URL: http://localhost:8080
+        run: npm run build
+
+      - name: Audit dependencies
+        working-directory: frontend
+        # --audit-level=high: fail only on high or critical vulns
+        run: npm audit --audit-level=high
+
+      - name: Docker build smoke test
+        run: docker build -t fabyoumeme-frontend:ci ./frontend

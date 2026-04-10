@@ -16,6 +16,11 @@ services:
       - 5432
     networks:
       - project_network
+    logging:
+      driver: json-file
+      options:
+        max-size: '50m'
+        max-file: '5'
 
   backend:
     restart: unless-stopped
@@ -63,6 +68,11 @@ services:
       - 8080
     networks:
       - project_network
+    logging:
+      driver: json-file
+      options:
+        max-size: '50m'
+        max-file: '5'
 
   frontend:
     restart: unless-stopped
@@ -77,6 +87,11 @@ services:
       - 3000
     networks:
       - project_network
+    logging:
+      driver: json-file
+      options:
+        max-size: '50m'
+        max-file: '5'
 
 volumes:
   postgres_data:

@@ -1,0 +1,41 @@
+// backend/internal/middleware/ip_allowlist.go
+package middleware
+
+import (
+	"net"
+	"net/http"
+)
+
+var allowedNets = []*net.IPNet{
+	mustParseCIDR("127.0.0.0/8"),
+	mustParseCIDR("10.0.0.0/8"),
+	mustParseCIDR("172.16.0.0/12"),
+	mustParseCIDR("192.168.0.0/16"),
+}
+
+func mustParseCIDR(s string) *net.IPNet {
+	_, n, err := net.ParseCIDR(s)
+	if err != nil {
+		panic(err)
+	}
+	return n
+}
+
+// RequirePrivateIP blocks requests from public IP addresses.
+// Use this to protect internal-only endpoints such as /api/metrics.
+func RequirePrivateIP(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			host = r.RemoteAddr
+		}
+		ip := net.ParseIP(host)
+		for _, n := range allowedNets {
+			if n.Contains(ip) {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+		http.Error(w, "forbidden", http.StatusForbidden)
+	})
+}

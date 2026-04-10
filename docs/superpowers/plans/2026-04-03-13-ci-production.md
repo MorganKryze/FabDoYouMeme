@@ -6,7 +6,9 @@
 
 **Architecture:** Two independent GitHub Actions workflows (path-filtered to avoid wasteful runs). No automatic deployment — this is a personal self-hosted project. Docker Compose is the deployment unit.
 
-**Tech Stack:** GitHub Actions, Go 1.23, Node.js 22, Docker, postgres:17-alpine, golang-migrate, govulncheck, `npm audit`
+**Tech Stack:** GitHub Actions, Go 1.25, Node.js 22, Docker, postgres:17-alpine, golang-migrate, govulncheck, `npm audit`
+
+> **Deviation (implemented):** Go version in `go.mod` is `1.25.0`, not `1.23`. CI workflows use `go-version: '1.25'`.
 
 ---
 
@@ -17,7 +19,7 @@
 | `.github/workflows/backend.yml`  | Backend CI: build, vet, migrate, test, govulncheck, Docker build |
 | `.github/workflows/frontend.yml` | Frontend CI: install, type-check, build, npm audit, Docker build |
 | `.env.example`                   | All required environment variables with safe placeholder values  |
-| `docker-compose.yml`             | Production Docker Compose (verify log driver config)             |
+| `docker/compose.base.yml`        | Base Docker Compose (log driver config added here)               |
 | `docker-compose.override.yml`    | Dev overrides (Mailpit, volume mounts)                           |
 
 ---
@@ -303,9 +305,11 @@ git commit -m "chore: add .env.example with all required variables documented"
 
 **Files:**
 
-- Modify: `docker-compose.yml`
+- Modify: `docker/compose.base.yml`
 
-- [ ] **Step 1: Read the current docker-compose.yml**
+> **Deviation (implemented):** Compose files live in `docker/` (not repo root) as `compose.base.yml`, `compose.dev.yml`, `compose.preprod.yml`, `compose.prod.yml`. Log rotation was added to `docker/compose.base.yml` so all environments inherit it.
+
+- [ ] **Step 1: Read the current docker/compose.base.yml**
 
 ```bash
 cat docker-compose.yml
