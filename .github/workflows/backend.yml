@@ -1,4 +1,11 @@
 # .github/workflows/backend.yml
+#
+# Backend CI — split into parallel jobs so a failure in one (e.g. lint)
+# does not block the others from reporting. The Postgres service container
+# that previous revisions started was unused: the test suite runs its own
+# Postgres via testcontainers-go, and the only other consumer was a
+# `migrate up` smoke run whose signal was weak. Dropping it saves ~20s
+# per run and removes a source of confusion about which DB tests hit.
 name: Backend CI
 
 on:
@@ -11,26 +18,9 @@ on:
       - 'backend/**'
 
 jobs:
-  build-and-test:
+  build:
+    name: Build & vet
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_DB: fabyoumeme_test
-          POSTGRES_USER: fabyoumeme
-          POSTGRES_PASSWORD: testpassword
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-retries 5
-
-    env:
-      DATABASE_URL: postgres://fabyoumeme:testpassword@localhost:5432/fabyoumeme_test
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -83,16 +73,75 @@ jobs:
           fi
           echo "ADR-011 lint OK — $strict/$total SameSite lines are Strict in $file"
 
-      - name: Install golang-migrate
-        run: go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+  sqlc-verify:
+    name: sqlc diff
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Run migrations
-        working-directory: backend
-        run: migrate -path ./db/migrations -database "$DATABASE_URL" up
+      - name: Set up sqlc
+        uses: sqlc-dev/setup-sqlc@v4
+        with:
+          sqlc-version: '1.27.0'
 
-      - name: Test
+      # `sqlc diff` exits non-zero if the generated Go in db/sqlc is stale
+      # relative to the queries in db/queries. This is our defense against
+      # Stage 1's finding 1.4 (no sqlc gate) and 1.3 (possible mtime drift).
+      - name: sqlc diff
         working-directory: backend
-        run: go test -race -count=1 ./...
+        run: sqlc diff
+
+  test:
+    name: Test (race + coverage)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      - name: Download modules
+        working-directory: backend
+        run: go mod download
+
+      # The test run is the project's primary gate. It exercises:
+      #   - every unit test (fast, in-process)
+      #   - every integration test (testcontainers-go spins up Postgres)
+      #   - every E2E test currently lives under the same `go test ./...`
+      #     invocation (no `//go:build e2e` tag is in use today)
+      #   - any goleak.VerifyTestMain hook added per Stage 6 §6.11
+      # ubuntu-latest ships Docker, which testcontainers needs.
+      - name: Test with coverage
+        working-directory: backend
+        run: go test -race -count=1 -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage.out
+          if-no-files-found: error
+          retention-days: 14
+
+  security:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: backend/go.sum
 
       # govulncheck exits 3 on any reachable vulnerability. We filter its
       # JSON output through the .govulncheck-ignore allowlist so the build
@@ -124,5 +173,12 @@ jobs:
           fi
           echo "govulncheck: all reachable vulns are listed in .govulncheck-ignore"
 
-      - name: Docker build smoke test
+  docker:
+    name: Docker build smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Docker build
         run: docker build -t fabyoumeme-backend:ci ./backend

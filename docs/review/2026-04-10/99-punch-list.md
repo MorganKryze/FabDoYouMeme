@@ -145,10 +145,10 @@ Grouped by the order they should be tackled. Each item lists: finding ID(s), eff
 
 | #    | Done | Title                                                                                                  | Effort | Files                                                          |
 | ---- | ---- | ------------------------------------------------------------------------------------------------------ | ------ | -------------------------------------------------------------- |
-| P4.1 | ☐    | New `backend.yml`: parallel jobs, drop wasted postgres service, add sqlc-verify, coverage, e2e, goleak | 0.5d   | `.github/workflows/backend.yml`                                |
-| P4.2 | ☐    | New `frontend.yml`: add vitest step, bump to Node 22                                                   | 0.25d  | `.github/workflows/frontend.yml`                               |
-| P4.3 | ☐    | Add `CODEOWNERS` requiring review on auth/middleware/main                                              | 0.1d   | `.github/CODEOWNERS` (new)                                     |
-| P4.4 | ☐    | Enable Dependabot + CodeQL                                                                             | 0.1d   | `.github/dependabot.yml`, `.github/workflows/codeql.yml` (new) |
+| P4.1 | ✅   | New `backend.yml`: parallel jobs, drop wasted postgres service, add sqlc-verify, coverage, e2e, goleak | 0.5d   | `.github/workflows/backend.yml`                                |
+| P4.2 | ✅   | New `frontend.yml`: add vitest step, bump to Node 22                                                   | 0.25d  | `.github/workflows/frontend.yml`                               |
+| P4.3 | ✅   | Add `CODEOWNERS` requiring review on auth/middleware/main                                              | 0.1d   | `.github/CODEOWNERS` (new)                                     |
+| P4.4 | ✅   | Enable Dependabot + CodeQL                                                                             | 0.1d   | `.github/dependabot.yml`, `.github/workflows/codeql.yml` (new) |
 
 ### P5 — Frontend test bootstrap
 

@@ -1,0 +1,79 @@
+# .github/dependabot.yml
+#
+# Weekly dependency scans across every ecosystem the repo ships:
+#   - Go modules (backend/)
+#   - npm (frontend/)
+#   - GitHub Actions pinned in .github/workflows/
+#   - Dockerfiles (backend/ and frontend/)
+#
+# Monday mornings keep the weekly noise predictable. Open PR caps limit
+# how much review burden Dependabot can impose in a bad week.
+# Semver-major bumps on the dev-dependency side get grouped so a single
+# review handles them — reduces PR churn without hiding breaking changes
+# in runtime deps.
+version: 2
+
+updates:
+  - package-ecosystem: gomod
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - backend
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - frontend
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - ci
+
+  - package-ecosystem: docker
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    labels:
+      - dependencies
+      - docker
+
+  - package-ecosystem: docker
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    labels:
+      - dependencies
+      - docker

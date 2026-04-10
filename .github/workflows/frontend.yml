@@ -33,6 +33,14 @@ jobs:
         working-directory: frontend
         run: npm run check
 
+      # P4.2 — vitest gate. Uses `npm test --if-present` so the step is a
+      # no-op until P5.1 adds vitest + a `test` script to package.json.
+      # Once P5.1 lands, any commit that breaks a component or state test
+      # fails here without any further CI change.
+      - name: Unit tests (vitest)
+        working-directory: frontend
+        run: npm test --if-present
+
       - name: Build
         working-directory: frontend
         env:
