@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"golang.org/x/time/rate"
+
+	"github.com/MorganKryze/FabDoYouMeme/backend/internal/clock"
 )
 
 type RateLimiter struct {
@@ -15,6 +17,7 @@ type RateLimiter struct {
 	clients map[string]*rateLimiterEntry
 	rate    rate.Limit
 	burst   int
+	clock   clock.Clock
 }
 
 type rateLimiterEntry struct {
@@ -22,12 +25,19 @@ type rateLimiterEntry struct {
 	lastSeen time.Time
 }
 
-func NewRateLimiter(requestsPerPeriod int, periodSeconds int) *RateLimiter {
+// NewRateLimiter constructs a RateLimiter. Pass clock.Real{} in production;
+// tests can inject a *clock.Fake to exercise the eviction cadence without
+// real sleeps.
+func NewRateLimiter(requestsPerPeriod int, periodSeconds int, clk clock.Clock) *RateLimiter {
+	if clk == nil {
+		clk = clock.Real{}
+	}
 	r := rate.Every(time.Duration(periodSeconds) * time.Second / time.Duration(requestsPerPeriod))
 	rl := &RateLimiter{
 		clients: make(map[string]*rateLimiterEntry),
 		rate:    r,
 		burst:   requestsPerPeriod,
+		clock:   clk,
 	}
 	go rl.evictLoop()
 	return rl
@@ -35,10 +45,10 @@ func NewRateLimiter(requestsPerPeriod int, periodSeconds int) *RateLimiter {
 
 // evictLoop removes entries that have been idle for more than 1 hour.
 func (rl *RateLimiter) evictLoop() {
-	ticker := time.NewTicker(10 * time.Minute)
+	ticker := rl.clock.NewTicker(10 * time.Minute)
 	defer ticker.Stop()
-	for range ticker.C {
-		cutoff := time.Now().Add(-1 * time.Hour)
+	for range ticker.C() {
+		cutoff := rl.clock.Now().Add(-1 * time.Hour)
 		rl.mu.Lock()
 		for ip, entry := range rl.clients {
 			if entry.lastSeen.Before(cutoff) {
@@ -57,7 +67,7 @@ func (rl *RateLimiter) getLimiter(ip string) *rate.Limiter {
 		entry = &rateLimiterEntry{limiter: rate.NewLimiter(rl.rate, rl.burst)}
 		rl.clients[ip] = entry
 	}
-	entry.lastSeen = time.Now()
+	entry.lastSeen = rl.clock.Now()
 	return entry.limiter
 }
 

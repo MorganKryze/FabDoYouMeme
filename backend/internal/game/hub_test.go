@@ -18,6 +18,7 @@ import (
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/api"
+	"github.com/MorganKryze/FabDoYouMeme/backend/internal/clock"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/config"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/game"
 	memecaption "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_caption"
@@ -99,7 +100,7 @@ func newHubEnv(t *testing.T) *hubEnv {
 	}
 	registry := game.NewRegistry()
 	registry.Register(memecaption.New())
-	manager := game.NewManager(registry, q, cfg, slog.Default())
+	manager := game.NewManager(registry, q, cfg, slog.Default(), clock.Real{})
 	manager.GetOrCreate(ctx, room.Code, room.ID, gt.Slug, host.ID.String())
 
 	wsHandler := api.NewWSHandler(manager, "") // empty allowedOrigin: test uses no Origin header

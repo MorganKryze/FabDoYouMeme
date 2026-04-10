@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"time"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -79,7 +78,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		Role:      "player",
 		IsActive:  true,
 		InvitedBy: invitedBy,
-		ConsentAt: time.Now().UTC(),
+		ConsentAt: h.clock.Now().UTC(),
 	})
 	if err != nil {
 		var pgErr *pgconn.PgError

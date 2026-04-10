@@ -25,6 +25,7 @@ import (
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/api"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/auth"
+	"github.com/MorganKryze/FabDoYouMeme/backend/internal/clock"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/config"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/email"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/game"
@@ -80,8 +81,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	// ── Clock (real wall clock in production) ────────────────────────────────
+	clk := clock.Real{}
+
 	// ── Auth handler ─────────────────────────────────────────────────────────
-	authHandler := auth.New(pool, cfg, emailSvc, logger)
+	authHandler := auth.New(pool, cfg, emailSvc, logger, clk)
 
 	// ── First-boot admin bootstrap ────────────────────────────────────────────
 	if err := authHandler.SeedAdmin(context.Background()); err != nil {
@@ -101,14 +105,14 @@ func main() {
 	registry.Register(memecaption.New())
 
 	// ── Game manager ──────────────────────────────────────────────────────────
-	manager := game.NewManager(registry, queries, cfg, logger)
+	manager := game.NewManager(registry, queries, cfg, logger, clk)
 
 	// ── Rate limiters ─────────────────────────────────────────────────────────
-	authLimiter   := mw.NewRateLimiter(cfg.RateLimitAuthRPM, 60)
-	inviteLimiter := mw.NewRateLimiter(cfg.RateLimitInviteRPH, 3600)
-	globalLimiter := mw.NewRateLimiter(cfg.RateLimitGlobalRPM, 60)
-	roomLimiter   := mw.NewRateLimiter(cfg.RateLimitRoomsRPH, 3600)
-	uploadLimiter := mw.NewRateLimiter(cfg.RateLimitUploadsRPH, 3600)
+	authLimiter   := mw.NewRateLimiter(cfg.RateLimitAuthRPM, 60, clk)
+	inviteLimiter := mw.NewRateLimiter(cfg.RateLimitInviteRPH, 3600, clk)
+	globalLimiter := mw.NewRateLimiter(cfg.RateLimitGlobalRPM, 60, clk)
+	roomLimiter   := mw.NewRateLimiter(cfg.RateLimitRoomsRPH, 3600, clk)
+	uploadLimiter := mw.NewRateLimiter(cfg.RateLimitUploadsRPH, 3600, clk)
 
 	// ── HTTP handlers ─────────────────────────────────────────────────────────
 	packHandler      := api.NewPackHandler(pool, cfg, store)

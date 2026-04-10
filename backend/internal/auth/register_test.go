@@ -16,6 +16,7 @@ import (
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/auth"
+	"github.com/MorganKryze/FabDoYouMeme/backend/internal/clock"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/config"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/testutil"
 )
@@ -55,7 +56,7 @@ func newTestHandler(t *testing.T) (*auth.Handler, *db.Queries) {
 		MagicLinkTTL:     15 * time.Minute,
 		SessionTTL:       720 * time.Hour,
 	}
-	h := auth.New(pool, cfg, &stubEmail{}, nil)
+	h := auth.New(pool, cfg, &stubEmail{}, nil, clock.Real{})
 	return h, db.New(pool)
 }
 
@@ -244,7 +245,7 @@ func TestRegister_SMTPFailureReturns201WithWarning(t *testing.T) {
 		MagicLinkTTL:     15 * time.Minute,
 		SessionTTL:       720 * time.Hour,
 	}
-	h := auth.New(pool, cfg, &failingSender{}, nil)
+	h := auth.New(pool, cfg, &failingSender{}, nil, clock.Real{})
 	q := db.New(pool)
 
 	slug := testutil.SeedName(t)

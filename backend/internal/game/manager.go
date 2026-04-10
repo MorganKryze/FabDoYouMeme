@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
+	"github.com/MorganKryze/FabDoYouMeme/backend/internal/clock"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/config"
 )
 
@@ -22,15 +23,20 @@ type Manager struct {
 	db       *db.Queries
 	cfg      *config.Config
 	log      *slog.Logger
+	clock    clock.Clock
 }
 
-func NewManager(registry *Registry, queries *db.Queries, cfg *config.Config, log *slog.Logger) *Manager {
+func NewManager(registry *Registry, queries *db.Queries, cfg *config.Config, log *slog.Logger, clk clock.Clock) *Manager {
+	if clk == nil {
+		clk = clock.Real{}
+	}
 	return &Manager{
 		hubs:     make(map[string]*Hub),
 		registry: registry,
 		db:       queries,
 		cfg:      cfg,
 		log:      log,
+		clock:    clk,
 	}
 }
 
@@ -53,6 +59,7 @@ func (m *Manager) GetOrCreate(ctx context.Context, roomCode string, roomID uuid.
 		DB:           m.db,
 		Cfg:          m.cfg,
 		Log:          m.log,
+		Clock:        m.clock,
 	})
 	m.hubs[roomCode] = h
 
@@ -101,5 +108,5 @@ func (m *Manager) Shutdown() {
 			"message": "Server is restarting. Please reconnect in a few moments.",
 		}))
 	}
-	time.Sleep(1 * time.Second)
+	m.clock.Sleep(1 * time.Second)
 }

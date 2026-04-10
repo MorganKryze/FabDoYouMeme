@@ -16,6 +16,7 @@ import (
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/api"
+	"github.com/MorganKryze/FabDoYouMeme/backend/internal/clock"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/config"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/game"
 	memecaption "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_caption"
@@ -29,7 +30,7 @@ func newRoomHandler(t *testing.T) (*api.RoomHandler, *db.Queries) {
 	registry.Register(memecaption.New())
 	q := db.New(pool)
 	cfg := &config.Config{}
-	manager := game.NewManager(registry, q, cfg, slog.Default())
+	manager := game.NewManager(registry, q, cfg, slog.Default(), clock.Real{})
 	return api.NewRoomHandler(pool, cfg, manager), q
 }
 

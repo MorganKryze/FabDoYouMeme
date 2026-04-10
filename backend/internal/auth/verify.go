@@ -4,7 +4,6 @@ package auth
 import (
 	"encoding/json"
 	"net/http"
-	"time"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 )
@@ -31,7 +30,7 @@ func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, "token_not_found", "Token not found")
 		return
 	}
-	if rawToken.ExpiresAt.Before(time.Now().UTC()) {
+	if rawToken.ExpiresAt.Before(h.clock.Now().UTC()) {
 		writeError(w, r, http.StatusBadRequest, "token_expired", "Token has expired")
 		return
 	}
@@ -106,7 +105,7 @@ func (h *Handler) createSessionAndRespond(w http.ResponseWriter, r *http.Request
 		return
 	}
 	sessionHash := HashToken(rawToken)
-	expiresAt := time.Now().UTC().Add(h.cfg.SessionTTL)
+	expiresAt := h.clock.Now().UTC().Add(h.cfg.SessionTTL)
 
 	if _, err := h.db.CreateSession(r.Context(), db.CreateSessionParams{
 		UserID:    user.ID,

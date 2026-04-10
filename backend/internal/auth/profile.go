@@ -248,7 +248,7 @@ func (h *Handler) GetExport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"exported_at": time.Now().UTC(),
+		"exported_at": h.clock.Now().UTC(),
 		"user": exportUser{
 			ID:        user.ID.String(),
 			Username:  user.Username,

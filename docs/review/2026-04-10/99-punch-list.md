@@ -93,69 +93,69 @@ Grouped by the order they should be tackled. Each item lists: finding ID(s), eff
 
 ### P0 — Foundation (unblocks everything else)
 
-| #    | Title                                                                                     | Effort | Files                                                                  | Acceptance                                              |
-| ---- | ----------------------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------- | ------------------------------------------------------- |
-| P0.1 | Add `clock.Clock` interface with `Real` + `Fake` implementations                          | 0.5d   | `backend/internal/clock/{clock,real,fake}.go` (new)                    | `FakeClock` unit tests pass; `Advance` is deterministic |
-| P0.2 | Plumb clock into `hub.go`, `auth/handler.go`, `middleware/rate_limit.go`                  | 1d     | 3 files + all call sites of `time.Now`, `time.After`, `time.AfterFunc` | `go build ./...` passes; existing tests still green     |
-| P0.3 | Add `testutil` helpers: `FakeStorage`, `FakeEmail`, `WSTestClient`, `HTTPTest`, factories | 2d     | `backend/internal/testutil/*.go` (new files)                           | Each helper has its own unit test                       |
+| #    | Done | Title                                                                                     | Effort | Files                                                                  | Acceptance                                              |
+| ---- | ---- | ----------------------------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------- | ------------------------------------------------------- |
+| P0.1 | ✅   | Add `clock.Clock` interface with `Real` + `Fake` implementations                          | 0.5d   | `backend/internal/clock/{clock,real,fake}.go` (new)                    | `FakeClock` unit tests pass; `Advance` is deterministic |
+| P0.2 | ✅   | Plumb clock into `hub.go`, `auth/handler.go`, `middleware/rate_limit.go`                  | 1d     | 3 files + all call sites of `time.Now`, `time.After`, `time.AfterFunc` | `go build ./...` passes; existing tests still green     |
+| P0.3 | ✅   | Add `testutil` helpers: `FakeStorage`, `FakeEmail`, `WSTestClient`, `HTTPTest`, factories | 2d     | `backend/internal/testutil/*.go` (new files)                           | Each helper has its own unit test                       |
 
-**Gate**: these three items must complete before any P1 item starts. They unblock 16 regression tests.
+**Gate**: these three items must complete before any P1 item starts. They unblock 16 regression tests. — **cleared 2026-04-10**.
 
 ### P1 — Must-fix critical defects
 
-| #    | Title                                                                                               | Finding  | Effort | Files                                                                                                    | Acceptance test                            |
-| ---- | --------------------------------------------------------------------------------------------------- | -------- | ------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| P1.1 | Create hubs in WS upgrade path with server-scoped context                                           | 3.A, 4.C | 1.5d   | `api/ws.go`, `game/manager.go`, `cmd/server/main.go`                                                     | `TestE2E_WebSocketHappyPath`               |
-| P1.2 | Cancel `runRounds` from `finishRoom` via dedicated roundsCtx                                        | 3.B, 4.F | 0.5d   | `game/hub.go`                                                                                            | `TestE2E_HostDisconnectFinishesGame`       |
-| P1.3 | Respect `SessionRenewInterval` in `SessionLookupFn`                                                 | 3.C      | 0.5d   | `auth/handler.go`                                                                                        | `TestSession_RenewAtMostOncePerInterval`   |
-| P1.4 | Authorize `DownloadURL` via new `CanUserDownloadMedia` query                                        | 5.A      | 1d     | `api/assets.go`, `db/queries/game_packs.sql`, regen sqlc                                                 | `TestAPI_DownloadURLAuthzMatrix` (9 cases) |
-| P1.5 | Add `middleware.ClientIP` trusted-proxy walker; replace `r.RemoteAddr` in rate_limit + ip_allowlist | 5.B      | 1d     | `middleware/real_ip.go` (new), `rate_limit.go`, `ip_allowlist.go`, `config.go` (TRUSTED_PROXIES env var) | `TestMiddleware_ClientIPTrustedProxyWalk`  |
+| #    | Done | Title                                                                                               | Finding  | Effort | Files                                                                                                    | Acceptance test                            |
+| ---- | ---- | --------------------------------------------------------------------------------------------------- | -------- | ------ | -------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| P1.1 | ☐    | Create hubs in WS upgrade path with server-scoped context                                           | 3.A, 4.C | 1.5d   | `api/ws.go`, `game/manager.go`, `cmd/server/main.go`                                                     | `TestE2E_WebSocketHappyPath`               |
+| P1.2 | ☐    | Cancel `runRounds` from `finishRoom` via dedicated roundsCtx                                        | 3.B, 4.F | 0.5d   | `game/hub.go`                                                                                            | `TestE2E_HostDisconnectFinishesGame`       |
+| P1.3 | ☐    | Respect `SessionRenewInterval` in `SessionLookupFn`                                                 | 3.C      | 0.5d   | `auth/handler.go`                                                                                        | `TestSession_RenewAtMostOncePerInterval`   |
+| P1.4 | ☐    | Authorize `DownloadURL` via new `CanUserDownloadMedia` query                                        | 5.A      | 1d     | `api/assets.go`, `db/queries/game_packs.sql`, regen sqlc                                                 | `TestAPI_DownloadURLAuthzMatrix` (9 cases) |
+| P1.5 | ☐    | Add `middleware.ClientIP` trusted-proxy walker; replace `r.RemoteAddr` in rate_limit + ip_allowlist | 5.B      | 1d     | `middleware/real_ip.go` (new), `rate_limit.go`, `ip_allowlist.go`, `config.go` (TRUSTED_PROXIES env var) | `TestMiddleware_ClientIPTrustedProxyWalk`  |
 
 **Gate**: all five P1 items must pass their acceptance tests before any deployment claiming "beta-ready".
 
 ### P2 — Should-fix high-severity
 
-| #    | Title                                                                  | Finding  | Effort | Files                                                                   | Acceptance                                  |
-| ---- | ---------------------------------------------------------------------- | -------- | ------ | ----------------------------------------------------------------------- | ------------------------------------------- |
-| P2.1 | Add `Stop()` to `RateLimiter` and call on shutdown                     | 4.A      | 0.25d  | `middleware/rate_limit.go`, `cmd/server/main.go`                        | `goleak` check in CI passes                 |
-| P2.2 | `KickPlayer(ctx)` with select/timeout, update call site                | 4.B      | 0.25d  | `game/hub.go`, `api/room_actions.go`                                    | `TestHub_KickPlayerRespectsContext`         |
-| P2.3 | Enforce `max_players` in `handleRegister` via handler interface        | 3.D      | 0.5d   | `game/hub.go`, `game/registry.go`, `game/types/meme_caption/handler.go` | `TestHub_RejectJoinWhenFull`                |
-| P2.4 | Add state/host guards to `Leave`; host-leaves-closes-room              | 3.E      | 0.5d   | `api/room_actions.go`                                                   | `TestAPI_LeaveRejectsPlaying`               |
-| P2.5 | Add finished-state guard to `Leaderboard`                              | 3.F      | 0.1d   | `api/room_actions.go`                                                   | `TestAPI_LeaderboardRejectsUnfinished`      |
-| P2.6 | Normalize WS `CheckOrigin` — trim trailing slash, support list         | 5.C      | 0.25d  | `api/ws.go`, `config.go`                                                | `TestWS_CheckOriginNormalizesTrailingSlash` |
-| P2.7 | Add ADR-011 for SameSite CSRF stance + lint rule for `SameSite=Strict` | 5.D      | 0.5d   | `docs/reference/decisions.md`, `.github/workflows/backend.yml`          | lint fails if SameSite relaxed              |
-| P2.8 | Fail-loud on bad `FRONTEND_URL`; bounds-check all duration/int env     | 4.D, 4.E | 0.5d   | `config/config.go`                                                      | `TestConfig_LoadRejects*` table             |
-| P2.9 | Validate username + email in Go before DB write                        | 5.E      | 0.25d  | `auth/register.go`, `auth/profile.go`                                   | `TestAuth_ValidateUsernameTable`            |
+| #    | Done | Title                                                                  | Finding  | Effort | Files                                                                   | Acceptance                                  |
+| ---- | ---- | ---------------------------------------------------------------------- | -------- | ------ | ----------------------------------------------------------------------- | ------------------------------------------- |
+| P2.1 | ☐    | Add `Stop()` to `RateLimiter` and call on shutdown                     | 4.A      | 0.25d  | `middleware/rate_limit.go`, `cmd/server/main.go`                        | `goleak` check in CI passes                 |
+| P2.2 | ☐    | `KickPlayer(ctx)` with select/timeout, update call site                | 4.B      | 0.25d  | `game/hub.go`, `api/room_actions.go`                                    | `TestHub_KickPlayerRespectsContext`         |
+| P2.3 | ☐    | Enforce `max_players` in `handleRegister` via handler interface        | 3.D      | 0.5d   | `game/hub.go`, `game/registry.go`, `game/types/meme_caption/handler.go` | `TestHub_RejectJoinWhenFull`                |
+| P2.4 | ☐    | Add state/host guards to `Leave`; host-leaves-closes-room              | 3.E      | 0.5d   | `api/room_actions.go`                                                   | `TestAPI_LeaveRejectsPlaying`               |
+| P2.5 | ☐    | Add finished-state guard to `Leaderboard`                              | 3.F      | 0.1d   | `api/room_actions.go`                                                   | `TestAPI_LeaderboardRejectsUnfinished`      |
+| P2.6 | ☐    | Normalize WS `CheckOrigin` — trim trailing slash, support list         | 5.C      | 0.25d  | `api/ws.go`, `config.go`                                                | `TestWS_CheckOriginNormalizesTrailingSlash` |
+| P2.7 | ☐    | Add ADR-011 for SameSite CSRF stance + lint rule for `SameSite=Strict` | 5.D      | 0.5d   | `docs/reference/decisions.md`, `.github/workflows/backend.yml`          | lint fails if SameSite relaxed              |
+| P2.8 | ☐    | Fail-loud on bad `FRONTEND_URL`; bounds-check all duration/int env     | 4.D, 4.E | 0.5d   | `config/config.go`                                                      | `TestConfig_LoadRejects*` table             |
+| P2.9 | ☐    | Validate username + email in Go before DB write                        | 5.E      | 0.25d  | `auth/register.go`, `auth/profile.go`                                   | `TestAuth_ValidateUsernameTable`            |
 
 ### P3 — Nice-to-have robustness & observability
 
-| #    | Title                                                                    | Finding   | Effort | Files                                                                      |
-| ---- | ------------------------------------------------------------------------ | --------- | ------ | -------------------------------------------------------------------------- |
-| P3.1 | Fix Svelte 5 `state_referenced_locally` warnings via `$derived` audit    | 1.1       | 1d     | 9 `.svelte` files                                                          |
-| P3.2 | Fix a11y warnings (autofocus via onMount, label `for=`)                  | 1.2       | 0.5d   | 6 `.svelte` files                                                          |
-| P3.3 | Log + return early on `json.Unmarshal` errors in hub and runRounds       | 4.H, 3.H  | 0.25d  | `game/hub.go`                                                              |
-| P3.4 | Close slow WS consumers on drop; add `ws_messages_dropped_total` counter | 4.I       | 0.5d   | `game/hub.go`, `middleware/metrics.go`                                     |
-| P3.5 | Non-blocking `graceExpired` send with default-drop                       | 4.G       | 0.1d   | `game/hub.go`                                                              |
-| P3.6 | Per-user rate limiter on `/api/users/me/export`                          | 5.H       | 0.25d  | `cmd/server/main.go`, `middleware/rate_limit.go` (per-user bucket variant) |
-| P3.7 | Audit logging consistency spot-check, add missing entries                | 5.G       | 0.5d   | `api/admin.go`, `auth/*.go`                                                |
-| P3.8 | Investigate govulncheck CI behavior; add `.govulncheck.yaml` suppression | 5.F, 1.5  | 0.5d   | `.github/workflows/backend.yml`, `backend/.govulncheck.yaml` (new)         |
-| P3.9 | Update CLAUDE.md compose paths + sqlc.yaml location                      | 0.2, 1.11 | 0.1d   | `CLAUDE.md`                                                                |
+| #    | Done | Title                                                                    | Finding   | Effort | Files                                                                      |
+| ---- | ---- | ------------------------------------------------------------------------ | --------- | ------ | -------------------------------------------------------------------------- |
+| P3.1 | ☐    | Fix Svelte 5 `state_referenced_locally` warnings via `$derived` audit    | 1.1       | 1d     | 9 `.svelte` files                                                          |
+| P3.2 | ☐    | Fix a11y warnings (autofocus via onMount, label `for=`)                  | 1.2       | 0.5d   | 6 `.svelte` files                                                          |
+| P3.3 | ☐    | Log + return early on `json.Unmarshal` errors in hub and runRounds       | 4.H, 3.H  | 0.25d  | `game/hub.go`                                                              |
+| P3.4 | ☐    | Close slow WS consumers on drop; add `ws_messages_dropped_total` counter | 4.I       | 0.5d   | `game/hub.go`, `middleware/metrics.go`                                     |
+| P3.5 | ☐    | Non-blocking `graceExpired` send with default-drop                       | 4.G       | 0.1d   | `game/hub.go`                                                              |
+| P3.6 | ☐    | Per-user rate limiter on `/api/users/me/export`                          | 5.H       | 0.25d  | `cmd/server/main.go`, `middleware/rate_limit.go` (per-user bucket variant) |
+| P3.7 | ☐    | Audit logging consistency spot-check, add missing entries                | 5.G       | 0.5d   | `api/admin.go`, `auth/*.go`                                                |
+| P3.8 | ☐    | Investigate govulncheck CI behavior; add `.govulncheck.yaml` suppression | 5.F, 1.5  | 0.5d   | `.github/workflows/backend.yml`, `backend/.govulncheck.yaml` (new)         |
+| P3.9 | ☐    | Update CLAUDE.md compose paths + sqlc.yaml location                      | 0.2, 1.11 | 0.1d   | `CLAUDE.md`                                                                |
 
 ### P4 — CI overhaul
 
-| #    | Title                                                                                                  | Effort | Files                                                          |
-| ---- | ------------------------------------------------------------------------------------------------------ | ------ | -------------------------------------------------------------- |
-| P4.1 | New `backend.yml`: parallel jobs, drop wasted postgres service, add sqlc-verify, coverage, e2e, goleak | 0.5d   | `.github/workflows/backend.yml`                                |
-| P4.2 | New `frontend.yml`: add vitest step, bump to Node 22                                                   | 0.25d  | `.github/workflows/frontend.yml`                               |
-| P4.3 | Add `CODEOWNERS` requiring review on auth/middleware/main                                              | 0.1d   | `.github/CODEOWNERS` (new)                                     |
-| P4.4 | Enable Dependabot + CodeQL                                                                             | 0.1d   | `.github/dependabot.yml`, `.github/workflows/codeql.yml` (new) |
+| #    | Done | Title                                                                                                  | Effort | Files                                                          |
+| ---- | ---- | ------------------------------------------------------------------------------------------------------ | ------ | -------------------------------------------------------------- |
+| P4.1 | ☐    | New `backend.yml`: parallel jobs, drop wasted postgres service, add sqlc-verify, coverage, e2e, goleak | 0.5d   | `.github/workflows/backend.yml`                                |
+| P4.2 | ☐    | New `frontend.yml`: add vitest step, bump to Node 22                                                   | 0.25d  | `.github/workflows/frontend.yml`                               |
+| P4.3 | ☐    | Add `CODEOWNERS` requiring review on auth/middleware/main                                              | 0.1d   | `.github/CODEOWNERS` (new)                                     |
+| P4.4 | ☐    | Enable Dependabot + CodeQL                                                                             | 0.1d   | `.github/dependabot.yml`, `.github/workflows/codeql.yml` (new) |
 
 ### P5 — Frontend test bootstrap
 
-| #    | Title                                                           | Effort | Files                                                                |
-| ---- | --------------------------------------------------------------- | ------ | -------------------------------------------------------------------- |
-| P5.1 | Add vitest + @testing-library/svelte; ~10 component/state tests | 1.5d   | `frontend/vitest.config.ts` (new), `frontend/src/**/*.test.ts` (new) |
-| P5.2 | Add Playwright E2E smoke test (register → play → results)       | 0.5d   | `frontend/tests/e2e/*.spec.ts` (new)                                 |
+| #    | Done | Title                                                           | Effort | Files                                                                |
+| ---- | ---- | --------------------------------------------------------------- | ------ | -------------------------------------------------------------------- |
+| P5.1 | ☐    | Add vitest + @testing-library/svelte; ~10 component/state tests | 1.5d   | `frontend/vitest.config.ts` (new), `frontend/src/**/*.test.ts` (new) |
+| P5.2 | ☐    | Add Playwright E2E smoke test (register → play → results)       | 0.5d   | `frontend/tests/e2e/*.spec.ts` (new)                                 |
 
 ---
 

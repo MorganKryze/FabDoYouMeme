@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
+	"github.com/MorganKryze/FabDoYouMeme/backend/internal/clock"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/config"
 )
 
@@ -88,6 +89,7 @@ type Hub struct {
 	db       *db.Queries
 	cfg      *config.Config
 	log      *slog.Logger
+	clock    clock.Clock
 
 	state   HubState
 	players map[string]*connectedPlayer // userID → player
@@ -132,10 +134,15 @@ type HubConfig struct {
 	DB           *db.Queries
 	Cfg          *config.Config
 	Log          *slog.Logger
+	Clock        clock.Clock
 }
 
 // NewHub creates a Hub but does not start it. Call hub.Run() in a goroutine.
 func NewHub(hc HubConfig) *Hub {
+	clk := hc.Clock
+	if clk == nil {
+		clk = clock.Real{}
+	}
 	return &Hub{
 		roomCode:     hc.RoomCode,
 		roomID:       hc.RoomID,
@@ -145,6 +152,7 @@ func NewHub(hc HubConfig) *Hub {
 		db:           hc.DB,
 		cfg:          hc.Cfg,
 		log:          hc.Log,
+		clock:        clk,
 		state:            HubLobby,
 		players:          make(map[string]*connectedPlayer),
 		register:         make(chan *connectedPlayer, 8),   // burst: ≤8 simultaneous joins before blocking
@@ -246,12 +254,12 @@ func (h *Hub) handleUnregister(p *connectedPlayer) {
 	h.broadcast(buildMessage("reconnecting", map[string]string{
 		"user_id": p.userID, "username": p.username,
 	}))
-	// time.AfterFunc avoids a goroutine leak: it uses an internal timer goroutine
-	// that exits after firing once. All state changes still happen inside Run()
-	// since the send is into a buffered channel read by Run().
+	// AfterFunc avoids a goroutine leak: the fake/real timer fires once and
+	// exits. All state changes still happen inside Run() because the send
+	// is into a buffered channel read by Run().
 	userID, username := p.userID, p.username
 	grace := h.cfg.ReconnectGraceWindow
-	time.AfterFunc(grace, func() {
+	h.clock.AfterFunc(grace, func() {
 		h.graceExpired <- graceExpiredMsg{userID: userID, username: username}
 	})
 }
@@ -498,7 +506,7 @@ func (h *Hub) runRounds(ctx context.Context) {
 		if item.MediaKey != nil {
 			mediaURL = *item.MediaKey
 		}
-		endsAt := time.Now().Add(roundDuration)
+		endsAt := h.clock.Now().Add(roundDuration)
 		h.roundCtrl <- roundCtrlStartRound{
 			roundID:  dbRound.ID,
 			itemID:   item.ID,
@@ -511,10 +519,10 @@ func (h *Hub) runRounds(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(roundDuration):
+		case <-h.clock.After(roundDuration):
 		}
 
-		votingEndsAt := time.Now().Add(votingDuration)
+		votingEndsAt := h.clock.Now().Add(votingDuration)
 		h.roundCtrl <- roundCtrlCloseSubmissions{
 			votingEndsAt: votingEndsAt,
 			duration:     votingDuration,
@@ -523,7 +531,7 @@ func (h *Hub) runRounds(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(votingDuration):
+		case <-h.clock.After(votingDuration):
 		}
 
 		h.roundCtrl <- roundCtrlCloseVoting{}
@@ -531,7 +539,7 @@ func (h *Hub) runRounds(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(3 * time.Second):
+		case <-h.clock.After(3 * time.Second):
 		}
 	}
 
@@ -704,7 +712,7 @@ func (h *Hub) readPump(p *connectedPlayer) {
 
 // writePump drains the player's send channel to the WebSocket connection.
 func (h *Hub) writePump(p *connectedPlayer) {
-	pingTicker := time.NewTicker(h.cfg.WSPingInterval)
+	pingTicker := h.clock.NewTicker(h.cfg.WSPingInterval)
 	defer func() {
 		pingTicker.Stop()
 		p.conn.Close()
@@ -719,7 +727,7 @@ func (h *Hub) writePump(p *connectedPlayer) {
 			if err := p.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
 				return
 			}
-		case <-pingTicker.C:
+		case <-pingTicker.C():
 			if err := p.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}

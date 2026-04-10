@@ -4,7 +4,6 @@ package auth
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -30,7 +29,7 @@ func (h *Handler) SeedAdmin(ctx context.Context) error {
 	}
 
 	// Create admin user with legitimate-interest consent_at (Art. 6(1)(f))
-	consentAt := time.Now().UTC()
+	consentAt := h.clock.Now().UTC()
 	admin, err := h.db.CreateUser(ctx, db.CreateUserParams{
 		Username:  "admin",
 		Email:     h.cfg.SeedAdminEmail,

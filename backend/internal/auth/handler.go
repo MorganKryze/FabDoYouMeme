@@ -8,12 +8,12 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"time"
 
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
+	"github.com/MorganKryze/FabDoYouMeme/backend/internal/clock"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/config"
 )
 
@@ -23,15 +23,22 @@ type Handler struct {
 	cfg   *config.Config
 	email EmailSender
 	log   *slog.Logger
+	clock clock.Clock
 }
 
-func New(pool *pgxpool.Pool, cfg *config.Config, email EmailSender, log *slog.Logger) *Handler {
+// New constructs an auth Handler. Pass clock.Real{} in production; tests can
+// inject a *clock.Fake to control session-expiry / magic-link-expiry windows.
+func New(pool *pgxpool.Pool, cfg *config.Config, email EmailSender, log *slog.Logger, clk clock.Clock) *Handler {
+	if clk == nil {
+		clk = clock.Real{}
+	}
 	return &Handler{
 		db:    db.New(pool),
 		pool:  pool,
 		cfg:   cfg,
 		email: email,
 		log:   log,
+		clock: clk,
 	}
 }
 
@@ -41,7 +48,7 @@ func (h *Handler) SessionLookupFn(ctx context.Context, tokenHash string) (string
 	if err != nil {
 		return "", "", "", "", false, err
 	}
-	newExpiry := time.Now().Add(h.cfg.SessionTTL)
+	newExpiry := h.clock.Now().Add(h.cfg.SessionTTL)
 	if _, err := h.db.RenewSession(ctx, db.RenewSessionParams{
 		ID:        row.ID,
 		ExpiresAt: newExpiry,
@@ -67,7 +74,7 @@ func (h *Handler) sendMagicLinkToUser(ctx context.Context, user db.User, purpose
 		return fmt.Errorf("generate token: %w", err)
 	}
 	tokenHash := HashToken(rawToken)
-	expiresAt := time.Now().Add(h.cfg.MagicLinkTTL)
+	expiresAt := h.clock.Now().Add(h.cfg.MagicLinkTTL)
 
 	if _, err := h.db.CreateMagicLinkToken(ctx, db.CreateMagicLinkTokenParams{
 		UserID:    user.ID,
