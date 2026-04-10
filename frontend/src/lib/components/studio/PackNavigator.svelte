@@ -10,6 +10,13 @@
   let newPackName = $state('');
   let newPackDesc = $state('');
   let creating = $state(false);
+  // Imperative focus replaces the raw `autofocus` attribute so screen
+  // readers announce the focus change when the inline form opens
+  // (a11y_autofocus — finding 1.2 in the 2026-04-10 review).
+  let newPackNameInput = $state<HTMLInputElement | null>(null);
+  $effect(() => {
+    if (showNewPackForm && newPackNameInput) newPackNameInput.focus();
+  });
 
   const officialPacks = $derived(studio.packs.filter((p) => p.owner_id === null));
   const myPacks = $derived(studio.packs.filter((p) => p.owner_id === user.id));
@@ -108,9 +115,9 @@
       <div class="flex flex-col gap-2 px-1">
         <input
           bind:value={newPackName}
+          bind:this={newPackNameInput}
           type="text"
           placeholder="Pack name"
-          autofocus
           class="h-8 rounded border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
         />
         <input

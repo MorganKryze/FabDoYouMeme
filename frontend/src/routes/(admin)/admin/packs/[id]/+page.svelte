@@ -1,12 +1,13 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
+  import { untrack } from 'svelte';
   import { toast } from '$lib/state/toast.svelte';
   import { uploadImageItem } from '$lib/api/studio';
   import type { ActionData, PageData } from './$types';
   import type { GameItem } from '$lib/api/types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
-  let items = $state<GameItem[]>(data.items);
+  let items = $state<GameItem[]>(untrack(() => data.items));
   let uploading = $state(false);
 
   $effect(() => {
@@ -43,7 +44,7 @@
     <span class="text-muted-foreground">/</span>
     <h1 class="text-xl font-bold">{data.pack.name}</h1>
     <span class="text-sm text-muted-foreground ml-1">({items.length} items)</span>
-    <div class="flex-1" />
+    <div class="flex-1"></div>
     <label class="h-9 px-4 rounded-lg border border-border text-sm font-medium cursor-pointer hover:bg-muted flex items-center gap-1">
       <input type="file" accept="image/jpeg,image/png,image/webp" multiple class="sr-only" onchange={handleFileInput} disabled={uploading} />
       {uploading ? 'Uploading…' : 'Add Items'}

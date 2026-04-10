@@ -21,6 +21,15 @@ var (
 		Help:    "HTTP request latency.",
 		Buckets: prometheus.DefBuckets,
 	}, []string{"method", "path"})
+
+	// WSMessagesDroppedTotal counts WebSocket messages dropped because the
+	// recipient's send buffer was full. A non-zero value indicates a slow
+	// or wedged consumer; the hub closes such connections to force a
+	// reconnect (finding 4.I in the 2026-04-10 review).
+	WSMessagesDroppedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "ws_messages_dropped_total",
+		Help: "Total WebSocket messages dropped due to slow consumers.",
+	}, []string{"reason"})
 )
 
 type responseRecorder struct {

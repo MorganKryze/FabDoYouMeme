@@ -1,12 +1,20 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
+  import { untrack } from 'svelte';
   import { toast } from '$lib/state/toast.svelte';
   import type { ActionData, PageData } from './$types';
   import type { Pack } from '$lib/api/types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
-  let packs = $state<Pack[]>(data.packs);
+  let packs = $state<Pack[]>(untrack(() => data.packs));
   let showNewRow = $state(false);
+  // Imperative focus replaces `autofocus` (a11y_autofocus): when the inline
+  // form opens, move focus once into the Name input so keyboard/screen-reader
+  // users follow the context change. Finding 1.2 in the 2026-04-10 review.
+  let newPackNameInput = $state<HTMLInputElement | null>(null);
+  $effect(() => {
+    if (showNewRow && newPackNameInput) newPackNameInput.focus();
+  });
 
   $effect(() => {
     if (form?.created) { packs = [...packs, form.created]; showNewRow = false; toast.show('Pack created.', 'success'); }
@@ -32,13 +40,15 @@
     <form method="POST" action="?/createPack" use:enhance
       class="flex gap-3 items-end rounded-lg border border-dashed border-border p-3">
       <div class="flex flex-col gap-1 flex-1">
-        <label class="text-xs font-medium">Name</label>
-        <input name="name" type="text" required autofocus placeholder="Pack name"
+        <label for="new-pack-name" class="text-xs font-medium">Name</label>
+        <input id="new-pack-name" name="name" type="text" required
+          bind:this={newPackNameInput}
+          placeholder="Pack name"
           class="h-9 rounded border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
       </div>
       <div class="flex flex-col gap-1 flex-1">
-        <label class="text-xs font-medium">Description</label>
-        <input name="description" type="text" placeholder="Optional"
+        <label for="new-pack-description" class="text-xs font-medium">Description</label>
+        <input id="new-pack-description" name="description" type="text" placeholder="Optional"
           class="h-9 rounded border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
       </div>
       <button type="submit"

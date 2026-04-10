@@ -111,14 +111,40 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 		// (finding 5.B in the 2026-04-10 review).
 		ip := ClientIP(r, rl.trustedProxies)
 		if !rl.getLimiter(ip).Allow() {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusTooManyRequests)
-			json.NewEncoder(w).Encode(map[string]string{
-				"error": "Too many requests",
-				"code":  "rate_limited",
-			})
+			writeRateLimited(w)
 			return
 		}
 		next.ServeHTTP(w, r)
+	})
+}
+
+// PerUserMiddleware keys the rate-limit bucket by authenticated user ID
+// rather than by client IP. Use it on expensive authenticated endpoints
+// where an IP-level bucket is too coarse (e.g. GDPR export — finding 5.H
+// in the 2026-04-10 review). Must be layered AFTER a handler that
+// populates the session user (RequireAuth); unauthenticated requests fall
+// back to the IP bucket so the middleware can never be silently bypassed.
+func (rl *RateLimiter) PerUserMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var key string
+		if u, ok := GetSessionUser(r); ok && u.UserID != "" {
+			key = "user:" + u.UserID
+		} else {
+			key = "ip:" + ClientIP(r, rl.trustedProxies)
+		}
+		if !rl.getLimiter(key).Allow() {
+			writeRateLimited(w)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func writeRateLimited(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusTooManyRequests)
+	json.NewEncoder(w).Encode(map[string]string{ //nolint:errcheck
+		"error": "Too many requests",
+		"code":  "rate_limited",
 	})
 }

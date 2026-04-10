@@ -5,6 +5,11 @@
 
   let { form }: { form: ActionData } = $props();
   let sent = $derived(form?.sent === true);
+  // Imperative focus for the email field — replaces raw `autofocus`.
+  let emailInput = $state<HTMLInputElement | null>(null);
+  $effect(() => {
+    if (!sent && emailInput) emailInput.focus();
+  });
 </script>
 
 <svelte:head>
@@ -31,10 +36,10 @@
         <input
           id="email"
           name="email"
+          bind:this={emailInput}
           type="email"
           required
           autocomplete="email"
-          autofocus
           class="h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           placeholder="you@example.com"
         />

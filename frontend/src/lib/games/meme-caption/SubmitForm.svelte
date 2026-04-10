@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { ws } from '$lib/state/ws.svelte';
   import { room } from '$lib/state/room.svelte';
   import type { Round } from '$lib/api/types';
@@ -12,7 +13,9 @@
   const deadline = $derived(Date.parse(round.ends_at));
   const totalMs = $derived(round.duration_seconds * 1000);
   const mountedExpired = $derived(deadline <= Date.now());
-  let timerMs = $state(Math.max(0, deadline - Date.now()));
+  // Seed the timer from the current deadline; subsequent updates are
+  // driven by the requestAnimationFrame loop in the $effect below.
+  let timerMs = $state(untrack(() => Math.max(0, deadline - Date.now())));
 
   $effect(() => {
     if (mountedExpired) return;

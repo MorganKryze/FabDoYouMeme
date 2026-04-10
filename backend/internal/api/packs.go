@@ -4,6 +4,7 @@ package api
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -220,13 +221,18 @@ func (h *PackHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // SetStatus handles PATCH /api/packs/:id/status (admin only).
 func (h *PackHandler) SetStatus(w http.ResponseWriter, r *http.Request) {
+	admin, ok := middleware.GetSessionUser(r)
+	if !ok {
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
 	packID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid pack ID")
 		return
 	}
 	var req struct{ Status string `json:"status"` }
-	json.NewDecoder(r.Body).Decode(&req)
+	json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck
 	if req.Status != "active" && req.Status != "flagged" && req.Status != "banned" {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "status must be active, flagged, or banned")
 		return
@@ -238,6 +244,9 @@ func (h *PackHandler) SetStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Update failed")
 		return
 	}
+	writeAuditLog(r.Context(), h.db, admin.UserID, "set_pack_status",
+		fmt.Sprintf("pack:%s", packID),
+		map[string]string{"status": req.Status})
 	writeJSON(w, http.StatusOK, updated)
 }
 

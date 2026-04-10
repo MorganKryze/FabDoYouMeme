@@ -1,11 +1,13 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
+  import { untrack } from 'svelte';
   import type { ActionData, PageData } from './$types';
   import type { Pack, PaginatedResponse } from '$lib/api/types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
-  let selectedGameTypeId = $state(data.gameTypes[0]?.id ?? '');
+  // Default to the first loaded game type; user can change it afterwards.
+  let selectedGameTypeId = $state(untrack(() => data.gameTypes[0]?.id ?? ''));
   let packs = $state<Pack[]>([]);
   let selectedPackId = $state('');
   let isSolo = $state(false);
@@ -14,6 +16,13 @@
   let votingDuration = $state(30);
   let loadingPacks = $state(false);
   let currentAbortController: AbortController | null = null;
+  // Imperative focus for the Join-room code input — replaces the raw
+  // `autofocus` attribute so screen readers announce the focus change
+  // (a11y_autofocus).
+  let roomCodeInput = $state<HTMLInputElement | null>(null);
+  $effect(() => {
+    if (roomCodeInput) roomCodeInput.focus();
+  });
 
   const selectedGameType = $derived(
     data.gameTypes.find((gt) => gt.id === selectedGameTypeId) ?? null
@@ -149,12 +158,12 @@
           <input
             id="room-code"
             name="code"
+            bind:this={roomCodeInput}
             type="text"
             inputmode="text"
             autocapitalize="characters"
             maxlength={4}
             placeholder="WXYZ"
-            autofocus
             class="h-14 rounded-lg border border-input bg-background px-4 text-center text-2xl font-mono tracking-widest uppercase focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>

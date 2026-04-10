@@ -1,12 +1,15 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { goto } from '$app/navigation';
+  import { untrack } from 'svelte';
   import { toast } from '$lib/state/toast.svelte';
   import type { ActionData, PageData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
-  let searchTerm = $state(data.q ?? '');
+  // Seed the input from the URL query once; thereafter the user owns it
+  // and a debounced goto() propagates edits back to the URL.
+  let searchTerm = $state(untrack(() => data.q ?? ''));
   let searchTimeout: ReturnType<typeof setTimeout>;
   let confirmDeleteId = $state<string | null>(null);
 

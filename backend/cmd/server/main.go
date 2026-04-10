@@ -118,6 +118,10 @@ func main() {
 	globalLimiter := mw.NewRateLimiter(cfg.RateLimitGlobalRPM, 60, clk, cfg.TrustedProxies)
 	roomLimiter   := mw.NewRateLimiter(cfg.RateLimitRoomsRPH, 3600, clk, cfg.TrustedProxies)
 	uploadLimiter := mw.NewRateLimiter(cfg.RateLimitUploadsRPH, 3600, clk, cfg.TrustedProxies)
+	// Per-user bucket on GDPR export: 5/hour/user is ample for a humane
+	// use case (Art. 20 data portability) while preventing a single
+	// logged-in account from scraping the endpoint (finding 5.H).
+	exportLimiter := mw.NewRateLimiter(5, 3600, clk, cfg.TrustedProxies)
 
 	// ── HTTP handlers ─────────────────────────────────────────────────────────
 	packHandler      := api.NewPackHandler(pool, cfg, store)
@@ -161,7 +165,7 @@ func main() {
 	r.With(mw.RequireAuth).Route("/api/users/me", func(r chi.Router) {
 		r.Patch("/", authHandler.PatchMe)
 		r.Get("/history", authHandler.GetHistory)
-		r.Get("/export", authHandler.GetExport)
+		r.With(exportLimiter.PerUserMiddleware).Get("/export", authHandler.GetExport)
 	})
 
 	// Admin user management (delete is on auth handler for the 5-step txn)
@@ -261,6 +265,7 @@ func main() {
 	globalLimiter.Stop()
 	roomLimiter.Stop()
 	uploadLimiter.Stop()
+	exportLimiter.Stop()
 	logger.Info("server stopped")
 }
 

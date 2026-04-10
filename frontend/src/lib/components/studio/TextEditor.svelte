@@ -1,9 +1,12 @@
 <!-- frontend/src/lib/components/studio/TextEditor.svelte -->
 <script lang="ts">
+  import { untrack } from 'svelte';
   const MAX_CHARS = 500;
   let { initialValue = '', onSave }: { initialValue?: string; onSave: (text: string) => void } = $props();
 
-  let value = $state(initialValue ?? '');
+  // Seed once from the prop via untrack — the editor owns `value` after
+  // mount, so reactively tracking initialValue would clobber user edits.
+  let value = $state(untrack(() => initialValue ?? ''));
 
   const remaining = $derived(MAX_CHARS - value.length);
 </script>

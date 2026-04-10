@@ -131,15 +131,15 @@ Grouped by the order they should be tackled. Each item lists: finding ID(s), eff
 
 | #    | Done | Title                                                                    | Finding   | Effort | Files                                                                      |
 | ---- | ---- | ------------------------------------------------------------------------ | --------- | ------ | -------------------------------------------------------------------------- |
-| P3.1 | ☐    | Fix Svelte 5 `state_referenced_locally` warnings via `$derived` audit    | 1.1       | 1d     | 9 `.svelte` files                                                          |
-| P3.2 | ☐    | Fix a11y warnings (autofocus via onMount, label `for=`)                  | 1.2       | 0.5d   | 6 `.svelte` files                                                          |
-| P3.3 | ☐    | Log + return early on `json.Unmarshal` errors in hub and runRounds       | 4.H, 3.H  | 0.25d  | `game/hub.go`                                                              |
-| P3.4 | ☐    | Close slow WS consumers on drop; add `ws_messages_dropped_total` counter | 4.I       | 0.5d   | `game/hub.go`, `middleware/metrics.go`                                     |
-| P3.5 | ☐    | Non-blocking `graceExpired` send with default-drop                       | 4.G       | 0.1d   | `game/hub.go`                                                              |
-| P3.6 | ☐    | Per-user rate limiter on `/api/users/me/export`                          | 5.H       | 0.25d  | `cmd/server/main.go`, `middleware/rate_limit.go` (per-user bucket variant) |
-| P3.7 | ☐    | Audit logging consistency spot-check, add missing entries                | 5.G       | 0.5d   | `api/admin.go`, `auth/*.go`                                                |
-| P3.8 | ☐    | Investigate govulncheck CI behavior; add `.govulncheck.yaml` suppression | 5.F, 1.5  | 0.5d   | `.github/workflows/backend.yml`, `backend/.govulncheck.yaml` (new)         |
-| P3.9 | ☐    | Update CLAUDE.md compose paths + sqlc.yaml location                      | 0.2, 1.11 | 0.1d   | `CLAUDE.md`                                                                |
+| P3.1 | ✅   | Fix Svelte 5 `state_referenced_locally` warnings via `untrack` seeding   | 1.1       | 1d     | 9 `.svelte` files                                                          |
+| P3.2 | ✅   | Fix a11y warnings (autofocus via `$effect` + bind:this, label `for=`)    | 1.2       | 0.5d   | 6 `.svelte` files                                                          |
+| P3.3 | ✅   | Log + return early on `json.Unmarshal` errors in hub and runRounds       | 4.H, 3.H  | 0.25d  | `game/hub.go`                                                              |
+| P3.4 | ✅   | Close slow WS consumers on drop; add `ws_messages_dropped_total` counter | 4.I       | 0.5d   | `game/hub.go`, `middleware/metrics.go`                                     |
+| P3.5 | ✅   | Non-blocking `graceExpired` send with default-drop                       | 4.G       | 0.1d   | `game/hub.go`                                                              |
+| P3.6 | ✅   | Per-user rate limiter on `/api/users/me/export`                          | 5.H       | 0.25d  | `cmd/server/main.go`, `middleware/rate_limit.go` (PerUserMiddleware)       |
+| P3.7 | ✅   | Audit logging consistency spot-check, add missing entries                | 5.G       | 0.5d   | `api/admin.go`, `api/packs.go`                                             |
+| P3.8 | ✅   | Filter govulncheck CI output against `backend/.govulncheck-ignore`       | 5.F, 1.5  | 0.5d   | `.github/workflows/backend.yml`, `backend/.govulncheck-ignore` (new)       |
+| P3.9 | ✅   | Update CLAUDE.md compose paths + sqlc.yaml location                      | 0.2, 1.11 | 0.1d   | `CLAUDE.md`                                                                |
 
 ### P4 — CI overhaul
 

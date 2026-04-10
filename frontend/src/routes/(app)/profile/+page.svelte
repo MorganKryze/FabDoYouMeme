@@ -7,6 +7,17 @@
 
   let editingUsername = $state(false);
   let editingEmail = $state(false);
+  // Imperative focus for the inline edit inputs — replaces the raw
+  // `autofocus` attribute so screen readers announce the focus change
+  // when a user switches into an edit mode (a11y_autofocus).
+  let usernameInput = $state<HTMLInputElement | null>(null);
+  let emailInput = $state<HTMLInputElement | null>(null);
+  $effect(() => {
+    if (editingUsername && usernameInput) usernameInput.focus();
+  });
+  $effect(() => {
+    if (editingEmail && emailInput) emailInput.focus();
+  });
 
   $effect(() => {
     if (form?.usernameSuccess) {
@@ -60,12 +71,12 @@
         {/if}
         <div class="flex gap-2">
           <input
+            bind:this={usernameInput}
             name="username"
             type="text"
             value={data.user.username}
             minlength={3}
             maxlength={30}
-            autofocus
             class="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           />
           <button type="submit" class="h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90">
@@ -98,9 +109,9 @@
         {/if}
         <div class="flex gap-2">
           <input
+            bind:this={emailInput}
             name="email"
             type="email"
-            autofocus
             class="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             placeholder="new@example.com"
           />

@@ -13,6 +13,7 @@ import (
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/clock"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/config"
+	"github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
 )
 
 // HubState tracks in-memory room lifecycle.
@@ -278,7 +279,18 @@ func (h *Hub) handleUnregister(p *connectedPlayer) {
 	userID, username := p.userID, p.username
 	grace := h.cfg.ReconnectGraceWindow
 	h.clock.AfterFunc(grace, func() {
-		h.graceExpired <- graceExpiredMsg{userID: userID, username: username}
+		// Non-blocking send: if graceExpired is full (16 concurrent
+		// expirations would be extreme) we drop and log. The player stays
+		// flagged reconnecting=true until the next expiration cycle or a
+		// real reconnect arrives. Finding 4.G in the 2026-04-10 review.
+		select {
+		case h.graceExpired <- graceExpiredMsg{userID: userID, username: username}:
+		default:
+			if h.log != nil {
+				h.log.Warn("hub: graceExpired channel full, dropping expiry",
+					"user_id", userID, "room", h.roomCode)
+			}
+		}
 	})
 }
 
@@ -331,7 +343,13 @@ func (h *Hub) handleMessage(ctx context.Context, msg playerMessage) {
 		var d struct {
 			TargetUserID string `json:"target_user_id"`
 		}
-		json.Unmarshal(msg.data, &d) //nolint:errcheck
+		if err := json.Unmarshal(msg.data, &d); err != nil {
+			if h.log != nil {
+				h.log.Warn("hub: system:kick payload unmarshal failed",
+					"error", err, "room", h.roomCode)
+			}
+			return
+		}
 		if p, ok := h.players[d.TargetUserID]; ok {
 			h.safeSend(p, buildMessage("player_kicked", map[string]string{"user_id": d.TargetUserID}))
 			delete(h.players, d.TargetUserID)
@@ -481,7 +499,13 @@ func (h *Hub) runRounds(ctx context.Context) {
 		VotingDurationSeconds int `json:"voting_duration_seconds"`
 	}
 	if room.Config != nil {
-		json.Unmarshal(room.Config, &cfg) //nolint:errcheck
+		if err := json.Unmarshal(room.Config, &cfg); err != nil && h.log != nil {
+			// Fall through with zero values; defaults below will kick in.
+			// Logging it is enough — a malformed room.Config is an operator
+			// issue, not a reason to abort the round loop.
+			h.log.Warn("runRounds: room.Config unmarshal failed",
+				"error", err, "room", h.roomCode)
+		}
 	}
 	if cfg.RoundCount == 0 {
 		cfg.RoundCount = 3
@@ -798,11 +822,22 @@ func (h *Hub) safeSend(p *connectedPlayer, msg []byte) {
 	select {
 	case p.send <- msg:
 	default:
-		// Slow consumer: drop message and log (A2-M1)
+		// Slow consumer: drop message, increment counter, and force-close
+		// the connection. Closing the underlying conn makes readPump's
+		// next ReadMessage error out, which routes the player through the
+		// unregister path and into the normal reconnect-grace window. A
+		// silent drop would leave the server and client with divergent
+		// state (finding 4.I in the 2026-04-10 review).
+		msgType := extractType(msg)
+		middleware.WSMessagesDroppedTotal.WithLabelValues(msgType).Inc()
 		if h.log != nil {
-			h.log.Warn("hub: dropped message for slow consumer", "user_id", p.userID,
-				"msg_type", extractType(msg))
+			h.log.Warn("hub: slow consumer — closing connection",
+				"user_id", p.userID, "room", h.roomCode, "msg_type", msgType)
 		}
+		// Run the close in a goroutine: safeSend is invoked from the Run
+		// loop, and websocket.Conn.Close acquires an internal write lock
+		// that may briefly block if writePump is mid-write.
+		go p.conn.Close()
 	}
 }
 

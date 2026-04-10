@@ -1,14 +1,17 @@
 <!-- frontend/src/routes/(public)/auth/register/+page.svelte -->
 <script lang="ts">
   import { enhance } from '$app/forms';
+  import { untrack } from 'svelte';
   import type { ActionData, PageData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
   let smtpWarning = $derived(form?.warning === 'smtp_failure');
   let success = $derived(form?.success === true);
-  let consent = $state(form?.consent ?? false);
-  let ageAffirmation = $state(form?.age_affirmation ?? false);
+  // Seed checkbox state from the server-returned form object exactly once;
+  // the checkboxes are user-owned after that. See `untrack` usage note above.
+  let consent = $state(untrack(() => form?.consent ?? false));
+  let ageAffirmation = $state(untrack(() => form?.age_affirmation ?? false));
 </script>
 
 <svelte:head>

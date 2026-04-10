@@ -2,7 +2,9 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -14,6 +16,25 @@ import (
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
 )
+
+// writeAuditLog is a best-effort admin audit write. Failures are intentionally
+// swallowed here (unlike auth.DeleteUser which must fail the request) because
+// the calling admin mutations are lower-severity than a GDPR hard-delete —
+// finding 5.G in the 2026-04-10 review. Callers should still provide an
+// accurate action/resource/changes payload.
+func writeAuditLog(ctx context.Context, q *db.Queries, adminUserID, action, resource string, changes any) {
+	adminUUID, err := uuid.Parse(adminUserID)
+	if err != nil {
+		return
+	}
+	body, _ := json.Marshal(changes)
+	q.CreateAuditLog(ctx, db.CreateAuditLogParams{ //nolint:errcheck
+		AdminID:  pgtype.UUID{Bytes: adminUUID, Valid: true},
+		Action:   action,
+		Resource: resource,
+		Changes:  json.RawMessage(body),
+	})
+}
 
 // AdminHandler handles /api/admin/* routes (users, invites, notifications).
 type AdminHandler struct {
@@ -45,6 +66,11 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 
 // UpdateUser handles PATCH /api/admin/users/:id.
 func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
+	admin, ok := middleware.GetSessionUser(r)
+	if !ok {
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
 	targetID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid user ID")
@@ -66,6 +92,9 @@ func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 			writeError(w, r, http.StatusInternalServerError, "internal_error", "Update failed")
 			return
 		}
+		writeAuditLog(r.Context(), h.db, admin.UserID, "update_user_role",
+			fmt.Sprintf("user:%s", targetID),
+			map[string]string{"new_role": *req.Role})
 		writeJSON(w, http.StatusOK, user)
 		return
 	}
@@ -77,6 +106,9 @@ func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 			writeError(w, r, http.StatusInternalServerError, "internal_error", "Update failed")
 			return
 		}
+		writeAuditLog(r.Context(), h.db, admin.UserID, "set_user_active",
+			fmt.Sprintf("user:%s", targetID),
+			map[string]bool{"is_active": *req.IsActive})
 		writeJSON(w, http.StatusOK, user)
 		return
 	}
@@ -152,6 +184,11 @@ func (h *AdminHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 
 // DeleteInvite handles DELETE /api/admin/invites/:id.
 func (h *AdminHandler) DeleteInvite(w http.ResponseWriter, r *http.Request) {
+	admin, ok := middleware.GetSessionUser(r)
+	if !ok {
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
 	inviteID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid invite ID")
@@ -161,6 +198,8 @@ func (h *AdminHandler) DeleteInvite(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Delete failed")
 		return
 	}
+	writeAuditLog(r.Context(), h.db, admin.UserID, "revoke_invite",
+		fmt.Sprintf("invite:%s", inviteID), nil)
 	w.WriteHeader(http.StatusNoContent)
 }
 

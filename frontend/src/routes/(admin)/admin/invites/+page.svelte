@@ -1,11 +1,13 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
+  import { untrack } from 'svelte';
   import { toast } from '$lib/state/toast.svelte';
   import type { ActionData, PageData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
   let showCreateForm = $state(false);
-  let invites = $state(data.invites);
+  // Snapshot from load data; list is locally mutated by the effect below.
+  let invites = $state(untrack(() => data.invites));
   let revealedTokens = $state<Set<string>>(new Set());
 
   $effect(() => {

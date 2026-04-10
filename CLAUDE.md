@@ -61,8 +61,12 @@ FabDoYouMeme/
 │   ├── Dockerfile
 │   └── package.json
 ├── docs/                        # documentation (see below)
-├── docker-compose.yml
-├── docker-compose.override.yml  # dev overrides (Mailpit, volume mounts)
+├── docker/
+│   ├── compose.base.yml         # shared services
+│   ├── compose.dev.yml          # dev overrides (Mailpit, volume mounts)
+│   ├── compose.preprod.yml
+│   └── compose.prod.yml
+├── Makefile                     # dev/preprod/prod up+down targets
 └── CLAUDE.md
 ```
 
@@ -104,11 +108,12 @@ FabDoYouMeme/
 ## Commands
 
 ```bash
-# Start all services (includes Mailpit via docker-compose.override.yml)
-docker compose up --build
+# Start the dev stack (includes Mailpit via docker/compose.dev.yml)
+make dev           # or: docker compose -f docker/compose.base.yml -f docker/compose.dev.yml --env-file .env.dev up --build -d
+make dev-down      # tear it down
 
 # Watch backend logs
-docker compose logs -f backend
+docker compose -f docker/compose.base.yml -f docker/compose.dev.yml logs -f backend
 
 # Apply all pending DB migrations
 migrate -path ./backend/db/migrations -database "$DATABASE_URL" up
@@ -117,6 +122,7 @@ migrate -path ./backend/db/migrations -database "$DATABASE_URL" up
 migrate -path ./backend/db/migrations -database "$DATABASE_URL" down 1
 
 # Regenerate sqlc types after modifying any query in backend/db/queries/
+# (config lives at backend/sqlc.yaml)
 cd backend && sqlc generate
 
 # Backend: build, vet, test

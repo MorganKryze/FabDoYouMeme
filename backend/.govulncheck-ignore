@@ -1,0 +1,18 @@
+# Suppressed govulncheck vulnerability IDs — one per line.
+#
+# Each entry MUST include a rationale comment above the ID and a tracking
+# date. Re-evaluate everything in this file at least every 90 days. The
+# CI step at .github/workflows/backend.yml filters govulncheck's JSON output
+# against this list and fails the build only on IDs that are NOT listed here.
+#
+# Format: lines starting with "#" are comments, blank lines ignored.
+
+# GO-2026-4887 — Moby AuthZ plugin bypass on oversized request bodies.
+# GO-2026-4883 — Moby off-by-one in plugin privilege validation.
+#
+# Both reachable only through `internal/testutil` → testcontainers-go →
+# docker client. Neither is compiled into `cmd/server`, so production
+# binary exposure is zero. No upstream fix available as of 2026-04-10
+# (stage 1 finding 1.5 / stage 5 finding 5.F). Re-evaluate 2026-07-10.
+GO-2026-4887
+GO-2026-4883
