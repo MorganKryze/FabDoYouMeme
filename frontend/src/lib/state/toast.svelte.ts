@@ -8,7 +8,7 @@ interface ToastItem {
   duration: number;
 }
 
-class ToastState {
+export class ToastState {
   #items = $state<ToastItem[]>([]);
   #nextId = 0;
 

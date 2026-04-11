@@ -146,9 +146,8 @@ jobs:
       # govulncheck exits 3 on any reachable vulnerability. We filter its
       # JSON output through the .govulncheck-ignore allowlist so the build
       # fails only on new vulns. Known-accepted IDs must carry a rationale
-      # comment in the ignore file — see finding 5.F in
-      # docs/review/2026-04-10/05-security.md. No untrusted GitHub event
-      # inputs are used in this step.
+      # comment in the ignore file. No untrusted GitHub event inputs are
+      # used in this step.
       - name: Vulnerability check
         working-directory: backend
         run: |

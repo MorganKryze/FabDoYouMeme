@@ -4,7 +4,7 @@ import { toast } from './toast.svelte';
 type RoomPhase = 'idle' | 'countdown' | 'submitting' | 'voting' | 'results';
 type RoomStatus = 'lobby' | 'playing' | 'finished';
 
-class RoomState {
+export class RoomState {
   code = $state<string | null>(null);
   gameType = $state<GameType | null>(null);
   state = $state<RoomStatus>('lobby');

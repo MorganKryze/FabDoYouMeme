@@ -1,11 +1,10 @@
 // backend/internal/middleware/real_ip_test.go
 //
-// Covers P1.5 from docs/review/2026-04-10/99-punch-list.md: middleware.ClientIP
-// must walk X-Forwarded-For from right to left, only following the chain while
-// the current hop is in the trusted-proxy allowlist. The bug it fixes is that
-// behind a reverse proxy, every request previously appeared to come from the
-// proxy's IP, so all rate limit buckets collapsed into one and RequirePrivateIP
-// was either fully open or fully closed.
+// middleware.ClientIP must walk X-Forwarded-For from right to left, only
+// following the chain while the current hop is in the trusted-proxy
+// allowlist. Without this, behind a reverse proxy every request appears
+// to come from the proxy's IP, so all rate limit buckets collapse into
+// one and RequirePrivateIP is either fully open or fully closed.
 package middleware_test
 
 import (

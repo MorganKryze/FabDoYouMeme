@@ -1,9 +1,8 @@
 // backend/internal/auth/session_renewal_test.go
 //
-// Covers P1.3 from docs/review/2026-04-10/99-punch-list.md: SessionLookupFn
-// must respect SessionRenewInterval instead of writing on every authenticated
-// request. The test drives the handler through a clock.Fake so the renewal
-// cadence is deterministic.
+// SessionLookupFn must respect SessionRenewInterval instead of writing on
+// every authenticated request. The test drives the handler through a
+// clock.Fake so the renewal cadence is deterministic.
 
 package auth_test
 

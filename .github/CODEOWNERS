@@ -2,17 +2,16 @@
 # surfaces of the backend. GitHub uses the LAST matching pattern, so
 # order matters: the default owner line is first, narrow rules last.
 #
-# Rationale (Stage 7, P4.3 / Stage 6 §6.9.3): the auth, middleware, and
-# server-wire-up layers are where a single silent regression can unlock
-# unauthenticated access, break rate limiting, or disable CSRF defense.
-# CODEOWNERS forces a second pair of eyes — even on a solo repo this
-# creates an audit trail and a GitHub review requirement that survives
-# future contributors.
+# Rationale: the auth, middleware, and server-wire-up layers are where
+# a single silent regression can unlock unauthenticated access, break
+# rate limiting, or disable CSRF defense. CODEOWNERS forces a second
+# pair of eyes — even on a solo repo this creates an audit trail and a
+# GitHub review requirement that survives future contributors.
 
 # Default owner — every file has a fallback reviewer.
 *       @MorganKryze
 
-# Security-critical surfaces (see docs/review/2026-04-10/99-punch-list.md)
+# Security-critical surfaces.
 /backend/internal/auth/         @MorganKryze
 /backend/internal/middleware/   @MorganKryze
 /backend/cmd/server/main.go     @MorganKryze

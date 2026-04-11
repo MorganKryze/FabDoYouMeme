@@ -1,4 +1,4 @@
-class UserState {
+export class UserState {
   id = $state<string | null>(null);
   username = $state<string | null>(null);
   email = $state<string | null>(null);
