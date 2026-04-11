@@ -2,6 +2,12 @@
 
 Self-hosted, invite-only party game platform. Launch meme caption rounds, vote on the funniest answers, and track scores — all running on your own hardware via Docker Compose.
 
+> [!IMPORTANT]
+> **If you self-host this, you are the GDPR data controller for your instance.**
+> FabDoYouMeme stores usernames, emails, and game history. When you run it, you — not the upstream project — are legally responsible for lawful processing, data subject requests (access, erasure, portability), breach notification, and publishing a privacy policy at `/privacy`. The defaults are designed to help (consent capture, export endpoint, admin-driven erasure, retention windows), but they don't absolve you of the obligations.
+>
+> Read before deploying to real users: [`docs/reference/gdpr.md`](docs/reference/gdpr.md) (compliance model) and [`docs/reference/privacy-policy.md`](docs/reference/privacy-policy.md) (Art. 13(1) stub to fill in).
+
 ---
 
 ## What it is
@@ -15,11 +21,11 @@ Self-hosted, invite-only party game platform. Launch meme caption rounds, vote o
 
 ## Prerequisites
 
-| Dependency              | Notes                                                                                          |
-| ----------------------- | ---------------------------------------------------------------------------------------------- |
-| Docker + Docker Compose | Runs all services                                                                              |
-| Reverse proxy           | Pre-existing; must route `/api/*` → backend and `/*` → frontend                                |
-| SMTP server             | For magic link delivery (Mailgun, AWS SES, self-hosted Postfix, etc.)                          |
+| Dependency              | Notes                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------- |
+| Docker + Docker Compose | Runs all services                                                                                 |
+| Reverse proxy           | Pre-existing; must route `/api/*` → backend and `/*` → frontend                                   |
+| SMTP server             | For magic link delivery (Mailgun, AWS SES, self-hosted Postfix, etc.)                             |
 | RustFS                  | S3-compatible object store deployed on the `pangolin` Docker network — see `docs/architecture.md` |
 
 ---
@@ -104,11 +110,11 @@ This starts: PostgreSQL, backend (Go), frontend (SvelteKit), Mailpit (local emai
 
 Services:
 
-| Service   | URL                         |
-| --------- | --------------------------- |
-| Frontend  | `http://localhost:3000`     |
-| Backend   | `http://localhost:8080`     |
-| Mailpit   | `http://localhost:8025`     |
+| Service  | URL                     |
+| -------- | ----------------------- |
+| Frontend | `http://localhost:3000` |
+| Backend  | `http://localhost:8080` |
+| Mailpit  | `http://localhost:8025` |
 
 ### 4. First boot
 
@@ -248,20 +254,20 @@ cd frontend && npm run check
 
 Full design documentation lives in `docs/`:
 
-| Doc                                | Contents                                                            |
-| ---------------------------------- | ------------------------------------------------------------------- |
-| `docs/overview.md`                 | Goals, tech stack rationale, key design decisions                   |
-| `docs/architecture.md`             | System components, DB schema, storage, middleware, startup          |
-| `docs/auth-and-identity.md`        | Auth flow, invite system, session management, security controls    |
-| `docs/game-engine.md`              | Room/round lifecycle, WebSocket hub, game type handler interface    |
-| `docs/api.md`                      | REST endpoints, WebSocket protocol, error model                     |
-| `docs/frontend.md`                 | SvelteKit routing, Svelte 5 state singletons, game plugin arch      |
-| `docs/self-hosting.md`             | Prerequisites, first boot, all environment variables                |
-| `docs/operations.md`               | Monitoring, logs, backups, CI, production checklist                 |
-| `docs/reference/error-codes.md`    | Canonical `snake_case` error code table (REST + WebSocket)          |
-| `docs/reference/decisions.md`      | ADR-001–ADR-010 architectural decisions                             |
-| `docs/reference/gdpr.md`           | GDPR compliance: lawful basis, rights, DPA, breach procedure        |
-| `docs/reference/privacy-policy.md` | Art. 13(1) Privacy Policy stub template for operator to complete    |
+| Doc                                | Contents                                                         |
+| ---------------------------------- | ---------------------------------------------------------------- |
+| `docs/overview.md`                 | Goals, tech stack rationale, key design decisions                |
+| `docs/architecture.md`             | System components, DB schema, storage, middleware, startup       |
+| `docs/auth-and-identity.md`        | Auth flow, invite system, session management, security controls  |
+| `docs/game-engine.md`              | Room/round lifecycle, WebSocket hub, game type handler interface |
+| `docs/api.md`                      | REST endpoints, WebSocket protocol, error model                  |
+| `docs/frontend.md`                 | SvelteKit routing, Svelte 5 state singletons, game plugin arch   |
+| `docs/self-hosting.md`             | Prerequisites, first boot, all environment variables             |
+| `docs/operations.md`               | Monitoring, logs, backups, CI, production checklist              |
+| `docs/reference/error-codes.md`    | Canonical `snake_case` error code table (REST + WebSocket)       |
+| `docs/reference/decisions.md`      | ADR-001–ADR-010 architectural decisions                          |
+| `docs/reference/gdpr.md`           | GDPR compliance: lawful basis, rights, DPA, breach procedure     |
+| `docs/reference/privacy-policy.md` | Art. 13(1) Privacy Policy stub template for operator to complete |
 
 ---
 
