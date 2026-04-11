@@ -1,6 +1,26 @@
+<div align="center">
+
+<!-- TODO(media): replace placeholder with a real banner exported to docs/assets/banner.png (recommended: 1280×320, transparent or dark background, logo left + tagline right). -->
+<img src="docs/assets/banner.png" alt="FabDoYouMeme banner" width="100%" />
+
 # FabDoYouMeme
 
-Self-hosted, invite-only party game platform. Launch meme caption rounds, vote on the funniest answers, and track scores — all running on your own hardware via Docker Compose.
+**A self-hosted, invite-only party game platform for friends who don't want to hand their data to a SaaS.**
+
+[![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
+[![Backend CI](https://github.com/MorganKryze/FabDoYouMeme/actions/workflows/backend.yml/badge.svg)](https://github.com/MorganKryze/FabDoYouMeme/actions/workflows/backend.yml)
+[![Frontend CI](https://github.com/MorganKryze/FabDoYouMeme/actions/workflows/frontend.yml/badge.svg)](https://github.com/MorganKryze/FabDoYouMeme/actions/workflows/frontend.yml)
+[![CodeQL](https://github.com/MorganKryze/FabDoYouMeme/actions/workflows/codeql.yml/badge.svg)](https://github.com/MorganKryze/FabDoYouMeme/actions/workflows/codeql.yml)
+
+[![Backend: Go](https://img.shields.io/badge/backend-Go-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Frontend: SvelteKit](https://img.shields.io/badge/frontend-SvelteKit-FF3E00?logo=svelte&logoColor=white)](https://kit.svelte.dev)
+[![Deploy: Docker Compose](https://img.shields.io/badge/deploy-Docker%20Compose-2496ED?logo=docker&logoColor=white)](https://docs.docker.com/compose/)
+[![Self-hosted](https://img.shields.io/badge/self--hosted-yes-ff69b4)](docs/self-hosting.md)
+[![GDPR: ready](https://img.shields.io/badge/GDPR-ready-4c1)](docs/reference/gdpr.md)
+
+</div>
+
+---
 
 > [!IMPORTANT]
 > **If you self-host this, you are the GDPR data controller for your instance.**
@@ -10,267 +30,172 @@ Self-hosted, invite-only party game platform. Launch meme caption rounds, vote o
 
 ---
 
-## What it is
+## Why this exists
 
-- **Invite-only**: no public registration; admins create invite tokens and control who joins
-- **Multi-game**: starts with meme-caption; new game types plug in without schema or protocol changes
-- **Self-hosted**: single Docker Compose stack on personal hardware; no third-party game servers
-- **No passwords**: authentication via magic links only — one email click to log in
+Commercial party-game platforms ask for accounts, track sessions, and monetise attention. None of that is required to caption a meme with four friends on a Friday night. FabDoYouMeme exists because a night of laughter shouldn't need a privacy policy you don't control.
 
----
+It runs entirely on hardware you already own — one Docker Compose stack on a spare machine, a home server, or a small VPS. Invitations are one-time tokens; there is no public registration. Nobody joins that you didn't let in. When the game is over, the data is still yours.
 
-## Prerequisites
-
-| Dependency              | Notes                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------- |
-| Docker + Docker Compose | Runs all services                                                                                 |
-| Reverse proxy           | Pre-existing; must route `/api/*` → backend and `/*` → frontend                                   |
-| SMTP server             | For magic link delivery (Mailgun, AWS SES, self-hosted Postfix, etc.)                             |
-| RustFS                  | S3-compatible object store deployed on the `pangolin` Docker network — see `docs/architecture.md` |
+It is also built to be **extended**, not just played. The game engine is a plugin architecture: new game types (trivia, drawing duels, pairs, quickfire) slot in as registered handler units without database or protocol changes. Meme captioning is the first type shipped; it is not meant to be the last.
 
 ---
 
-## Local development
+## What you get
 
-This section covers running the full stack locally for testing and development.
+**For players**
+- Join a room with a short code — no account, no app install, no download
+- Caption the round, vote on the funniest, see the leaderboard climb
+- Reconnect cleanly if your WiFi drops mid-round (30-second grace window by default)
 
-### 1. Copy and configure the environment file
+**For the host (game admin)**
+- Create rooms, pick a pack, kick off rounds; everything is in-browser
+- Invite-only tokens with per-email restrictions if you want to pre-assign seats
+- Content packs managed from a dedicated admin panel — upload media, build decks
 
-```bash
-cp .env.dev.example .env.dev
-```
-
-Edit `.env.dev` with values for your setup. At minimum set:
-
-```bash
-POSTGRES_PASSWORD=dev_password
-FRONTEND_URL=http://localhost:3000
-BACKEND_URL=http://localhost:8080
-SEED_ADMIN_EMAIL=you@example.com
-```
-
-SMTP is automatically replaced by Mailpit in dev mode — you don't need real SMTP credentials locally.
-
-### 2. Set up object storage
-
-The backend exits on startup if it can't reach `RUSTFS_ENDPOINT`. You have two options:
-
-**Option A — Use your existing RustFS instance**
-
-Fill in your credentials in `.env.dev`:
-
-```bash
-RUSTFS_ENDPOINT=https://rustfs.example.com
-RUSTFS_ACCESS_KEY=your_access_key
-RUSTFS_SECRET_KEY=your_secret_key
-RUSTFS_BUCKET=fabyoumeme-assets
-```
-
-Make sure the bucket exists in your RustFS instance before starting.
-
-**Option B — Run a local MinIO substitute**
-
-MinIO is S3-compatible and works as a drop-in replacement for local testing. Add it to your dev stack:
-
-```bash
-# Start MinIO on the project_network so the backend can reach it
-docker run -d --name minio \
-  --network project_network \
-  -e MINIO_ROOT_USER=minioadmin \
-  -e MINIO_ROOT_PASSWORD=minioadmin \
-  -p 9001:9001 \
-  quay.io/minio/minio server /data --console-address ":9001"
-```
-
-Then create the bucket (open `http://localhost:9001`, log in with `minioadmin/minioadmin`, create bucket `fabyoumeme-assets`) or via CLI:
-
-```bash
-docker exec minio sh -c "
-  mc alias set local http://localhost:9000 minioadmin minioadmin &&
-  mc mb local/fabyoumeme-assets
-"
-```
-
-Set these in `.env.dev`:
-
-```bash
-RUSTFS_ENDPOINT=http://minio:9000
-RUSTFS_ACCESS_KEY=minioadmin
-RUSTFS_SECRET_KEY=minioadmin
-RUSTFS_BUCKET=fabyoumeme-assets
-```
-
-### 3. Start the full stack
-
-```bash
-make dev
-```
-
-This starts: PostgreSQL, backend (Go), frontend (SvelteKit), Mailpit (local email).
-
-Services:
-
-| Service  | URL                     |
-| -------- | ----------------------- |
-| Frontend | `http://localhost:3000` |
-| Backend  | `http://localhost:8080` |
-| Mailpit  | `http://localhost:8025` |
-
-### 4. First boot
-
-On first start the backend sends a magic link to `SEED_ADMIN_EMAIL`:
-
-1. Open `http://localhost:8025` (Mailpit)
-2. Click the magic link in the email
-3. You are now logged in as admin
-
-### 5. Create an invite and register a player
-
-1. Navigate to `http://localhost:3000/admin` → **Invites** → **Create Invite**
-2. Copy the invite token
-3. In a new browser (or incognito), go to `http://localhost:3000/auth/register?invite=<token>`
-4. Fill in username, email, check both consent boxes, submit
-5. Check Mailpit for the magic link → click it → logged in as a regular player
-
-### 6. Test the game flow
-
-With two browser sessions (admin + player):
-
-1. **Admin/host**: go to `http://localhost:3000` → Create Room (select game type + pack) → redirected to `/rooms/WXYZ`
-2. **Player**: enter the room code on the join card → joins room
-3. Both players visible in the sidebar panel
-4. **Host** clicks **Start Game** → countdown overlay appears (3…2…1…GO!)
-5. Both players write captions, submit → status pills turn green ✓
-6. Voting phase: select a caption and vote
-7. Results: see vote counts, leaderboard, **Next Round →**
-8. After all rounds: Game Over screen with final leaderboard
-
-### 7. Test the profile page
-
-1. Navigate to `http://localhost:3000/profile`
-2. Edit username → Save → green toast "Username updated."
-3. Click **Download My Data** → JSON file downloads
+**For the self-hoster (operator)**
+- One Docker Compose stack. One reverse proxy. One `.env` file. That's the install surface.
+- PostgreSQL 17 + RustFS (S3-compatible) for state and assets
+- Magic-link auth only — no passwords to rotate, leak, or forget
+- Prometheus-friendly `/api/metrics`, structured JSON logs, request IDs
+- Built-in GDPR primitives: consent capture, data export, admin-driven erasure, sentinel-UUID anonymisation, retention windows
+- Multi-game extensibility — add a new game type in one Go file, zero schema or protocol changes
 
 ---
 
-## Pre-production deployment
+## See it in action
 
-Use this when you want to deploy a locally-built image to the server (e.g. testing a branch before merging). Requires the `pangolin` Docker network to exist on the host.
+<!-- TODO(media): replace the placeholders below with real screenshots. Suggested set:
+     1. Lobby / room join (desktop + mobile)
+     2. Caption submission phase (timer visible)
+     3. Vote phase with submitted captions
+     4. Results / leaderboard
+     5. Admin panel — pack management
+     Recommended path: docs/assets/screenshots/*.png -->
 
-**1. Copy and fill the environment file**
+<div align="center">
 
-```bash
-cp .env.preprod.example .env.preprod
-```
+| | |
+|:-:|:-:|
+| ![Lobby placeholder](docs/assets/screenshots/lobby.png) | ![Submission placeholder](docs/assets/screenshots/submit.png) |
+| **Lobby** — room code, player list, host controls | **Submit** — caption the round against a timer |
+| ![Voting placeholder](docs/assets/screenshots/vote.png) | ![Results placeholder](docs/assets/screenshots/results.png) |
+| **Vote** — pick the funniest, anonymous until reveal | **Results** — round score + running leaderboard |
 
-Fill in real values — see `docs/self-hosting.md` for the full list. Real SMTP credentials are required (no Mailpit in preprod).
+</div>
 
-**2. Start all services**
-
-```bash
-make preprod
-```
-
-Services are not port-forwarded; they are exposed via the pangolin reverse proxy.
-
-**3. Check your email**
-
-The backend sends a magic link to `SEED_ADMIN_EMAIL` on first boot (idempotent — no-op if admin already exists).
-
----
-
-## Production deployment
-
-Use this when deploying pre-built images from GitHub Container Registry. Requires the `pangolin` Docker network to exist on the host.
-
-**1. Copy and fill the environment file**
-
-```bash
-cp .env.prod.example .env.prod
-```
-
-Required variables (see `docs/self-hosting.md` for the full list):
-
-```bash
-POSTGRES_PASSWORD=strong_random_password
-RUSTFS_ENDPOINT=https://rustfs.example.com
-RUSTFS_ACCESS_KEY=...
-RUSTFS_SECRET_KEY=...
-RUSTFS_BUCKET=fabyoumeme-assets
-FRONTEND_URL=https://meme.example.com
-BACKEND_URL=https://meme.example.com/api
-SMTP_HOST=smtp.example.com
-SMTP_USERNAME=...
-SMTP_PASSWORD=...
-SMTP_FROM=noreply@example.com
-SEED_ADMIN_EMAIL=you@example.com
-```
-
-**2. Start all services**
-
-```bash
-make prod
-```
-
-Images are pulled from `ghcr.io/morgankryze/fabyoumeme-{backend,frontend}:latest` — no local build needed.
-
-**3. Check your email**
-
-The backend sends a magic link to `SEED_ADMIN_EMAIL` on first boot (idempotent — no-op if admin already exists). Click it to log in, then create invite tokens for your players.
+> **Prefer a moving demo?** A 30-second loop is planned at `docs/assets/demo.gif`. _Coming soon._
 
 ---
 
-## Development commands
+## How it works
 
-```bash
-# Rebuild and restart all services (dev-local)
-make dev
+FabDoYouMeme is a **Go backend** (HTTP + WebSocket) plus a **SvelteKit frontend** (`adapter-node`), both shipped as minimal Docker images and wired together with a pre-existing reverse proxy. A single PostgreSQL 17 database holds game state; RustFS (S3-compatible) holds uploaded assets. There is no message broker, no cache layer, no background job runner — ADR-005 in [`docs/reference/decisions.md`](docs/reference/decisions.md) explains why that's a feature, not a shortcut.
 
-# Tear down dev stack
-make dev-down
+The **game engine** is a per-room goroutine owned by a WebSocket hub. Each room transitions through a fixed lifecycle — `lobby → countdown → submission → voting → results → next round → game over` — and broadcasts phase changes over a shared protocol. Game-type handlers (implementations of `GameTypeHandler`) plug into this lifecycle without touching it. The [`docs/game-engine.md`](docs/game-engine.md) doc walks through the full handler contract and room/round state machine.
 
-# Watch backend logs
-docker compose -f docker/compose.base.yml -f docker/compose.dev.yml logs -f backend
-
-# Roll back one migration (requires golang-migrate CLI: brew install golang-migrate)
-migrate -path ./backend/db/migrations \
-  -database "postgres://fabyoumeme:${POSTGRES_PASSWORD}@localhost:5432/fabyoumeme?sslmode=disable" down 1
-
-# Regenerate sqlc types after editing backend/db/queries/*.sql
-cd backend && sqlc generate
-
-# Backend: build, vet, test
-cd backend && go build ./...
-cd backend && go vet ./...
-cd backend && go test -race -count=1 ./...
-
-# Frontend: type-check
-cd frontend && npm run check
-```
+**Authentication** is magic-link only. Registration takes a one-time invite token, a username, an email, and two consent checkboxes. Login sends a 15-minute, single-use token by email; the database stores only its SHA-256 hash. Sessions are opaque, DB-backed, and revocable by deleting a row. Nothing crackable lives on disk. Deeper security details are in [`docs/auth-and-identity.md`](docs/auth-and-identity.md) and [`SECURITY.md`](.github/SECURITY.md).
 
 ---
 
-## Architecture
+## Try it
 
-Full design documentation lives in `docs/`:
+Everything you need to run an instance — prerequisites, environment variables, first-boot procedure, production deployment — is consolidated in **[`docs/self-hosting.md`](docs/self-hosting.md)**. That document is the single source of truth for installation; this README intentionally does not duplicate it.
 
-| Doc                                | Contents                                                         |
-| ---------------------------------- | ---------------------------------------------------------------- |
-| `docs/overview.md`                 | Goals, tech stack rationale, key design decisions                |
-| `docs/architecture.md`             | System components, DB schema, storage, middleware, startup       |
-| `docs/auth-and-identity.md`        | Auth flow, invite system, session management, security controls  |
-| `docs/game-engine.md`              | Room/round lifecycle, WebSocket hub, game type handler interface |
-| `docs/api.md`                      | REST endpoints, WebSocket protocol, error model                  |
-| `docs/frontend.md`                 | SvelteKit routing, Svelte 5 state singletons, game plugin arch   |
-| `docs/self-hosting.md`             | Prerequisites, first boot, all environment variables             |
-| `docs/operations.md`               | Monitoring, logs, backups, CI, production checklist              |
-| `docs/reference/error-codes.md`    | Canonical `snake_case` error code table (REST + WebSocket)       |
-| `docs/reference/decisions.md`      | ADR-001–ADR-010 architectural decisions                          |
-| `docs/reference/gdpr.md`           | GDPR compliance: lawful basis, rights, DPA, breach procedure     |
-| `docs/reference/privacy-policy.md` | Art. 13(1) Privacy Policy stub template for operator to complete |
+Short version for the impatient: you need Docker, a reverse proxy that routes `/api/*` to the backend and `/*` to the frontend, an SMTP server for magic-link delivery, and a reachable RustFS instance. Copy `.env.example`, fill in the values, `make dev` (or `make prod`), click the magic link that lands in your inbox on first boot. You are the admin.
 
 ---
+
+## Security posture
+
+Self-hosted does not mean security-by-obscurity. The things that matter to a small-scale party-game platform, handled explicitly:
+
+- **No passwords.** Authentication is magic-link only. Credential stuffing, reuse, and storage-breach risk are removed entirely rather than mitigated.
+- **Magic-link tokens are hashed.** Only SHA-256 digests hit the database; a DB leak yields nothing crackable. Tokens are single-use and expire in 15 minutes.
+- **Sessions are revocable in one SQL statement.** Unlike JWTs, there is no signing key to rotate and no grace period on logout — `DELETE FROM sessions WHERE id = …` is immediate and total.
+- **Rate limiting on every auth-adjacent surface.** Registration attempts, magic-link requests, room creation, upload URL grants, and generic API traffic all have per-IP or per-user caps. Defaults live in [`docs/self-hosting.md`](docs/self-hosting.md).
+- **WebSocket frame limits, origin checks, and per-connection rate limits.** The hub drops clients that exceed 20 messages/s or 4 KB frames; origin validation prevents cross-site hijacking.
+- **Upload validation is two-layer.** MIME type _and_ magic-byte inspection; the frontend never receives a direct asset URL for a client-chosen key.
+- **Invite-only by design.** There is no public registration endpoint. Every user enters through an admin-issued, optionally email-restricted token.
+- **CodeQL scanning on every push** plus `govulncheck` and `npm audit` via CI. Dependabot is enabled for every ecosystem the repo touches.
+- **Responsible disclosure:** see [`.github/SECURITY.md`](.github/SECURITY.md) for the private reporting channel and SLA.
+
+The security model is intentionally scoped to a single-host deployment. Multi-instance hardening (externalised rate limits, distributed session store) is explicitly out of scope — see ADR-005.
+
+---
+
+## Privacy & GDPR
+
+FabDoYouMeme is built to be deployable in the EU without legal retrofitting. Every instance ships with:
+
+- **Registration gated on explicit consent** — `consent: true` and `age_affirmation: true` are mandatory; `users.consent_at` is written once and never updated.
+- **A first-class data export endpoint** — `GET /api/users/me/export` returns a complete, machine-readable JSON dump for Art. 20 portability requests.
+- **Admin-driven erasure with referential integrity** — hard-deletion replaces `submissions.user_id` and `votes.voter_id` with a sentinel UUID before removing the user row, so round integrity survives without leaking personal data.
+- **Retention windows** — game data is purged 2 years after game end; audit-log PII is anonymised after 3 years; magic-link tokens are cleaned 7 days after use.
+- **An Art. 13(1) privacy-policy template** at [`docs/reference/privacy-policy.md`](docs/reference/privacy-policy.md) that operators fill in once and serve at `/privacy`.
+
+The full compliance model — lawful basis, ROPA-lite, data-subject rights, processor list, breach procedure — is documented in [`docs/reference/gdpr.md`](docs/reference/gdpr.md). Read it **before** going live with real users; GDPR obligations attach to the operator (you), not the upstream project.
+
+---
+
+## Built with AI, reviewed by a human
+
+This project was developed collaboratively with AI coding assistants (primarily Claude Code) as pair-programming tooling. That's worth being up-front about, so you can weigh it against your own risk tolerance. The working agreement throughout has been:
+
+- **Every change reviewed by a human** before commit. AI assistance accelerates exploration and boilerplate — it does not ship unsupervised.
+- **The same CI gates apply regardless of origin.** `go vet`, `go test -race`, `npm run check`, CodeQL, `govulncheck`, and `npm audit` run on every push. An AI-generated line and a hand-typed line survive or fail on the same criteria.
+- **Security-sensitive surfaces carry `CODEOWNERS` review.** The auth, middleware, and server-wire-up paths require explicit review on every PR ([`.github/CODEOWNERS`](.github/CODEOWNERS)).
+- **Contributor AI policy is explicit.** [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md) states what's acceptable: AI-assisted PRs are welcome, untested AI-generated PRs are not.
+
+If you find an issue — AI-introduced or otherwise — the disclosure channel is the same: [`.github/SECURITY.md`](.github/SECURITY.md) for vulnerabilities, the issue tracker for everything else.
+
+---
+
+## Open source & why GPLv3
+
+FabDoYouMeme is released under the **GNU General Public License v3.0**. In plain English, that means you are free to:
+
+- **Run it**, for any purpose, personal or commercial
+- **Study it**, inspect every line of how it works, and learn from it
+- **Modify it**, fork it, customise it, add your own game types, rewire the frontend
+- **Redistribute it**, share your changes with friends, run it on someone else's machine
+
+With one obligation: **derivatives must stay GPLv3**. If you ship a modified version — privately hosted, publicly hosted, or redistributed — the people you ship it to get the same rights you did, and the source has to be available to them. That's the copyleft bargain, and it's the entire reason this is GPLv3 and not MIT: a game meant to protect its players from SaaS capture should not be legally easy to turn into SaaS capture.
+
+Full text: [`LICENSE`](LICENSE). Short, human-readable summary of your rights and obligations: [choosealicense.com/licenses/gpl-3.0/](https://choosealicense.com/licenses/gpl-3.0/).
+
+---
+
+## Documentation
+
+Full design documentation lives in [`docs/`](docs/):
+
+| Doc                                                              | Contents                                                         |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [`docs/overview.md`](docs/overview.md)                           | Goals, tech stack rationale, key design decisions                |
+| [`docs/architecture.md`](docs/architecture.md)                   | System components, DB schema, storage, middleware, startup       |
+| [`docs/auth-and-identity.md`](docs/auth-and-identity.md)         | Auth flow, invite system, session management, security controls  |
+| [`docs/game-engine.md`](docs/game-engine.md)                     | Room/round lifecycle, WebSocket hub, game type handler interface |
+| [`docs/api.md`](docs/api.md)                                     | REST endpoints, WebSocket protocol, error model                  |
+| [`docs/frontend.md`](docs/frontend.md)                           | SvelteKit routing, Svelte 5 state singletons, game plugin arch   |
+| [`docs/self-hosting.md`](docs/self-hosting.md)                   | Prerequisites, first boot, all environment variables             |
+| [`docs/operations.md`](docs/operations.md)                       | Monitoring, logs, backups, CI, production checklist              |
+| [`docs/reference/error-codes.md`](docs/reference/error-codes.md) | Canonical `snake_case` error code table (REST + WebSocket)       |
+| [`docs/reference/decisions.md`](docs/reference/decisions.md)     | ADR-001–ADR-010 architectural decisions                          |
+| [`docs/reference/gdpr.md`](docs/reference/gdpr.md)               | GDPR compliance: lawful basis, rights, DPA, breach procedure     |
+| [`docs/reference/privacy-policy.md`](docs/reference/privacy-policy.md) | Art. 13(1) Privacy Policy stub template for operator to complete |
+
+---
+
+## Contributing
+
+Issues, feature requests, and pull requests are welcome. Please read [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md) first — it covers when to open an issue vs. go straight to a PR, the tests and CI checks you need to pass, and what won't get merged.
+
+Proposing a **new game type**? There is a dedicated [issue template](.github/ISSUE_TEMPLATE/game-type-proposal.yml) for that; it asks the right questions for the plugin architecture (slug, round structure, WS messages, scoring, asset needs, player range). Read [`docs/game-engine.md`](docs/game-engine.md) before filling it in.
+
+## Code of conduct
+
+All participation — issues, PRs, discussions — is governed by the short, readable [`.github/CODE_OF_CONDUCT.md`](.github/CODE_OF_CONDUCT.md). Roughly: keep it technical, be specific, own your mistakes, and don't make the project hostile. Reports go to `contact@libresoftware.cloud`.
 
 ## License
 
-[GPLv3](LICENSE)
+[GPLv3](LICENSE) — copyleft, forever, for you and everyone you share it with.

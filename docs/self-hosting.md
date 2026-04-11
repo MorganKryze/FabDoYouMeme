@@ -16,7 +16,9 @@
 
 1. **Copy `.env.example` to `.env`** and fill in all required values (see [Environment variables](#environment-variables) below).
 
-2. **Set `SEED_ADMIN_EMAIL`** to your email address. On first startup, the backend detects that no admin exists and automatically creates the admin user + sends a magic link to that address. Subsequent restarts with the same env var are no-ops.
+2. **Set `SEED_ADMIN_EMAIL`** to a real inbox you control. On first startup, the backend detects that no admin exists and automatically creates the admin user + sends a magic link to that address. Subsequent restarts with the same env var are no-ops.
+
+   > **Do not leave this at the `.env.example` placeholder value.** The admin row is created once, keyed by email — if the magic link is sent to an address you do not own, you will not receive it and requesting another link from the login page will just route it to the same dead inbox. Recovery is a chore (edit `.env`, set a different `SEED_ADMIN_EMAIL`, restart the backend — this creates a *second* admin keyed by the new address; the first stays orphaned but harmless).
 
 3. **Start the stack:**
 
