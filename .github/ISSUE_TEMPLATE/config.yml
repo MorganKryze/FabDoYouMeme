@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/MorganKryze/FabDoYouMeme/security/advisories/new
+    about: Report security issues privately via GitHub Private Security Advisory. Do NOT open a public issue. See .github/SECURITY.md.
+  - name: Open-ended discussion
+    url: https://github.com/MorganKryze/FabDoYouMeme/discussions
+    about: For show-and-tell, "what if..." ideas, or chats that don't need a fix, use Discussions instead of an issue.

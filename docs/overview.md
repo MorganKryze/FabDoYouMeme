@@ -67,7 +67,7 @@ Svelte 5 runes work inside `.svelte.ts` files outside of components. This enable
 
 When a user is hard-deleted (GDPR erasure), their submission history must be preserved for round integrity. Rather than making `submissions.user_id` nullable (which breaks FK constraints and requires `IS NULL` checks throughout), a fixed placeholder row (`id = 00000000-0000-0000-0000-000000000001`, `username = '[deleted]'`) is seeded in the first migration. Hard-delete replaces the user's `user_id` with the sentinel before removing the row. The sentinel is inert: it cannot log in, has no deliverable email, and holds no personal data.
 
-Full ADR records for all ten architectural decisions live in `design/ref-decisions.md`.
+Full ADR records for all ten architectural decisions live in `docs/reference/decisions.md`.
 
 ---
 

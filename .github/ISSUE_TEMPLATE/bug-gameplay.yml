@@ -1,0 +1,112 @@
+name: "Bug — gameplay / runtime"
+description: Something broke while playing. Rounds don't advance, voting fails, scores wrong, WebSocket drops mid-game, UI bugs.
+title: "[bug/gameplay] "
+labels: ["bug", "gameplay"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For deployment or self-hosting bugs (Docker, migrations, auth setup, RustFS, SMTP), use the **Bug — self-hosting** template instead.
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit SHA or deploy date
+      description: Output of `git rev-parse --short HEAD` or the date you deployed.
+      placeholder: "e.g. 4dd0ca0 or 2026-04-12"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: game-type
+    attributes:
+      label: Game type
+      options:
+        - "meme-caption"
+        - "other / not sure"
+    validations:
+      required: true
+
+  - type: input
+    id: players
+    attributes:
+      label: Number of players in the room
+      placeholder: "e.g. 4"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Which phase did it happen in?
+      options:
+        - "lobby (before start)"
+        - "countdown / round start"
+        - "submission phase"
+        - "voting phase"
+        - "results / leaderboard"
+        - "between rounds"
+        - "game over"
+        - "unsure"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happens
+    attributes:
+      label: What happened?
+      description: Expected vs. actual behavior. Screenshots help for UI bugs.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: What did players do to trigger it? Does it reproduce in a fresh room?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Client(s) where it happens
+      multiple: true
+      options:
+        - "Chrome / Chromium (desktop)"
+        - "Firefox (desktop)"
+        - "Safari (desktop)"
+        - "Edge"
+        - "Mobile Safari"
+        - "Mobile Chrome"
+        - "Other / not sure"
+    validations:
+      required: true
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Browser console errors
+      description: Open DevTools → Console and copy anything red or yellow that looks related.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: backend-logs
+    attributes:
+      label: Backend logs around the event
+      description: From `docker compose logs backend`. Redact secrets before pasting.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I have searched existing issues.
+          required: true
+        - label: The issue reproduces in a fresh room (not stale state from before a restart).
+          required: false

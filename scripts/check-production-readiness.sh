@@ -61,6 +61,6 @@ if [ "$FAIL" -gt 0 ]; then
   echo "Fix the failing items above before going live."
   exit 1
 else
-  echo "All checks passed. Review the manual items in design/06-operations.md before inviting users."
+  echo "All checks passed. Review the manual items in docs/operations.md before inviting users."
   exit 0
 fi

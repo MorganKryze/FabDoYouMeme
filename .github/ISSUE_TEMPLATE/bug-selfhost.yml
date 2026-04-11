@@ -1,0 +1,100 @@
+name: "Bug — self-hosting / deployment"
+description: Something is broken before a game can run — Docker, migrations, auth setup, RustFS, SMTP, reverse proxy.
+title: "[bug/selfhost] "
+labels: ["bug", "self-hosting"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This template is for issues that happen **before** players can join a game — the stack doesn't come up, migrations fail, magic links don't deliver, RustFS unreachable, etc.
+
+        For bugs during actual gameplay (rounds, voting, scoring, WebSocket drops mid-game), use the **Bug — gameplay** template instead.
+
+  - type: input
+    id: commit
+    attributes:
+      label: Commit SHA or pull date
+      description: Output of `git rev-parse --short HEAD` or the date you pulled `main`.
+      placeholder: "e.g. 4dd0ca0 or 2026-04-12"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: stack
+    attributes:
+      label: Which stack?
+      options:
+        - "dev (make dev)"
+        - "preprod (make preprod)"
+        - "prod (make prod)"
+        - "custom compose"
+    validations:
+      required: true
+
+  - type: input
+    id: docker-version
+    attributes:
+      label: Docker + Compose version
+      description: Output of `docker --version && docker compose version`
+      placeholder: "Docker version 27.x, Docker Compose version v2.x"
+    validations:
+      required: true
+
+  - type: input
+    id: host-os
+    attributes:
+      label: Host OS
+      placeholder: "Ubuntu 24.04, Debian 12, macOS 15, etc."
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happens
+    attributes:
+      label: What happens?
+      description: What did you try to do, and what did you see instead? Be specific.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: Step-by-step from a fresh state. If possible, start with `git clone` or `docker compose down -v`.
+      placeholder: |
+        1. `cp .env.example .env`
+        2. Set `POSTGRES_PASSWORD=...`
+        3. `make dev`
+        4. Backend container exits with ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: "`docker compose logs backend` or similar. **Redact all secrets before pasting.**"
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Relevant .env variables (redacted)
+      description: Only keys you think are relevant. **Remove passwords, API keys, real email addresses.**
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I have redacted all secrets (passwords, API keys, real emails) from logs and env output.
+          required: true
+        - label: I have searched existing issues for this problem.
+          required: true
+        - label: I am running the latest `main` (not a fork or stale checkout).
+          required: false

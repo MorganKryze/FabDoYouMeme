@@ -20,7 +20,7 @@ Self-hosted, invite-only party game platform. Launch meme caption rounds, vote o
 | Docker + Docker Compose | Runs all services                                                                              |
 | Reverse proxy           | Pre-existing; must route `/api/*` → backend and `/*` → frontend                                |
 | SMTP server             | For magic link delivery (Mailgun, AWS SES, self-hosted Postfix, etc.)                          |
-| RustFS                  | S3-compatible object store deployed on the `pangolin` Docker network — see `design/03-data.md` |
+| RustFS                  | S3-compatible object store deployed on the `pangolin` Docker network — see `docs/architecture.md` |
 
 ---
 
@@ -157,7 +157,7 @@ Use this when you want to deploy a locally-built image to the server (e.g. testi
 cp .env.preprod.example .env.preprod
 ```
 
-Fill in real values — see `design/ref-env-vars.md` for the full list. Real SMTP credentials are required (no Mailpit in preprod).
+Fill in real values — see `docs/self-hosting.md` for the full list. Real SMTP credentials are required (no Mailpit in preprod).
 
 **2. Start all services**
 
@@ -183,7 +183,7 @@ Use this when deploying pre-built images from GitHub Container Registry. Require
 cp .env.prod.example .env.prod
 ```
 
-Required variables (see `design/ref-env-vars.md` for the full list):
+Required variables (see `docs/self-hosting.md` for the full list):
 
 ```bash
 POSTGRES_PASSWORD=strong_random_password
@@ -246,17 +246,22 @@ cd frontend && npm run check
 
 ## Architecture
 
-Full design documentation lives in `design/`:
+Full design documentation lives in `docs/`:
 
-| Doc                       | Contents                                  |
-| ------------------------- | ----------------------------------------- |
-| `design/00-index.md`      | Index + quick-reference flows             |
-| `design/02-identity.md`   | Auth, invite system, session management   |
-| `design/03-data.md`       | PostgreSQL schema, RustFS storage         |
-| `design/04-protocol.md`   | REST API, WebSocket protocol, game engine |
-| `design/05-frontend.md`   | SvelteKit routing, state, UX flows        |
-| `design/06-operations.md` | Docker Compose, migrations, CI, backups   |
-| `design/ref-gdpr.md`      | GDPR compliance reference                 |
+| Doc                                | Contents                                                            |
+| ---------------------------------- | ------------------------------------------------------------------- |
+| `docs/overview.md`                 | Goals, tech stack rationale, key design decisions                   |
+| `docs/architecture.md`             | System components, DB schema, storage, middleware, startup          |
+| `docs/auth-and-identity.md`        | Auth flow, invite system, session management, security controls    |
+| `docs/game-engine.md`              | Room/round lifecycle, WebSocket hub, game type handler interface    |
+| `docs/api.md`                      | REST endpoints, WebSocket protocol, error model                     |
+| `docs/frontend.md`                 | SvelteKit routing, Svelte 5 state singletons, game plugin arch      |
+| `docs/self-hosting.md`             | Prerequisites, first boot, all environment variables                |
+| `docs/operations.md`               | Monitoring, logs, backups, CI, production checklist                 |
+| `docs/reference/error-codes.md`    | Canonical `snake_case` error code table (REST + WebSocket)          |
+| `docs/reference/decisions.md`      | ADR-001–ADR-010 architectural decisions                             |
+| `docs/reference/gdpr.md`           | GDPR compliance: lawful basis, rights, DPA, breach procedure        |
+| `docs/reference/privacy-policy.md` | Art. 13(1) Privacy Policy stub template for operator to complete    |
 
 ---
 

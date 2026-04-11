@@ -1,0 +1,85 @@
+name: "New game type proposal"
+description: Propose a new game type for the plugin architecture (trivia, draw-this, match-pairs, etc.).
+title: "[game-type] "
+labels: ["game-type", "enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        FabDoYouMeme is designed so new game types plug in without schema or protocol changes — they implement `GameTypeHandler` and register via `game.Register()` in `cmd/server/main.go`.
+
+        **Read `docs/game-engine.md` before filling this out.** It describes the handler interface, room/round lifecycle, and the shared WebSocket messages your game type inherits for free.
+
+  - type: input
+    id: name
+    attributes:
+      label: Game type slug
+      description: Short snake_case identifier used in WebSocket messages and routes.
+      placeholder: "e.g. match_pairs, trivia, draw_this"
+    validations:
+      required: true
+
+  - type: textarea
+    id: pitch
+    attributes:
+      label: One-paragraph pitch
+      description: What is the game? How does it play? What makes it fun?
+    validations:
+      required: true
+
+  - type: textarea
+    id: rounds
+    attributes:
+      label: Round structure
+      description: How is a round structured? Which phases (submission, voting, scoring, reveal)? How long does a round typically take?
+    validations:
+      required: true
+
+  - type: textarea
+    id: ws-messages
+    attributes:
+      label: Game-specific WebSocket messages
+      description: "List the new WS messages needed (e.g. `trivia:answer`, `trivia:reveal`). The shared ones (`join`, `start`, `round_started`, `vote_results`, etc.) are already provided."
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: scoring
+    attributes:
+      label: Scoring rules
+      description: How are points awarded per round and for the game total?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: assets
+    attributes:
+      label: Does it need media / assets?
+      options:
+        - "No, text only"
+        - "Yes, images (like meme-caption)"
+        - "Yes, audio"
+        - "Yes, something else"
+    validations:
+      required: true
+
+  - type: input
+    id: min-max-players
+    attributes:
+      label: Min / max players
+      placeholder: "3–8, or 2–20, etc."
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I have read `docs/game-engine.md` and understand the `GameTypeHandler` interface.
+          required: true
+        - label: This game type does NOT require schema changes to existing tables.
+          required: true
+        - label: I have searched existing issues for similar proposals.
+          required: true

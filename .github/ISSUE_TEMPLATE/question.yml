@@ -1,0 +1,54 @@
+name: "Question / help"
+description: You're stuck self-hosting, configuring, or understanding how something works.
+title: "[question] "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening an issue, please check:
+        - `README.md` for setup
+        - `docs/self-hosting.md` for env vars and first boot
+        - `docs/operations.md` for monitoring, logs, backups
+        - Existing issues and discussions
+
+        For open-ended chats or "what if..." ideas, prefer GitHub **Discussions** over an issue.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: What's the question about?
+      options:
+        - "Self-hosting / deployment"
+        - "Configuration (env vars, compose)"
+        - "Game mechanics / rules"
+        - "Code / architecture (how does X work)"
+        - "Something else"
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+      description: "Be specific. \"How do I do X?\" is better than \"help.\""
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you already tried?
+      description: Commands run, docs read. Helps avoid suggesting things you've already eliminated.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I have checked the docs linked above.
+          required: true
+        - label: I have searched existing issues and discussions.
+          required: true

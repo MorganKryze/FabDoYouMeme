@@ -140,7 +140,7 @@ All errors return the same shape:
 
 The `request_id` field matches the `X-Request-ID` response header, which is logged on the server side. Use it to correlate client errors with server logs.
 
-Full error code table: `design/ref-error-codes.md`.
+Full error code table: `docs/reference/error-codes.md`.
 
 ---
 
@@ -213,4 +213,4 @@ Every timed event includes both `duration_seconds` (server-authoritative) and `e
 - Max message size: `WS_READ_LIMIT_BYTES` (default 4 KB) — exceeding this disconnects the client
 - Max message rate: `WS_RATE_LIMIT` per second (default 20) — exceeding this disconnects the client
 
-For full WebSocket protocol details and game-specific message payloads, see `design/04-protocol.md`.
+For game-specific message payloads and the room/round lifecycle behind these messages, see `docs/game-engine.md`.

@@ -135,4 +135,4 @@ This preserves round history for other players while removing all personal data.
 
 **Data processor:** the SMTP provider receives the user's email address to deliver magic links. A Data Processing Agreement with the SMTP provider is required before production use.
 
-See `design/ref-gdpr.md` for the full GDPR documentation.
+See `docs/reference/gdpr.md` for the full GDPR documentation.

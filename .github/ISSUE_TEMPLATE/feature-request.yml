@@ -1,0 +1,60 @@
+name: "Feature request"
+description: Suggest a new feature, UX improvement, or change to existing behavior.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Before you write this up:** small fixes can go straight to a PR (see CONTRIBUTING.md). This template is for changes that need discussion first.
+
+        **If you want to add a new game type**, use the dedicated **New game type proposal** template — it has the right fields for the plugin architecture.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: "Describe the pain point. Pattern: \"As a [host/player/operator], I can't do X because Y.\""
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like to see? Be specific about UX, data, or API changes where relevant.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else did you think about? Why doesn't the current behavior work?
+    validations:
+      required: false
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Who benefits?
+      multiple: true
+      options:
+        - "Players"
+        - "Hosts / room admins"
+        - "Self-hosters (operators)"
+        - "Contributors"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I have searched existing issues and discussions.
+          required: true
+        - label: This fits the project's goal of being self-hosted and invite-only.
+          required: true
+        - label: This does NOT couple FabDoYouMeme to a specific paid service or hosting provider.
+          required: true
