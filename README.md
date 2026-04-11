@@ -43,16 +43,19 @@ It is also built to be **extended**, not just played. The game engine is a plugi
 ## What you get
 
 **For players**
+
 - Join a room with a short code — no account, no app install, no download
 - Caption the round, vote on the funniest, see the leaderboard climb
 - Reconnect cleanly if your WiFi drops mid-round (30-second grace window by default)
 
 **For the host (game admin)**
+
 - Create rooms, pick a pack, kick off rounds; everything is in-browser
 - Invite-only tokens with per-email restrictions if you want to pre-assign seats
 - Content packs managed from a dedicated admin panel — upload media, build decks
 
 **For the self-hoster (operator)**
+
 - One Docker Compose stack. One reverse proxy. One `.env` file. That's the install surface.
 - PostgreSQL 17 + RustFS (S3-compatible) for state and assets
 - Magic-link auth only — no passwords to rotate, leak, or forget
@@ -74,12 +77,12 @@ It is also built to be **extended**, not just played. The game engine is a plugi
 
 <div align="center">
 
-| | |
-|:-:|:-:|
+|                                                         |                                                               |
+| :-----------------------------------------------------: | :-----------------------------------------------------------: |
 | ![Lobby placeholder](docs/assets/screenshots/lobby.png) | ![Submission placeholder](docs/assets/screenshots/submit.png) |
-| **Lobby** — room code, player list, host controls | **Submit** — caption the round against a timer |
-| ![Voting placeholder](docs/assets/screenshots/vote.png) | ![Results placeholder](docs/assets/screenshots/results.png) |
-| **Vote** — pick the funniest, anonymous until reveal | **Results** — round score + running leaderboard |
+|    **Lobby** — room code, player list, host controls    |        **Submit** — caption the round against a timer         |
+| ![Voting placeholder](docs/assets/screenshots/vote.png) |  ![Results placeholder](docs/assets/screenshots/results.png)  |
+|  **Vote** — pick the funniest, anonymous until reveal   |        **Results** — round score + running leaderboard        |
 
 </div>
 
@@ -150,38 +153,23 @@ If you find an issue — AI-introduced or otherwise — the disclosure channel i
 
 ---
 
-## Open source & why GPLv3
-
-FabDoYouMeme is released under the **GNU General Public License v3.0**. In plain English, that means you are free to:
-
-- **Run it**, for any purpose, personal or commercial
-- **Study it**, inspect every line of how it works, and learn from it
-- **Modify it**, fork it, customise it, add your own game types, rewire the frontend
-- **Redistribute it**, share your changes with friends, run it on someone else's machine
-
-With one obligation: **derivatives must stay GPLv3**. If you ship a modified version — privately hosted, publicly hosted, or redistributed — the people you ship it to get the same rights you did, and the source has to be available to them. That's the copyleft bargain, and it's the entire reason this is GPLv3 and not MIT: a game meant to protect its players from SaaS capture should not be legally easy to turn into SaaS capture.
-
-Full text: [`LICENSE`](LICENSE). Short, human-readable summary of your rights and obligations: [choosealicense.com/licenses/gpl-3.0/](https://choosealicense.com/licenses/gpl-3.0/).
-
----
-
 ## Documentation
 
 Full design documentation lives in [`docs/`](docs/):
 
-| Doc                                                              | Contents                                                         |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------- |
-| [`docs/overview.md`](docs/overview.md)                           | Goals, tech stack rationale, key design decisions                |
-| [`docs/architecture.md`](docs/architecture.md)                   | System components, DB schema, storage, middleware, startup       |
-| [`docs/auth-and-identity.md`](docs/auth-and-identity.md)         | Auth flow, invite system, session management, security controls  |
-| [`docs/game-engine.md`](docs/game-engine.md)                     | Room/round lifecycle, WebSocket hub, game type handler interface |
-| [`docs/api.md`](docs/api.md)                                     | REST endpoints, WebSocket protocol, error model                  |
-| [`docs/frontend.md`](docs/frontend.md)                           | SvelteKit routing, Svelte 5 state singletons, game plugin arch   |
-| [`docs/self-hosting.md`](docs/self-hosting.md)                   | Prerequisites, first boot, all environment variables             |
-| [`docs/operations.md`](docs/operations.md)                       | Monitoring, logs, backups, CI, production checklist              |
-| [`docs/reference/error-codes.md`](docs/reference/error-codes.md) | Canonical `snake_case` error code table (REST + WebSocket)       |
-| [`docs/reference/decisions.md`](docs/reference/decisions.md)     | ADR-001–ADR-010 architectural decisions                          |
-| [`docs/reference/gdpr.md`](docs/reference/gdpr.md)               | GDPR compliance: lawful basis, rights, DPA, breach procedure     |
+| Doc                                                                    | Contents                                                         |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [`docs/overview.md`](docs/overview.md)                                 | Goals, tech stack rationale, key design decisions                |
+| [`docs/architecture.md`](docs/architecture.md)                         | System components, DB schema, storage, middleware, startup       |
+| [`docs/auth-and-identity.md`](docs/auth-and-identity.md)               | Auth flow, invite system, session management, security controls  |
+| [`docs/game-engine.md`](docs/game-engine.md)                           | Room/round lifecycle, WebSocket hub, game type handler interface |
+| [`docs/api.md`](docs/api.md)                                           | REST endpoints, WebSocket protocol, error model                  |
+| [`docs/frontend.md`](docs/frontend.md)                                 | SvelteKit routing, Svelte 5 state singletons, game plugin arch   |
+| [`docs/self-hosting.md`](docs/self-hosting.md)                         | Prerequisites, first boot, all environment variables             |
+| [`docs/operations.md`](docs/operations.md)                             | Monitoring, logs, backups, CI, production checklist              |
+| [`docs/reference/error-codes.md`](docs/reference/error-codes.md)       | Canonical `snake_case` error code table (REST + WebSocket)       |
+| [`docs/reference/decisions.md`](docs/reference/decisions.md)           | ADR-001–ADR-010 architectural decisions                          |
+| [`docs/reference/gdpr.md`](docs/reference/gdpr.md)                     | GDPR compliance: lawful basis, rights, DPA, breach procedure     |
 | [`docs/reference/privacy-policy.md`](docs/reference/privacy-policy.md) | Art. 13(1) Privacy Policy stub template for operator to complete |
 
 ---
@@ -198,4 +186,13 @@ All participation — issues, PRs, discussions — is governed by the short, rea
 
 ## License
 
-[GPLv3](LICENSE) — copyleft, forever, for you and everyone you share it with.
+FabDoYouMeme is released under the **[GNU General Public License v3.0](LICENSE)**. In plain English, that means you are free to:
+
+- **Run it**, for any purpose, personal or commercial
+- **Study it**, inspect every line of how it works, and learn from it
+- **Modify it**, fork it, customise it, add your own game types, rewire the frontend
+- **Redistribute it**, share your changes with friends, run it on someone else's machine
+
+With one obligation: **derivatives must stay GPLv3**. If you ship a modified version — privately hosted, publicly hosted, or redistributed — the people you ship it to get the same rights you did, and the source has to be available to them. That's the copyleft bargain, and it's the entire reason this is GPLv3 and not MIT: a game meant to protect its players from SaaS capture should not be legally easy to turn into SaaS capture.
+
+Full text: [`LICENSE`](LICENSE). Human-readable summary: [choosealicense.com/licenses/gpl-3.0/](https://choosealicense.com/licenses/gpl-3.0/).
