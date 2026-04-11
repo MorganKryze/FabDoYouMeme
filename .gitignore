@@ -31,3 +31,6 @@ postgres_data/
 
 # graphify
 graphify-out/
+
+# Local-only scratch notes (checklists, drafts) — never pushed
+*.local.md
