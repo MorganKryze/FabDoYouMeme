@@ -28,3 +28,6 @@ postgres_data/
 .env.dev
 .env.preprod
 .env.prod
+
+# graphify
+graphify-out/
