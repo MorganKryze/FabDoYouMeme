@@ -1,0 +1,178 @@
+# .github/workflows/docker-publish.yml
+#
+# Publishes backend and frontend images to GHCR.
+#
+# Triggers:
+#   push to main           → :unstable      (rolling dev build)
+#   release published      → :X.Y.Z, :X.Y, :X, :stable   (SemVer moving tags)
+#
+# Note: intentionally NOT triggered by pull_request. A PR from a fork running
+# with push permissions would be a supply-chain disaster. Tests and image
+# smoke builds for PRs live in backend.yml / frontend.yml (push-only, no-push
+# smoke test). The roadmap calls this out explicitly.
+#
+# Tag semantics (no :latest — see roadmap):
+#   :unstable   rolling build from main, may break
+#   :X.Y.Z      exact version, frozen forever
+#   :X.Y        latest patch of minor line
+#   :X          latest minor of major line
+#   :stable     latest released version across all lines
+#
+# Self-hoster guidance: pin :stable for production, :X.Y for conservative
+# auto-upgrade within a minor line, an exact :X.Y.Z if you need full freeze.
+name: Docker publish
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - '.github/workflows/docker-publish.yml'
+  release:
+    types: [published]
+
+# Cancel in-flight :unstable rebuilds when a newer commit lands on main, but
+# never cancel a release publish — those are one-shot and must complete.
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
+
+# Least-privilege token. contents:read for checkout, packages:write for GHCR
+# push, id-token + attestations for SLSA provenance attestations.
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+jobs:
+  publish:
+    name: Build & push ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            context: ./backend
+            dockerfile: ./backend/Dockerfile
+          - name: frontend
+            context: ./frontend
+            dockerfile: ./frontend/Dockerfile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # GHCR requires lowercase image paths. github.repository_owner preserves
+      # case (e.g. "MorganKryze"), so downcase it explicitly — otherwise the
+      # push fails with "invalid reference format". Matrix value is passed via
+      # env to keep ${{ }} out of the shell script body (injection hygiene).
+      - name: Compute image reference
+        id: image
+        env:
+          IMAGE_NAME: ${{ matrix.name }}
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "ref=ghcr.io/${owner}/fabdoyoumeme-${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Tag plan — one call to metadata-action emits every tag we want.
+      # `enable` clauses scope each pattern to the correct trigger.
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.ref }}
+          tags: |
+            type=raw,value=unstable,enable=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ github.event_name == 'release' }}
+            type=semver,pattern={{major}},enable=${{ github.event_name == 'release' }}
+            type=raw,value=stable,enable=${{ github.event_name == 'release' }}
+          labels: |
+            org.opencontainers.image.title=FabDoYouMeme ${{ matrix.name }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=GPL-3.0-or-later
+
+      # Multi-arch build. Go backend cross-compiles natively so arm64 is fast;
+      # frontend arm64 goes through QEMU, which is slower but still under the
+      # build cache window on repeat builds. GHA cache makes the second run ~3×
+      # faster than a cold start.
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+      # SLSA build provenance signed by GitHub's Sigstore identity. Verifiable
+      # with `gh attestation verify <image>` — gives self-hosters cryptographic
+      # proof the image came from this exact workflow run on this repo.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-name: ${{ steps.image.outputs.ref }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      # Trivy: non-blocking OS/package vuln scan. Reports CRITICAL/HIGH to the
+      # Security tab but exits 0 — we don't block releases on a new upstream
+      # CVE landing in Debian/Alpine. govulncheck (backend) and npm audit
+      # (frontend) already run as blocking gates in the per-language CI.
+      - name: Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.image.outputs.ref }}@${{ steps.build.outputs.digest }}
+          format: sarif
+          output: trivy-${{ matrix.name }}.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+
+      - name: Upload Trivy results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.name }}.sarif
+          category: trivy-${{ matrix.name }}
+
+      # Matrix and step outputs are passed via env to keep ${{ }} out of the
+      # shell body — defends against future edits introducing an injection
+      # path even though current values are all trusted.
+      - name: Summary
+        env:
+          IMAGE_NAME: ${{ matrix.name }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Published ${IMAGE_NAME}"
+            echo ""
+            echo "**Digest:** \`${IMAGE_DIGEST}\`"
+            echo ""
+            echo "**Tags:**"
+            echo '```'
+            printf '%s\n' "${IMAGE_TAGS}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
