@@ -151,7 +151,14 @@ jobs:
       # doesn't publish a floating major tag like actions/checkout@v6, so exact
       # version pin is the closest equivalent. Dependabot tracks this line
       # weekly (see .github/dependabot.yml — github-actions ecosystem).
+      # `continue-on-error: true` honors the non-blocking intent: a Trivy DB
+      # download flake, multi-arch index quirk, or transient GHCR pull error
+      # must not fail the publish job. `exit-code: '0'` only governs Trivy's
+      # behavior on finding vulnerabilities — it does not cover Trivy itself
+      # erroring before it writes the SARIF file.
       - name: Trivy vulnerability scan
+        id: trivy
+        continue-on-error: true
         uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: ${{ steps.image.outputs.ref }}@${{ steps.build.outputs.digest }}
@@ -160,9 +167,13 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: '0'
 
+      # `hashFiles` returns '' when the path doesn't exist, so this skips
+      # cleanly if the Trivy step errored before producing a SARIF. Without
+      # this guard, `if: always()` tried to upload a missing file and failed
+      # the job with "Path does not exist: trivy-<name>.sarif".
       - name: Upload Trivy results
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        if: always() && hashFiles(format('trivy-{0}.sarif', matrix.name)) != ''
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-${{ matrix.name }}.sarif
           category: trivy-${{ matrix.name }}
