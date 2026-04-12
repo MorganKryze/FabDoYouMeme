@@ -39,12 +39,17 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'push' }}
 
 # Least-privilege token. contents:read for checkout, packages:write for GHCR
-# push, id-token + attestations for SLSA provenance attestations.
+# push, id-token + attestations for SLSA provenance attestations,
+# security-events:write so the Trivy SARIF upload can post to the Security tab
+# (codeql-action/upload-sarif calls the code-scanning API, which is scoped to
+# this permission — without it the upload warns "Resource not accessible by
+# integration" and silently drops the findings).
 permissions:
   contents: read
   packages: write
   id-token: write
   attestations: write
+  security-events: write
 
 jobs:
   publish:
@@ -140,8 +145,14 @@ jobs:
       # Security tab but exits 0 — we don't block releases on a new upstream
       # CVE landing in Debian/Alpine. govulncheck (backend) and npm audit
       # (frontend) already run as blocking gates in the per-language CI.
+      #
+      # Pinned to an exact version (not @master) so a compromise of the Trivy
+      # Action repo can't silently land in our builds. aquasecurity/trivy-action
+      # doesn't publish a floating major tag like actions/checkout@v6, so exact
+      # version pin is the closest equivalent. Dependabot tracks this line
+      # weekly (see .github/dependabot.yml — github-actions ecosystem).
       - name: Trivy vulnerability scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.35.0
         with:
           image-ref: ${{ steps.image.outputs.ref }}@${{ steps.build.outputs.digest }}
           format: sarif
