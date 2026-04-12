@@ -80,27 +80,55 @@ The client sends a `ping` every `WS_PING_INTERVAL` (default 25 seconds). The ser
 
 ## Game type system
 
-Game types are registered handler units. The entire backend game logic is contained behind a single Go interface: `GameTypeHandler`. Each game type implements this interface and registers itself at startup with `game.Register(slug, handler)`.
+Game types are registered handler units. The entire backend game logic is contained behind a single Go interface: `game.GameTypeHandler` (defined in `backend/internal/game/handler.go`). Each game type implements this interface and is added to the process-wide registry at startup.
 
-The interface defines five responsibilities:
+### Registration at startup
 
-| Method                           | Purpose                                                   |
-| -------------------------------- | --------------------------------------------------------- |
-| `SupportedPayloadVersions()`     | Declares which item payload versions this handler can use |
-| `ValidateSubmission()`           | Validates a player's submission payload                   |
-| `BuildSubmissionsShownPayload()` | Transforms raw submissions into anonymous display data    |
-| `ValidateVote()`                 | Validates a vote (prevents self-vote, duplicate vote)     |
-| `CalculateRoundScores()`         | Computes per-player points from votes                     |
+A `*game.Registry` is constructed in `main.go`, and each handler is added via `registry.Register(handler)`. The slug is taken from the handler itself (`h.Slug()`) — there is no separate slug argument. Duplicate slugs panic at startup rather than failing silently at runtime, so a misconfiguration is caught on the first boot.
 
-The hub calls these methods but never knows which game type it is running. Game-specific WebSocket messages use a prefixed type (`meme-caption:submit`, `trivia:answer`) so the protocol can carry any game type without changes.
+```go
+// backend/cmd/server/main.go
+registry := game.NewRegistry()
+registry.Register(memecaption.New())
+// registry.Register(trivia.New())   // future game types added here
+```
+
+The registry is then passed to the game manager and the `GameTypeHandler` HTTP handler, which are the only components that resolve slugs back to handlers (`registry.Get(slug)`).
+
+### The `GameTypeHandler` interface
+
+The interface defines nine methods. The hub calls them during gameplay and never knows which game type it is running — game-specific WebSocket messages use a prefixed type (`meme-caption:submit`, `trivia:answer`) so the protocol can carry any game type without changes.
+
+| Method                           | Purpose                                                                                        |
+| -------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `Slug()`                         | Matches `game_types.slug` in the DB (e.g. `"meme-caption"`); also the registry key             |
+| `SupportedPayloadVersions()`     | Declares which item payload versions this handler can process                                  |
+| `SupportsSolo()`                 | Whether the handler permits single-player rooms                                                |
+| `MaxPlayers()`                   | Absolute per-room cap; `0` means no cap. Checked in `handleRegister` before allocating state   |
+| `ValidateSubmission()`           | Validates a player's submission payload                                                        |
+| `ValidateVote()`                 | Validates a vote (self-vote check; hub has already verified phase + duplicate)                 |
+| `CalculateRoundScores()`         | Computes per-player points from votes                                                          |
+| `BuildSubmissionsShownPayload()` | Transforms raw submissions into the anonymous display payload for `{slug}:submissions_shown`   |
+| `BuildVoteResultsPayload()`      | Builds the reveal payload for `{slug}:vote_results`                                            |
+
+Implementations must be safe to call from a single hub goroutine — the hub is single-threaded per room, so no additional locking is needed.
+
+### Two places the slug must match
+
+A game type has two halves that must agree on the slug:
+
+1. **DB row** in `game_types` — holds the operator-tunable metadata: name, description, `supports_solo`, and the `config` JSONB with round/voting duration bounds, player bounds, and round count bounds. Seeded via a migration in `backend/db/migrations/`.
+2. **Go handler** in `backend/internal/game/types/{slug}/` — holds the behaviour (validation, scoring, payload builders) and hard caps (`MaxPlayers`).
+
+If either half is missing, the game type is unusable: a missing handler means `registry.Get(slug)` returns `false` and room creation is rejected; a missing DB row means there is nothing for the UI to list under `/api/game-types` even though the handler is registered.
 
 ### Adding a new game type
 
-1. Add a migration seeding a new row in `game_types` with the slug, name, and config ranges
-2. Create `backend/internal/game/types/{slug}/handler.go` implementing `GameTypeHandler`
-3. Call `game.Register("{slug}", handler)` in `backend/cmd/server/main.go`
-4. Create `frontend/src/lib/games/{slug}/` with `SubmitForm`, `VoteForm`, `ResultsView`, and `GameRules` components, plus an `index.ts` re-export
-5. Optionally add new frontend routes if the game needs unique views
+1. **Migration** — add `backend/db/migrations/NNN_seed_{slug}.up.sql` (and a matching `.down.sql`) inserting a row into `game_types` with the slug, name, description, `supports_solo`, and the config JSONB (min/max/default for round duration, voting duration, player count, round count). Use `002_seed_game_types.up.sql` as the template.
+2. **Handler package** — create `backend/internal/game/types/{slug}/handler.go` implementing every method on `game.GameTypeHandler`. Add a compile-time assertion at the bottom of the file: `var _ game.GameTypeHandler = (*Handler)(nil)`. This turns a missing method into a build error instead of a runtime panic.
+3. **Register at startup** — in `backend/cmd/server/main.go`, add `registry.Register(yourpkg.New())` alongside the existing `memecaption` line.
+4. **Frontend plugin** — create `frontend/src/lib/games/{slug}/` with `SubmitForm.svelte`, `VoteForm.svelte`, `ResultsView.svelte`, and `GameRules.svelte`, plus an `index.ts` that re-exports them. The room page selects the bundle by slug at runtime.
+5. **Optional frontend routes** — only if the game needs views that do not fit the default room layout.
 
 No database schema changes. No WebSocket protocol changes. No changes to existing game types.
 
