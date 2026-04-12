@@ -21,17 +21,23 @@
 <div class="flex flex-col gap-6">
   <div class="text-center">
     <h1 class="text-2xl font-bold">Create your account</h1>
-    <p class="text-sm text-muted-foreground mt-1">You need an invite to join.</p>
+    <p class="text-sm font-semibold text-brand-text-muted mt-1">You need an invite to join.</p>
   </div>
 
   {#if success && !smtpWarning}
-    <div class="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-800">
+    <div
+      class="rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-5 py-3 text-sm font-bold text-center"
+      style="box-shadow: 0 4px 0 rgba(0,0,0,0.06);"
+    >
       Account created! Check your email for your login link.
     </div>
   {/if}
 
   {#if smtpWarning}
-    <div class="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+    <div
+      class="rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-5 py-3 text-sm font-bold text-center"
+      style="box-shadow: 0 4px 0 rgba(0,0,0,0.06);"
+    >
       Account created, but the login email couldn't be sent. Ask your admin to resend.
     </div>
   {/if}
@@ -39,26 +45,29 @@
   {#if !success}
     <form method="POST" use:enhance class="flex flex-col gap-4">
       {#if form?.error}
-        <div class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+        <div
+          class="rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white px-4 py-3 text-sm font-bold"
+          style="box-shadow: 0 4px 0 rgba(0,0,0,0.06);"
+        >
           {form.error}
         </div>
       {/if}
 
       <div class="flex flex-col gap-1">
-        <label for="invite_token" class="text-sm font-medium">Invite Token</label>
+        <label for="invite_token" class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Invite Token</label>
         <input
           id="invite_token"
           name="invite_token"
           type="text"
           required
           value={form?.invite_token ?? data.inviteToken}
-          class="h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          class="h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
           placeholder="abc123xyz789"
         />
       </div>
 
       <div class="flex flex-col gap-1">
-        <label for="username" class="text-sm font-medium">Username</label>
+        <label for="username" class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Username</label>
         <input
           id="username"
           name="username"
@@ -68,14 +77,14 @@
           maxlength={30}
           autocomplete="username"
           value={form?.username ?? ''}
-          class="h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          class="h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
           placeholder="your_username"
         />
-        <p class="text-xs text-muted-foreground">3–30 characters, letters, numbers, underscore.</p>
+        <p class="text-xs font-semibold text-brand-text-muted">3–30 characters, letters, numbers, underscore.</p>
       </div>
 
       <div class="flex flex-col gap-1">
-        <label for="email" class="text-sm font-medium">Email</label>
+        <label for="email" class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Email</label>
         <input
           id="email"
           name="email"
@@ -83,7 +92,7 @@
           required
           autocomplete="email"
           value={form?.email ?? ''}
-          class="h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          class="h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
           placeholder="you@example.com"
         />
       </div>
@@ -93,12 +102,12 @@
           type="checkbox"
           name="consent"
           bind:checked={consent}
-          class="mt-0.5 h-4 w-4 rounded border-input"
+          class="mt-0.5 h-4 w-4 rounded border-brand-border-heavy"
           required
         />
-        <span class="text-sm leading-snug">
+        <span class="text-sm font-semibold leading-snug">
           I have read and agree to the
-          <a href="/privacy" class="underline hover:text-foreground" target="_blank">Privacy Policy</a>.
+          <a href="/privacy" class="underline hover:text-brand-text" target="_blank">Privacy Policy</a>.
         </span>
       </label>
 
@@ -107,23 +116,24 @@
           type="checkbox"
           name="age_affirmation"
           bind:checked={ageAffirmation}
-          class="mt-0.5 h-4 w-4 rounded border-input"
+          class="mt-0.5 h-4 w-4 rounded border-brand-border-heavy"
           required
         />
-        <span class="text-sm leading-snug">I confirm I am at least 16 years old.</span>
+        <span class="text-sm font-semibold leading-snug">I confirm I am at least 16 years old.</span>
       </label>
 
       <button
         type="submit"
-        class="h-11 rounded-lg bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors"
+        class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold transition-colors cursor-pointer"
+        style="box-shadow: 0 5px 0 rgba(0,0,0,0.35);"
       >
         Create Account
       </button>
     </form>
 
-    <p class="text-center text-sm text-muted-foreground">
+    <p class="text-center text-sm font-semibold text-brand-text-muted">
       Already have an account?
-      <a href="/auth/magic-link" class="underline hover:text-foreground">Sign in</a>
+      <a href="/auth/magic-link" class="underline hover:text-brand-text">Sign in</a>
     </p>
   {/if}
 </div>

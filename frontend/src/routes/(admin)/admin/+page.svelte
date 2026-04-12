@@ -18,8 +18,8 @@
         { label: 'Total Packs', value: data.stats.total_packs ?? 0 },
         { label: 'Pending Invites', value: data.stats.pending_invites ?? 0 },
       ] as card}
-        <div class="rounded-xl border border-border bg-card p-4">
-          <p class="text-sm text-muted-foreground">{card.label}</p>
+        <div class="rounded-xl border border-brand-border bg-brand-white p-4">
+          <p class="text-sm text-brand-text-muted">{card.label}</p>
           <p class="text-3xl font-bold mt-1">{card.value}</p>
         </div>
       {/each}
@@ -28,6 +28,6 @@
 
   <section class="flex flex-col gap-3">
     <h2 class="text-base font-semibold">Recent Activity</h2>
-    <p class="text-sm text-muted-foreground">No recent activity.</p>
+    <p class="text-sm text-brand-text-muted">No recent activity.</p>
   </section>
 </div>

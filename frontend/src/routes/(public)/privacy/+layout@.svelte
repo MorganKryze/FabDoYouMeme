@@ -5,6 +5,6 @@
   let { children } = $props();
 </script>
 
-<div class="min-h-screen bg-background text-foreground px-4 py-8">
+<div class="relative z-[2] min-h-screen text-brand-text px-4 py-8">
   {@render children()}
 </div>

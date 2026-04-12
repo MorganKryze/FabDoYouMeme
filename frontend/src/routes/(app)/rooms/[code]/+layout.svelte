@@ -31,14 +31,14 @@
 
 <div class="flex-1 flex flex-col">
   <!-- Room header bar -->
-  <div class="border-b border-border px-4 py-2 flex items-center gap-4">
+  <div class="border-b border-brand-border px-4 py-2 flex items-center gap-4">
     <div class="flex items-center gap-2">
-      <span class="text-xs text-muted-foreground uppercase tracking-wider">Room</span>
+      <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Room</span>
       <span class="font-mono font-bold text-lg">{data.room.code}</span>
       <button
         type="button"
         onclick={copyRoomCode}
-        class="text-xs text-muted-foreground hover:text-foreground transition-colors"
+        class="text-xs font-bold text-brand-text-muted hover:text-brand-text transition-colors"
         title="Copy room code"
       >
         {copied ? 'Copied!' : 'Copy'}
@@ -46,14 +46,14 @@
     </div>
 
     {#if room.gameType}
-      <span class="text-sm text-muted-foreground">{room.gameType.name}</span>
+      <span class="text-sm font-semibold text-brand-text-mid">{room.gameType.name}</span>
     {/if}
 
     <div class="flex-1"></div>
 
     <!-- Reconnecting banner -->
     {#if ws.status === 'reconnecting'}
-      <div class="text-xs text-amber-600 animate-pulse">
+      <div class="text-xs font-bold animate-pulse" style="color: var(--brand-accent);">
         Reconnecting… (attempt {ws.retryCount} / 10)
       </div>
     {/if}
@@ -66,17 +66,29 @@
     </div>
 
     <!-- Player panel -->
-    <aside class="w-48 shrink-0 border-l border-border overflow-y-auto px-3 py-4">
-      <h3 class="text-xs font-semibold uppercase text-muted-foreground tracking-wider mb-3">
+    <aside class="w-52 shrink-0 border-l border-brand-border overflow-y-auto px-3 py-4">
+      <h3 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted mb-3">
         Players ({room.players.length})
       </h3>
-      <ul class="flex flex-col gap-1.5">
-        {#each room.players as player}
-          <li class="flex items-center gap-2 text-sm">
-            <span class="h-2 w-2 rounded-full {player.connected ? 'bg-green-500' : 'bg-gray-300'}"></span>
-            <span class="truncate">{player.username}</span>
+      <ul class="flex flex-col gap-2">
+        {#each room.players as player, i}
+          {@const colors = ['#E8937F', '#8BC9B1', '#D4A5C9', '#A8D8EA', '#FDDCB5', '#B5E2D0']}
+          <li
+            class="flex items-center gap-3 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-3 py-2 transition-transform duration-300"
+            style="box-shadow: 0 4px 0 rgba(0,0,0,0.06);"
+          >
+            <span
+              class="h-9 w-9 shrink-0 rounded-full border-[2.5px] border-brand-border-heavy flex items-center justify-center text-xs font-bold text-white"
+              style="background: {colors[i % colors.length]};"
+            >
+              {player.username.slice(0, 2).toUpperCase()}
+            </span>
+            <span class="truncate text-sm font-bold">{player.username}</span>
             {#if player.is_host}
-              <span class="text-xs text-muted-foreground ml-auto">(host)</span>
+              <span class="text-[0.7rem] font-semibold text-brand-text-muted ml-auto">Host</span>
+            {/if}
+            {#if !player.connected}
+              <span class="h-2 w-2 rounded-full bg-gray-300 ml-auto"></span>
             {/if}
           </li>
         {/each}

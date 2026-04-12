@@ -60,9 +60,9 @@
 
 <div class="flex flex-col h-full">
   {#if item}
-    <div class="px-4 py-3 border-b border-border shrink-0">
+    <div class="px-4 py-3 border-b border-brand-border shrink-0">
       <p class="text-sm font-semibold truncate">{item.name}</p>
-      <p class="text-xs text-muted-foreground">{item.type} · {studio.versions.length} version(s)</p>
+      <p class="text-xs text-brand-text-muted">{item.type} · {studio.versions.length} version(s)</p>
     </div>
 
     <div class="flex-1 overflow-y-auto p-4">

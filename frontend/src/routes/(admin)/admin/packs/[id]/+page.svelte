@@ -40,25 +40,25 @@
 
 <div class="p-6 flex flex-col gap-4">
   <div class="flex items-center gap-3">
-    <a href="/admin/packs" class="text-sm text-muted-foreground hover:text-foreground">← Packs</a>
-    <span class="text-muted-foreground">/</span>
+    <a href="/admin/packs" class="text-sm text-brand-text-muted hover:text-brand-text">← Packs</a>
+    <span class="text-brand-text-muted">/</span>
     <h1 class="text-xl font-bold">{data.pack.name}</h1>
-    <span class="text-sm text-muted-foreground ml-1">({items.length} items)</span>
+    <span class="text-sm text-brand-text-muted ml-1">({items.length} items)</span>
     <div class="flex-1"></div>
-    <label class="h-9 px-4 rounded-lg border border-border text-sm font-medium cursor-pointer hover:bg-muted flex items-center gap-1">
+    <label class="h-9 px-4 rounded-lg border border-brand-border text-sm font-medium cursor-pointer hover:bg-muted flex items-center gap-1">
       <input type="file" accept="image/jpeg,image/png,image/webp" multiple class="sr-only" onchange={handleFileInput} disabled={uploading} />
       {uploading ? 'Uploading…' : 'Add Items'}
     </label>
   </div>
 
   {#if data.pack.description}
-    <p class="text-sm text-muted-foreground">{data.pack.description}</p>
+    <p class="text-sm text-brand-text-muted">{data.pack.description}</p>
   {/if}
 
-  <div class="rounded-xl border border-border overflow-hidden">
+  <div class="rounded-xl border border-brand-border overflow-hidden">
     <table class="w-full text-sm">
       <thead>
-        <tr class="border-b border-border bg-muted/40 text-xs font-medium text-muted-foreground">
+        <tr class="border-b border-brand-border bg-muted/40 text-xs font-medium text-brand-text-muted">
           <th class="w-10 px-4 py-3">#</th>
           <th class="text-left px-4 py-3">Preview</th>
           <th class="text-left px-4 py-3">Name</th>
@@ -69,28 +69,28 @@
       </thead>
       <tbody>
         {#each items as item, i}
-          <tr class="border-b border-border/50 hover:bg-muted/20 transition-colors">
-            <td class="px-4 py-3 text-muted-foreground text-xs">{i + 1}</td>
+          <tr class="border-b border-brand-border/50 hover:bg-muted/20 transition-colors">
+            <td class="px-4 py-3 text-brand-text-muted text-xs">{i + 1}</td>
             <td class="px-4 py-3">
               {#if item.thumbnail_url}
                 <img src={item.thumbnail_url} alt="" class="h-10 w-10 rounded object-cover" />
               {:else}
-                <div class="h-10 w-10 rounded bg-muted flex items-center justify-center text-muted-foreground text-xs">
+                <div class="h-10 w-10 rounded bg-muted flex items-center justify-center text-brand-text-muted text-xs">
                   {item.type === 'image' ? '🖼' : 'T'}
                 </div>
               {/if}
             </td>
             <td class="px-4 py-3 font-medium">{item.name}</td>
             <td class="px-4 py-3">
-              <span class="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{item.type}</span>
+              <span class="text-xs px-2 py-0.5 rounded-full bg-muted text-brand-text-muted">{item.type}</span>
             </td>
-            <td class="px-4 py-3 text-muted-foreground text-xs">v{item.version_number ?? 1}</td>
+            <td class="px-4 py-3 text-brand-text-muted text-xs">v{item.version_number ?? 1}</td>
             <td class="px-4 py-3 text-right">
               <form method="POST" action="?/deleteItem" use:enhance
                 onsubmit={(e) => !confirm(`Delete "${item.name}"?`) && e.preventDefault()}>
                 <input type="hidden" name="item_id" value={item.id} />
                 <button type="submit"
-                  class="text-muted-foreground hover:text-red-600 transition-colors text-lg leading-none"
+                  class="text-brand-text-muted hover:text-red-600 transition-colors text-lg leading-none"
                   aria-label="Delete item">×</button>
               </form>
             </td>
@@ -98,7 +98,7 @@
         {/each}
         {#if items.length === 0}
           <tr>
-            <td colspan={6} class="px-4 py-8 text-center text-muted-foreground text-sm">
+            <td colspan={6} class="px-4 py-8 text-center text-brand-text-muted text-sm">
               No items yet. Upload images to get started.
             </td>
           </tr>

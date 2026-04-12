@@ -2,7 +2,7 @@
 
 Living document for the **FabDoYouMeme** brand. This is the canonical reference for name, voice, vocabulary, visual direction, and namespace decisions. Update when any of these evolve.
 
-> **Status:** early — name confirmed, visual direction and namespace TBD.
+> **Status:** visual design language validated, logo/mascot/tagline TBD.
 
 ---
 
@@ -76,43 +76,233 @@ The fablab origin gives a natural vocabulary rooted in maker culture. Use these 
 - _Craft your punchline._
 - _Where makers meme._
 
-Pick one later, once the visual direction is set.
+Pick one later, once the logo direction is set.
 
 ---
 
-## Visual direction (TBD)
+## Design Philosophy
 
-Not yet designed. Capturing initial instincts so the future designer has a starting brief:
+**Chill, cozy, retro, modern.** A platform that feels warm and inviting — like a game night at a friend's place — without being childish. Visually appealing enough to leave running on a screen in the background. Minimal friction to gameplay fun.
 
-### Palette hypothesis
+The visual language is **neo-retro capsule design**: pill shapes, thick borders, physical depth on interactive elements, and pastel gradients with grain texture for a tactile "reality" feel — closer to print and film photography than flat digital UI.
 
-A **lab palette** — clean workshop surfaces with pops of maker energy:
+**Inspiration reference:** [Wero merchant page](https://sowieso.wero-wallet.eu/nl-en/merchant)
 
-- **Maker blue** `#2563EB` — primary accent, trust + craft energy
-- **Neon green** `#22C55E` — secondary, for success states and highlights
-- **Workshop grey** `#3F3F46` — background, surfaces
-- **Chalkboard** `#18181B` — text, deep backgrounds
-- **Paper white** `#FAF9F6` — light mode / contrast element
-- **Caution yellow** `#FACC15` — highlight, achievements, warnings
+### Core Principles
 
-### Typography hypothesis
+1. **Cozy but confident** — warm pastel tones, but with strong contrast and bold typography. Not soft/clinical.
+2. **Alive, not still** — animated gradient backgrounds, time-of-day awareness, smooth transitions between game states.
+3. **Concise over descriptive** — large bold text for gameplay. No paragraphs during play. Statement text, not description text.
+4. **Tactile and physical** — buttons that press like real keys, cards that tilt like playing cards, real depth via shadows.
+5. **Almost aligned** — layout is clean and intentional, with just enough imperfection to feel human. Movement comes from interaction (hover, click), not from static layout chaos.
 
-"Maker craft x playful content" pairing:
+---
 
-- **Brand / headings:** a condensed grotesque or industrial sans-serif. Character: workshop signage, confident, slightly rough
-- **UI body:** a warm, rounded sans (e.g. Inter, Figtree, Nunito). Character: friendly, readable, no friction
+## Color Palette
 
-### Iconography hypothesis
+### Time-Aware Gradient System
 
-- Core symbol: something that combines **making** and **memes** — a beaker with a laughing face, a 3D printer extruding a meme, crossed tools over a speech bubble
-- Motif: blueprint lines, workshop textures, maker-space energy
-- Avoid: literal meme iconography (Doge, Stonks, etc.), overly techy/startup aesthetics
+The background is a **multi-color animated gradient** that shifts based on time of day. The gradient flows slowly (30s cycle, `background-size: 400% 400%`) and is overlaid with a **grain texture** (SVG `fractalNoise` filter at `opacity: 0.22`) for the tactile "reality" feel.
 
-### Hero concept
+#### Daytime — Mint Garden
 
-A workshop bench with meme materials being assembled — scissors, glue, printed templates, absurd imagery being cut and pasted. Physical craft meets digital silliness.
+Fresh, bright, sun-through-the-window energy.
 
-> **Decision point:** commission or DIY? A single afternoon with a designer friend + Figma could produce the core lockup, icon, and palette. See `Open questions` below.
+| Role           | Color                     | Hex                                        |
+| -------------- | ------------------------- | ------------------------------------------ |
+| Gradient stops | Sage, Seafoam, Peach, Sky | `#D4EDDA`, `#B5E2D0`, `#FDDCB5`, `#A8D8EA` |
+| Text           | Near black                | `#1A1A1A`                                  |
+| Mid text       | Dark grey                 | `#3A3A3A`                                  |
+| Muted text     | Transparent dark          | `rgba(26,26,26,0.4)`                       |
+| Surface        | White                     | `#FEFEFE`                                  |
+| Border         | Dark translucent          | `rgba(26,26,26,0.7)`                       |
+
+#### Evening — Warm Sunset
+
+Cozy, peach, winding-down-into-good-conversation energy.
+
+| Role           | Color                     | Hex                                        |
+| -------------- | ------------------------- | ------------------------------------------ |
+| Gradient stops | Peach, Blush, Mauve, Mint | `#FDDCB5`, `#F9B4AB`, `#D4A5C9`, `#B5E2D0` |
+| Text           | Near black                | `#1A1A1A`                                  |
+| Accent         | Coral                     | `#E8937F`                                  |
+
+#### Night — Lavender Dusk
+
+Deep, dreamy, creative-studio-at-night energy.
+
+| Role           | Color                                | Hex                                        |
+| -------------- | ------------------------------------ | ------------------------------------------ |
+| Gradient stops | Deep purple, Indigo, Plum, Dark teal | `#1E1A2B`, `#2A2040`, `#3D2B5A`, `#1B2838` |
+| Text           | Light lavender                       | `#E0D6F0`                                  |
+| Mid text       | Muted purple                         | `#B8AED0`                                  |
+| Surface        | Dark purple                          | `#2A2040`                                  |
+| Border         | Light translucent                    | `rgba(255,255,255,0.4)`                    |
+
+### Gradient Animation
+
+```css
+background: linear-gradient(135deg, <stops>);
+background-size: 400% 400%;
+animation: gradientFlow 30s ease-in-out infinite;
+
+@keyframes gradientFlow {
+  0% {
+    background-position: 0% 50%;
+  }
+  25% {
+    background-position: 50% 100%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  75% {
+    background-position: 50% 0%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+```
+
+### Time-of-Day Logic
+
+```
+06:00–12:00 → Mint Garden (morning)
+12:00–17:00 → Warm transition (afternoon blend)
+17:00–21:00 → Warm Sunset (evening)
+21:00–06:00 → Lavender Dusk (night)
+```
+
+Transitions between time bands must be **imperceptible** — CSS custom properties updated via JS interval every few minutes, with CSS `transition` on all color values. The user should never see colors "jump."
+
+### Grain Texture
+
+Applied globally as a fixed overlay above the gradient, below content:
+
+```css
+position: fixed;
+inset: 0;
+opacity: 0.22;
+pointer-events: none;
+background-image: url('data:image/svg+xml,...feTurbulence fractalNoise...');
+background-size: 128px 128px;
+```
+
+Stays constant across all time-of-day palettes for visual continuity.
+
+---
+
+## Typography
+
+### Font: Quicksand
+
+| Usage      | Weight | Size                         | Letter-spacing |
+| ---------- | ------ | ---------------------------- | -------------- |
+| Hero       | 700    | `clamp(4rem, 10vw, 8rem)`    | `-0.04em`      |
+| Section    | 700    | `clamp(2rem, 4.5vw, 3.2rem)` | `-0.02em`      |
+| Game stage | 700    | `clamp(2.5rem, 6vw, 4rem)`   | `-0.03em`      |
+| Card title | 700    | `1.3rem`                     | normal         |
+| Body       | 600    | `0.9rem–0.95rem`             | normal         |
+| Label      | 700    | `0.65rem–0.72rem`, uppercase | `0.2em`        |
+
+**Character:** Rounded, geometric, playful but not childish. Retro-modern.
+
+### Text Philosophy
+
+- **During gameplay:** Big, bold, concise. "Write your caption" not "It's time to write your caption for this round."
+- **Stage transitions:** Statement text only. "Pick the best one." "BobZilla wins!" "+420 points."
+- **Information hierarchy:** Size and weight, not color. Important = bigger. Secondary = smaller + muted alpha.
+
+---
+
+## Component Design Language
+
+### Shared Traits
+
+All interactive components share:
+
+- **Pill/capsule shapes** — `border-radius: 999px` on buttons, inputs, toggles, toasts, player rows, nav
+- **Thick dark borders** — `2.5px solid rgba(26,26,26,0.7)`
+- **Physical depth** — offset `box-shadow` (not blur), e.g. `0 5px 0 rgba(0,0,0,0.22)`
+- **White backgrounds** — `#FEFEFE` for components, `rgba(255,255,255,0.82)` for cards
+- **Cards use `border-radius: 22px`** — slightly less round than pills, distinguishing containers from controls
+
+### Navigation — Pill Nav
+
+White pill, `2.5px` dark border. Active state uses **underline** (not fill). Shadow: `0 5px 0 rgba(0,0,0,0.12)`.
+
+### Buttons
+
+Three variants, all pill-shaped with `2.5px` dark border:
+
+| Variant                | Background  | Text  | Shadow                     |
+| ---------------------- | ----------- | ----- | -------------------------- |
+| **Primary (outlined)** | White       | Dark  | `0 5px 0 rgba(0,0,0,0.22)` |
+| **Dark (filled)**      | Dark        | White | `0 5px 0 rgba(0,0,0,0.35)` |
+| **Ghost**              | Transparent | Dark  | `0 4px 0 rgba(0,0,0,0.1)`  |
+
+**Press physics:** Hover lifts `translateY(-2px)`, shadow grows. Press pushes `translateY(3px)`, shadow shrinks to `1px`. Transition: `0.1s` for immediate tactile feel.
+
+### Button Hover Effects
+
+Five validated effects for different contexts:
+
+| Style              | Effect                                          | Use for                         |
+| ------------------ | ----------------------------------------------- | ------------------------------- |
+| **Color Swap**     | White → dark inversion                          | Standard actions (Submit, Copy) |
+| **Gradient Fill**  | Pastel gradient fades in + shimmers behind text | Primary CTAs (Create a Room)    |
+| **Pulse Glow**     | Gradient halo breathes behind button            | Highlighted actions             |
+| **Bounce Expand**  | `scale(1.06)` with elastic spring               | Playful secondary actions       |
+| **Rainbow Border** | Border cycles through palette colors            | Special moments (game start)    |
+
+### Cards — 3D Physical Card Behavior
+
+Cards use **cursor-tracked 3D transforms** like real playing cards:
+
+- **Hover:** tilt follows cursor (max ±6° Y, ±4° X), lift proportional to distance from center, shadow shifts with tilt direction
+- **Click:** snap flat (`scale(0.98)`, `0.08s`) then spring back (`0.4s cubic-bezier(0.22, 1, 0.36, 1)`)
+- **Surface:** `rgba(255,255,255,0.82)`, `2.5px` border, `border-radius: 22px`, shadow `0 5px 0 rgba(0,0,0,0.08)`
+
+### Other Components
+
+| Component       | Key traits                                                                                            |
+| --------------- | ----------------------------------------------------------------------------------------------------- |
+| **Player row**  | Pill-shaped, white, `2.5px` border. Hover: lift + slide right. `44px` avatar circles with dark border |
+| **Meme card**   | 3D card physics. Image top, caption bottom. Voted state: dark border + dark offset shadow             |
+| **Text input**  | Pill-shaped, `2.5px` border. Focus: border darkens, shadow strengthens                                |
+| **Timer**       | Pill, white, dark border. `2.4rem` bold numerals. Pulsing coral dot (`#E8937F`)                       |
+| **Pill toggle** | White container, dark border. Active: dark fill + white text                                          |
+| **Toast**       | Pill, white, dark border. Emoji + bold text. `fit-content` width                                      |
+
+---
+
+## Animation & Motion
+
+### Background
+
+- **Gradient flow:** `30s` ease-in-out infinite. Viewport pans across 400% gradient.
+- **Time shift:** CSS custom properties updated every few minutes. CSS `transition` ensures imperceptible shifts.
+
+### Page Transitions
+
+- **Scroll reveal:** `translateY(20px) → 0`, `opacity 0 → 1`, `0.6s ease`. IntersectionObserver, `threshold: 0.12`.
+- **Staggered delays:** Siblings enter with `0.08s` incremental delays.
+
+### Gameplay Stage Transitions
+
+- **Between stages:** fade + scale. Hidden: `opacity: 0, scale(0.93), translateY(16px)`. Visible: `opacity: 1, scale(1), translateY(0)`.
+- **Timing:** `0.9s cubic-bezier(0.22, 1, 0.36, 1)` — fast start, gentle landing. Liquid flow, never snapping.
+
+### Interactive Elements
+
+- **Buttons:** `0.1s` press, immediate feedback
+- **Cards:** real-time cursor tracking (no transition). Press `0.08s`, release `0.4s` spring
+- **Player rows:** `0.3s` slide on hover
+
+### Philosophy
+
+Motion is **ambient when idle** (gradient, time shifts) and **responsive when interactive** (card tilt, button press). The platform should feel different at different times of day, with shifts so gradual the user never notices them.
 
 ---
 
@@ -144,8 +334,6 @@ Not yet audited for `fabdoyoumeme.*`.
 | ------------------------------------- | -------------------------------- |
 | `github.com/MorganKryze/FabDoYouMeme` | ✅ Current repo — already in use |
 
-No namespace conflict. The repo name matches the brand.
-
 ### Gaming platforms & packages
 
 | Target  | Status                          |
@@ -162,7 +350,7 @@ No trademark search has been conducted. The name "Do You Meme?" is trademarked b
 
 ---
 
-## Brand architecture (future-proofing)
+## Brand architecture
 
 FabDoYouMeme is a **multi-game platform**, not a single game. The brand architecture should reflect this:
 
@@ -171,7 +359,7 @@ FabDoYouMeme is a **multi-game platform**, not a single game. The brand architec
 - Each game inherits the maker/lab theme but may have its own secondary palette
 - The platform identity is what players remember — game names are descriptors
 
-This means: invest in the FabDoYouMeme identity first, treat individual game identities as lighter-weight variations.
+Invest in the FabDoYouMeme identity first, treat individual game identities as lighter-weight variations.
 
 ---
 
@@ -181,10 +369,12 @@ These need user or designer input before locking in:
 
 - [ ] **Domain audit** — run availability checks for `fabdoyoumeme.*` TLDs
 - [ ] **Short alias** — does a redirect domain like `fdym.fr` or similar make sense alongside the full name?
-- [ ] **Logo direction** — DIY with Figma, or commission? Budget?
-- [ ] **Typography** — specific typefaces TBD, need licenses (or pick Google Fonts)
+- [ ] **Logo direction** — full lockup (icon + wordmark). Style TBD (abstract, symbolic, illustrative, or mascot-based)
+- [ ] **Mascot?** — does FabDoYouMeme have a character? (e.g. a lab assistant, a meme gremlin) Decide deliberately — don't backfill one later
 - [ ] **Tagline** — pick one of the five candidates, or workshop more
 - [ ] **Vocabulary lock-in** — which of the community terms ship in v1 copy, which stay as flavour text
-- [ ] **Mascot?** — does FabDoYouMeme have a character? (e.g. a lab assistant, a meme gremlin) Decide deliberately — don't backfill one later
 - [ ] **"Do You Meme?" proximity** — decide if the name similarity to the Fuckjerry card game needs any explicit disclaimer or differentiation in public-facing copy
-- [ ] **Palette direction** — clean lab (blues/greens) or warm workshop (embers/oranges)? These set very different moods
+- [ ] **Afternoon palette** — blend of morning + evening, or its own identity?
+- [ ] **Dark mode toggle** — can users override the auto time-based theme?
+- [ ] **Mobile adaptations** — touch-based card interaction instead of cursor tracking
+- [ ] **Sound design** — audio to accompany visual transitions

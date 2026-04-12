@@ -18,16 +18,16 @@
 
 <div class="flex-1 flex overflow-hidden h-[calc(100vh-3.5rem)]">
   <!-- Left: Pack Navigator (fixed width) -->
-  <div class="w-52 shrink-0 border-r border-border overflow-y-auto">
+  <div class="w-52 shrink-0 border-r border-brand-border overflow-y-auto">
     <PackNavigator />
   </div>
 
   <!-- Center: Item Table (flexible) -->
-  <div class="flex-1 min-w-0 border-r border-border overflow-y-auto">
+  <div class="flex-1 min-w-0 border-r border-brand-border overflow-y-auto">
     {#if studio.selectedPackId}
       <ItemTable />
     {:else}
-      <div class="flex items-center justify-center h-full text-muted-foreground text-sm">
+      <div class="flex items-center justify-center h-full text-brand-text-muted text-sm">
         Select a pack to view items.
       </div>
     {/if}
@@ -38,7 +38,7 @@
     {#if studio.selectedItemId}
       <ItemEditor />
     {:else}
-      <div class="flex items-center justify-center h-full text-muted-foreground text-sm p-4 text-center">
+      <div class="flex items-center justify-center h-full text-brand-text-muted text-sm p-4 text-center">
         Select an item to edit.
       </div>
     {/if}

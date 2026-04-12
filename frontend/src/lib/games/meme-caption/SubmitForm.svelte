@@ -2,6 +2,7 @@
   import { untrack } from 'svelte';
   import { ws } from '$lib/state/ws.svelte';
   import { room } from '$lib/state/room.svelte';
+  import { pressPhysics } from '$lib/actions/pressPhysics';
   import type { Round } from '$lib/api/types';
 
   let { round }: { round: Round } = $props();
@@ -40,26 +41,34 @@
 <div class="flex flex-col gap-6">
   <!-- Timer -->
   {#if mountedExpired}
-    <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+    <div
+      class="rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-5 py-3 text-sm font-bold w-fit mx-auto"
+      style="box-shadow: 0 5px 0 rgba(0,0,0,0.14);"
+    >
       Submission window has closed.
     </div>
   {:else}
-    <div class="flex items-center gap-3">
+    <div class="flex flex-col items-center gap-3">
+      <!-- Brand timer pill -->
       <div
-        class="flex-1 h-2 rounded-full bg-muted overflow-hidden"
-        role="progressbar"
-        aria-valuenow={secondsLeft}
-        aria-valuemin={0}
-        aria-valuemax={round.duration_seconds}
-        aria-label="Time remaining"
+        class="flex items-center gap-3 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-8 py-3 w-fit"
+        style="box-shadow: 0 5px 0 rgba(0,0,0,0.18);"
       >
-        <div
-          class="h-full bg-primary transition-none rounded-full"
-          style="width: {progressPct}%"
-        ></div>
+        <span
+          class="h-3 w-3 rounded-full"
+          style="background: var(--brand-accent); animation: pulse-dot 1.5s ease-in-out infinite;"
+        ></span>
+        <span
+          class="text-[2.4rem] font-bold tabular-nums leading-none tracking-wide"
+          role="timer"
+          aria-label="Time remaining"
+        >
+          {Math.floor(secondsLeft / 60)}:{(secondsLeft % 60).toString().padStart(2, '0')}
+        </span>
       </div>
-      <span class="text-sm tabular-nums font-medium w-10 text-right">{secondsLeft}s</span>
-      <span class="text-sm text-muted-foreground">Round {round.round_number}</span>
+      <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+        Round {round.round_number}
+      </span>
     </div>
   {/if}
 
@@ -68,18 +77,21 @@
     <img
       src={round.item?.media_url ?? round.media_url}
       alt="Round prompt"
-      class="w-full aspect-video object-cover rounded-lg border border-border"
+      class="w-full aspect-video object-cover rounded-[22px] border-[2.5px] border-brand-border-heavy"
     />
   {/if}
 
   {#if round.text_prompt}
-    <p class="text-center text-muted-foreground italic">"{round.text_prompt}"</p>
+    <p class="text-center text-brand-text-mid font-semibold italic">"{round.text_prompt}"</p>
   {/if}
 
   <!-- Caption input -->
   {#if submitted}
-    <div class="rounded-lg border border-border bg-muted p-4 text-center text-sm text-muted-foreground">
-      Submitted ✓ — waiting for others…
+    <div
+      class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-5 text-center text-sm font-bold text-brand-text-mid"
+      style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
+    >
+      Submitted — waiting for others…
     </div>
   {:else}
     <div class="flex flex-col gap-2">
@@ -89,15 +101,17 @@
         maxlength={MAX_CHARS}
         rows={3}
         placeholder="Write your caption…"
-        class="w-full rounded-lg border border-input bg-background p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-50"
+        class="w-full rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white p-4 text-sm font-semibold resize-none focus:outline-none focus:border-brand-text transition-colors disabled:opacity-50"
+        style="box-shadow: 0 4px 0 rgba(0,0,0,0.06);"
       ></textarea>
       <div class="flex items-center justify-between">
-        <span class="text-xs text-muted-foreground">{caption.length}/{MAX_CHARS}</span>
+        <span class="text-xs font-semibold text-brand-text-muted">{caption.length}/{MAX_CHARS}</span>
         <button
+          use:pressPhysics={'dark'}
           type="button"
           onclick={submit}
           disabled={submitted || isExpired || caption.trim().length === 0}
-          class="h-10 px-6 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50 hover:bg-primary/90 transition-colors"
+          class="h-11 px-7 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold disabled:opacity-50 transition-colors cursor-pointer"
         >
           Submit
         </button>
@@ -109,8 +123,13 @@
   <div class="flex flex-wrap gap-2">
     {#each room.players as player}
       {@const hasSub = room.submissions.some((s) => s.user_id === player.user_id)}
-      <span class="flex items-center gap-1 text-xs px-2 py-1 rounded-full border {hasSub ? 'border-green-300 bg-green-50 text-green-800' : 'border-border text-muted-foreground'}">
-        {hasSub ? '✓' : '⏳'} {player.username}
+      <span
+        class="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-full border-[2.5px]
+          {hasSub
+            ? 'border-brand-border-heavy bg-brand-white text-brand-text'
+            : 'border-brand-border bg-brand-surface text-brand-text-muted'}"
+      >
+        {hasSub ? '\u2713' : '\u23F3'} {player.username}
       </span>
     {/each}
   </div>

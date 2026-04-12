@@ -70,13 +70,13 @@
   {#snippet packGroup(label: string, packs: Pack[])}
     {#if packs.length > 0}
       <div class="flex flex-col gap-0.5">
-        <p class="text-xs font-semibold uppercase text-muted-foreground tracking-wider px-2 py-1">{label}</p>
+        <p class="text-xs font-semibold uppercase text-brand-text-muted tracking-wider px-2 py-1">{label}</p>
         {#each packs as pack}
           <button
             type="button"
             onclick={() => selectPack(pack.id)}
             class="w-full text-left px-2 py-1.5 rounded-md text-sm transition-colors
-              {studio.selectedPackId === pack.id ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted text-foreground'}"
+              {studio.selectedPackId === pack.id ? 'bg-primary/10 text-primary font-medium' : 'hover:bg-muted text-brand-text'}"
           >
             <span class="block truncate">{pack.name}</span>
           </button>
@@ -91,8 +91,8 @@
 
   <!-- Admin moderation section -->
   {#if user.role === 'admin' && flaggedPacks.length > 0}
-    <div class="mt-2 border-t border-border pt-2">
-      <p class="text-xs font-semibold uppercase text-muted-foreground tracking-wider px-2 py-1">
+    <div class="mt-2 border-t border-brand-border pt-2">
+      <p class="text-xs font-semibold uppercase text-brand-text-muted tracking-wider px-2 py-1">
         Moderation ({flaggedPacks.length})
       </p>
       {#each flaggedPacks as pack}
@@ -102,7 +102,7 @@
             <button type="button" onclick={() => banPack(pack)}
               class="text-xs text-red-600 underline hover:text-red-800">Ban</button>
             <button type="button" onclick={() => clearFlag(pack)}
-              class="text-xs text-muted-foreground underline hover:text-foreground">Clear</button>
+              class="text-xs text-brand-text-muted underline hover:text-brand-text">Clear</button>
           </div>
         </div>
       {/each}
@@ -110,7 +110,7 @@
   {/if}
 
   <!-- New Pack form -->
-  <div class="mt-2 border-t border-border pt-2">
+  <div class="mt-2 border-t border-brand-border pt-2">
     {#if showNewPackForm}
       <div class="flex flex-col gap-2 px-1">
         <input
@@ -118,13 +118,13 @@
           bind:this={newPackNameInput}
           type="text"
           placeholder="Pack name"
-          class="h-8 rounded border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          class="h-8 rounded border border-brand-border-heavy bg-brand-white px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
         />
         <input
           bind:value={newPackDesc}
           type="text"
           placeholder="Description (optional)"
-          class="h-8 rounded border border-input bg-background px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          class="h-8 rounded border border-brand-border-heavy bg-brand-white px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
         />
         <div class="flex gap-1">
           <button type="button" onclick={submitNewPack} disabled={creating || !newPackName.trim()}
@@ -132,14 +132,14 @@
             {creating ? 'Creating…' : 'Create'}
           </button>
           <button type="button" onclick={() => showNewPackForm = false}
-            class="h-8 px-3 rounded border border-border text-xs hover:bg-muted">
+            class="h-8 px-3 rounded border border-brand-border text-xs hover:bg-muted">
             Cancel
           </button>
         </div>
       </div>
     {:else}
       <button type="button" onclick={() => showNewPackForm = true}
-        class="w-full text-left px-2 py-1.5 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+        class="w-full text-left px-2 py-1.5 rounded-md text-sm text-brand-text-muted hover:text-brand-text hover:bg-muted transition-colors">
         + New Pack
       </button>
     {/if}

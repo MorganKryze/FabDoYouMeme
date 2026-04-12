@@ -80,24 +80,24 @@
 <div class="flex flex-col gap-3">
   <!-- Toolbar -->
   <div class="flex items-center gap-3 flex-wrap">
-    <div class="flex gap-1 rounded-md border border-border overflow-hidden">
+    <div class="flex gap-1 rounded-md border border-brand-border overflow-hidden">
       <button type="button" onclick={() => tool = 'draw'}
         class="px-3 py-1 text-xs font-medium transition-colors {tool === 'draw' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}">
         Draw
       </button>
     </div>
-    <label class="flex items-center gap-1 text-xs text-muted-foreground">
+    <label class="flex items-center gap-1 text-xs text-brand-text-muted">
       Color
       <input type="color" bind:value={strokeColor} class="h-6 w-8 rounded border-none cursor-pointer" />
     </label>
-    <label class="flex items-center gap-1 text-xs text-muted-foreground">
+    <label class="flex items-center gap-1 text-xs text-brand-text-muted">
       Size
       <input type="range" min={1} max={20} bind:value={strokeWidth} class="w-16 accent-primary" />
     </label>
   </div>
 
   <!-- Canvas -->
-  <div class="relative overflow-hidden rounded-lg border border-border bg-muted/20">
+  <div class="relative overflow-hidden rounded-lg border border-brand-border bg-muted/20">
     <canvas
       bind:this={canvas}
       class="w-full cursor-crosshair"

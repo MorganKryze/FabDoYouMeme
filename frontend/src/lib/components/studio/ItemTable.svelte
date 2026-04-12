@@ -81,13 +81,13 @@
 
 <div class="flex flex-col h-full">
   <!-- Header -->
-  <div class="flex items-center gap-3 px-4 py-3 border-b border-border shrink-0">
+  <div class="flex items-center gap-3 px-4 py-3 border-b border-brand-border shrink-0">
     <h2 class="text-sm font-semibold flex-1">
       {studio.packs.find((p) => p.id === studio.selectedPackId)?.name ?? 'Items'}
-      <span class="text-muted-foreground font-normal">({studio.items.length})</span>
+      <span class="text-brand-text-muted font-normal">({studio.items.length})</span>
     </h2>
 
-    <label class="h-8 px-3 rounded-md border border-border text-xs font-medium cursor-pointer hover:bg-muted transition-colors flex items-center gap-1">
+    <label class="h-8 px-3 rounded-md border border-brand-border text-xs font-medium cursor-pointer hover:bg-muted transition-colors flex items-center gap-1">
       <input type="file" accept="image/jpeg,image/png,image/webp" multiple class="sr-only" onchange={onFileInput} />
       Bulk Import
     </label>
@@ -109,21 +109,21 @@
     {/if}
 
     {#if uploading && uploadProgress}
-      <div class="px-4 py-2 bg-muted/50 text-xs text-muted-foreground border-b border-border">
+      <div class="px-4 py-2 bg-muted/50 text-xs text-brand-text-muted border-b border-brand-border">
         Uploading {uploadProgress.name}… ({uploadProgress.done + 1}/{uploadProgress.total})
       </div>
     {/if}
 
     <!-- Item table -->
     {#if studio.items.length === 0}
-      <div class="flex flex-col items-center justify-center h-48 text-muted-foreground text-sm gap-2">
+      <div class="flex flex-col items-center justify-center h-48 text-brand-text-muted text-sm gap-2">
         <p>No items yet.</p>
         <p class="text-xs">Drag images here or use Bulk Import.</p>
       </div>
     {:else}
       <table class="w-full text-sm">
         <thead>
-          <tr class="border-b border-border text-xs text-muted-foreground font-medium">
+          <tr class="border-b border-brand-border text-xs text-brand-text-muted font-medium">
             <th class="text-left px-4 py-2">Name</th>
             <th class="text-left px-4 py-2">Type</th>
             <th class="text-right px-4 py-2">Ver.</th>
@@ -133,7 +133,7 @@
         <tbody>
           {#each studio.items as item}
             <tr
-              class="border-b border-border/50 hover:bg-muted/40 cursor-pointer transition-colors
+              class="border-b border-brand-border/50 hover:bg-muted/40 cursor-pointer transition-colors
                 {studio.selectedItemId === item.id ? 'bg-primary/5' : ''}"
               onclick={() => selectItem(item)}
             >
@@ -142,7 +142,7 @@
                   {#if item.thumbnail_url}
                     <img src={item.thumbnail_url} alt="" class="h-8 w-8 rounded object-cover shrink-0" />
                   {:else}
-                    <div class="h-8 w-8 rounded bg-muted shrink-0 flex items-center justify-center text-muted-foreground text-xs">
+                    <div class="h-8 w-8 rounded bg-muted shrink-0 flex items-center justify-center text-brand-text-muted text-xs">
                       {item.type === 'image' ? 'img' : 'T'}
                     </div>
                   {/if}
@@ -150,16 +150,16 @@
                 </div>
               </td>
               <td class="px-4 py-2">
-                <span class="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                <span class="text-xs px-2 py-0.5 rounded-full bg-muted text-brand-text-muted">
                   {item.type}
                 </span>
               </td>
-              <td class="px-4 py-2 text-right text-muted-foreground">v{item.version_number ?? 1}</td>
+              <td class="px-4 py-2 text-right text-brand-text-muted">v{item.version_number ?? 1}</td>
               <td class="px-4 py-2 text-right">
                 <button
                   type="button"
                   onclick={(e) => { e.stopPropagation(); handleDelete(item); }}
-                  class="text-muted-foreground hover:text-red-600 transition-colors text-lg leading-none"
+                  class="text-brand-text-muted hover:text-red-600 transition-colors text-lg leading-none"
                   aria-label="Delete item"
                 >
                   ×

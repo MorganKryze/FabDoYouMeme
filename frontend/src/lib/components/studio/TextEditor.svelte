@@ -18,9 +18,9 @@
       rows={6}
       maxlength={MAX_CHARS}
       placeholder="Enter text content…"
-      class="w-full rounded-lg border border-input bg-background p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
+      class="w-full rounded-lg border border-brand-border-heavy bg-brand-white p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-ring"
     ></textarea>
-    <span class="absolute bottom-2 right-3 text-xs text-muted-foreground">{remaining}</span>
+    <span class="absolute bottom-2 right-3 text-xs text-brand-text-muted">{remaining}</span>
   </div>
 
   <button

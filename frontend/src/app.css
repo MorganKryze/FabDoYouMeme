@@ -1,1 +1,102 @@
 @import 'tailwindcss';
+
+/* ============================================================
+   FabDoYouMeme — Brand Design Token System
+   ============================================================
+   Source of truth: docs/brand.md + docs/superpowers/specs/2026-04-12-brand-visual-design.md
+
+   Architecture:
+   1. :root CSS custom properties (day defaults, updated at runtime by TimeBackground.svelte)
+   2. @theme inline bridges runtime vars → Tailwind utility classes
+   3. Keyframes for gradient, pulse, reveal animations
+   ============================================================ */
+
+/* === Brand CSS Custom Properties (day defaults) === */
+:root {
+  --brand-text: #1A1A1A;
+  --brand-text-mid: #3A3A3A;
+  --brand-text-muted: rgba(26, 26, 26, 0.4);
+  --brand-white: #FEFEFE;
+  --brand-surface: rgba(255, 255, 255, 0.82);
+  --brand-border: rgba(26, 26, 26, 0.18);
+  --brand-border-heavy: rgba(26, 26, 26, 0.7);
+  --brand-accent: #E8937F;
+
+  /* Gradient stops (evening default; overridden by TimeBackground.svelte) */
+  --brand-grad-1: #FDDCB5;
+  --brand-grad-2: #F9B4AB;
+  --brand-grad-3: #D4A5C9;
+  --brand-grad-4: #B5E2D0;
+
+  /* Smooth time-band transitions — imperceptible shifts */
+  transition:
+    color 2s ease,
+    background-color 2s ease,
+    border-color 2s ease;
+}
+
+/* === Body owns the animated gradient === */
+/* We render the gradient on <body> instead of a fixed child div so it sits
+   below everything in the canvas painting order — no z-index ambiguity. */
+html, body {
+  min-height: 100vh;
+}
+body {
+  background:
+    linear-gradient(
+      135deg,
+      var(--brand-grad-1),
+      var(--brand-grad-2),
+      var(--brand-grad-3),
+      var(--brand-grad-4),
+      var(--brand-grad-1)
+    );
+  background-size: 400% 400%;
+  background-attachment: fixed;
+  animation: gradientFlow 30s ease-in-out infinite;
+  color: var(--brand-text);
+  transition: color 2s ease;
+}
+
+/* === Bridge to Tailwind via @theme inline === */
+@theme inline {
+  --font-sans: 'Quicksand', ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-text: var(--brand-text);
+  --color-brand-text-mid: var(--brand-text-mid);
+  --color-brand-text-muted: var(--brand-text-muted);
+  --color-brand-white: var(--brand-white);
+  --color-brand-surface: var(--brand-surface);
+  --color-brand-border: var(--brand-border);
+  --color-brand-border-heavy: var(--brand-border-heavy);
+  --color-brand-accent: var(--brand-accent);
+}
+
+/* === Keyframes === */
+@keyframes gradientFlow {
+  0%   { background-position: 0% 50%; }
+  25%  { background-position: 50% 100%; }
+  50%  { background-position: 100% 50%; }
+  75%  { background-position: 50% 0%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.3; transform: scale(0.7); }
+}
+
+/* === Scroll Reveal Base === */
+.reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal.d1 { transition-delay: 0.08s; }
+.reveal.d2 { transition-delay: 0.16s; }
+.reveal.d3 { transition-delay: 0.24s; }
+.reveal.d4 { transition-delay: 0.32s; }

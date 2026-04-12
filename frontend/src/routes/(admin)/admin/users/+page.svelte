@@ -39,14 +39,14 @@
       placeholder="Search users…"
       bind:value={searchTerm}
       oninput={onSearchInput}
-      class="h-9 w-56 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+      class="h-9 w-56 rounded-md border border-brand-border-heavy bg-brand-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
     />
   </div>
 
-  <div class="rounded-xl border border-border overflow-hidden">
+  <div class="rounded-xl border border-brand-border overflow-hidden">
     <table class="w-full text-sm">
       <thead>
-        <tr class="border-b border-border bg-muted/40 text-xs font-medium text-muted-foreground">
+        <tr class="border-b border-brand-border bg-muted/40 text-xs font-medium text-brand-text-muted">
           <th class="text-left px-4 py-3">Username</th>
           <th class="text-left px-4 py-3">Email</th>
           <th class="text-left px-4 py-3">Role</th>
@@ -57,7 +57,7 @@
       </thead>
       <tbody>
         {#each data.users as u}
-          <tr class="border-b border-border/50 hover:bg-muted/20 transition-colors">
+          <tr class="border-b border-brand-border/50 hover:bg-muted/20 transition-colors">
             <td class="px-4 py-3">
               <form method="POST" action="?/updateUser" use:enhance class="flex gap-1">
                 <input type="hidden" name="user_id" value={u.id} />
@@ -69,7 +69,7 @@
                     if ((e.target as HTMLInputElement).value !== u.username)
                       (e.target as HTMLInputElement).closest('form')?.requestSubmit();
                   }}
-                  class="h-7 w-28 rounded border border-transparent hover:border-border px-1 text-sm bg-transparent focus:outline-none focus:border-ring"
+                  class="h-7 w-28 rounded border border-transparent hover:border-brand-border px-1 text-sm bg-transparent focus:outline-none focus:border-ring"
                 />
               </form>
             </td>
@@ -84,7 +84,7 @@
                     if ((e.target as HTMLInputElement).value !== u.email)
                       (e.target as HTMLInputElement).closest('form')?.requestSubmit();
                   }}
-                  class="h-7 w-40 rounded border border-transparent hover:border-border px-1 text-sm bg-transparent focus:outline-none focus:border-ring"
+                  class="h-7 w-40 rounded border border-transparent hover:border-brand-border px-1 text-sm bg-transparent focus:outline-none focus:border-ring"
                 />
               </form>
             </td>
@@ -95,7 +95,7 @@
                   name="role"
                   value={u.role}
                   onchange={(e) => (e.target as HTMLSelectElement).closest('form')?.requestSubmit()}
-                  class="h-7 rounded border border-transparent hover:border-border px-1 text-sm bg-transparent focus:outline-none focus:border-ring cursor-pointer"
+                  class="h-7 rounded border border-transparent hover:border-brand-border px-1 text-sm bg-transparent focus:outline-none focus:border-ring cursor-pointer"
                 >
                   <option value="player">player</option>
                   <option value="admin">admin</option>
@@ -126,7 +126,7 @@
                 />
               </form>
             </td>
-            <td class="px-4 py-3 text-muted-foreground text-xs">
+            <td class="px-4 py-3 text-brand-text-muted text-xs">
               {new Date(u.created_at).toLocaleDateString()}
             </td>
             <td class="px-4 py-3 text-right">
@@ -139,13 +139,13 @@
                     </button>
                   </form>
                   <button type="button" onclick={() => confirmDeleteId = null}
-                    class="text-xs text-muted-foreground underline">
+                    class="text-xs text-brand-text-muted underline">
                     Cancel
                   </button>
                 </div>
               {:else}
                 <button type="button" onclick={() => confirmDeleteId = u.id}
-                  class="text-muted-foreground hover:text-red-600 transition-colors text-lg leading-none"
+                  class="text-brand-text-muted hover:text-red-600 transition-colors text-lg leading-none"
                   aria-label="Delete user">
                   ×
                 </button>
@@ -160,7 +160,7 @@
   {#if data.nextCursor}
     <a
       href="?{data.q ? `q=${encodeURIComponent(data.q)}&` : ''}cursor={data.nextCursor}"
-      class="self-center text-sm text-muted-foreground underline hover:text-foreground"
+      class="self-center text-sm text-brand-text-muted underline hover:text-brand-text"
     >
       Load more
     </a>

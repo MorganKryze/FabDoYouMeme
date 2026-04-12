@@ -34,11 +34,11 @@
   }
 </script>
 
-<div class="border-t border-border">
+<div class="border-t border-brand-border">
   <button
     type="button"
     onclick={() => open = !open}
-    class="w-full flex items-center justify-between px-4 py-2 text-xs font-semibold uppercase text-muted-foreground tracking-wider hover:bg-muted/40 transition-colors"
+    class="w-full flex items-center justify-between px-4 py-2 text-xs font-semibold uppercase text-brand-text-muted tracking-wider hover:bg-muted/40 transition-colors"
   >
     Version History ({studio.versions.length})
     <span>{open ? '▲' : '▼'}</span>
@@ -54,7 +54,7 @@
         <div class="px-4 py-2 flex flex-col gap-1 {isBinned ? 'opacity-50' : ''} {isSelected ? 'bg-primary/5' : ''}">
           <div class="flex items-center gap-2 text-xs">
             <span class="font-medium">v{version.version_number}</span>
-            <span class="text-muted-foreground">{new Date(version.created_at).toLocaleDateString()}</span>
+            <span class="text-brand-text-muted">{new Date(version.created_at).toLocaleDateString()}</span>
             {#if isActive}
               <span class="ml-auto px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-medium">active</span>
             {/if}
@@ -64,28 +64,28 @@
             <div class="flex gap-2 text-xs">
               {#if !isActive}
                 <button type="button" onclick={() => restore(version)}
-                  class="text-muted-foreground underline hover:text-foreground">
+                  class="text-brand-text-muted underline hover:text-brand-text">
                   Restore
                 </button>
               {/if}
               <button type="button" onclick={() => moveToBin(version)}
-                class="text-muted-foreground underline hover:text-red-600">
+                class="text-brand-text-muted underline hover:text-red-600">
                 Move to Bin
               </button>
               <button type="button" onclick={() => studio.toggleVersionSelection(version.id)}
-                class="ml-auto {isSelected ? 'text-primary' : 'text-muted-foreground'} underline hover:text-foreground">
+                class="ml-auto {isSelected ? 'text-primary' : 'text-brand-text-muted'} underline hover:text-brand-text">
                 {isSelected ? 'Deselect' : 'Compare'}
               </button>
             </div>
           {:else}
-            <p class="text-xs text-muted-foreground">In bin — cannot be restored.</p>
+            <p class="text-xs text-brand-text-muted">In bin — cannot be restored.</p>
           {/if}
         </div>
       {/each}
     </div>
 
     {#if studio.selectedVersionIds.length === 2}
-      <div class="px-4 py-2 border-t border-border">
+      <div class="px-4 py-2 border-t border-brand-border">
         <button
           type="button"
           disabled

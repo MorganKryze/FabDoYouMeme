@@ -1,6 +1,8 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { toast } from '$lib/state/toast.svelte';
+  import { pressPhysics } from '$lib/actions/pressPhysics';
+  import { reveal } from '$lib/actions/reveal';
   import type { ActionData, PageData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -58,16 +60,18 @@
   <title>Profile — FabDoYouMeme</title>
 </svelte:head>
 
-<div class="max-w-lg mx-auto p-6 flex flex-col gap-8">
-  <h1 class="text-2xl font-bold">Profile</h1>
+<div class="max-w-lg mx-auto p-6 flex flex-col gap-8" use:reveal>
+  <h1 style="font-size: clamp(2rem, 4.5vw, 3.2rem); font-weight: 700; line-height: 1; letter-spacing: -0.02em;">
+    Maker Card
+  </h1>
 
   <!-- Username section -->
   <section class="flex flex-col gap-3">
-    <h2 class="text-base font-semibold">Username</h2>
+    <h2 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Username</h2>
     {#if editingUsername}
       <form method="POST" action="?/updateUsername" use:enhance class="flex flex-col gap-2">
         {#if form?.usernameError}
-          <p class="text-sm text-red-600">{form.usernameError}</p>
+          <p class="text-sm font-bold text-red-600">{form.usernameError}</p>
         {/if}
         <div class="flex gap-2">
           <input
@@ -77,22 +81,30 @@
             value={data.user.username}
             minlength={3}
             maxlength={30}
-            class="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            class="flex-1 h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
           />
-          <button type="submit" class="h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90">
+          <button
+            use:pressPhysics={'dark'}
+            type="submit"
+            class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold cursor-pointer"
+          >
             Save
           </button>
-          <button type="button" onclick={() => editingUsername = false}
-            class="h-10 px-4 rounded-md border border-border text-sm hover:bg-muted">
+          <button
+            use:pressPhysics={'ghost'}
+            type="button"
+            onclick={() => editingUsername = false}
+            class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-transparent text-sm font-bold cursor-pointer"
+          >
             Cancel
           </button>
         </div>
       </form>
     {:else}
       <div class="flex items-center gap-3">
-        <span class="text-sm">{data.user.username}</span>
+        <span class="text-sm font-bold">{data.user.username}</span>
         <button type="button" onclick={() => editingUsername = true}
-          class="text-xs text-muted-foreground underline hover:text-foreground">
+          class="text-xs font-bold text-brand-text-muted underline hover:text-brand-text transition-colors">
           Edit
         </button>
       </div>
@@ -101,35 +113,43 @@
 
   <!-- Email section -->
   <section class="flex flex-col gap-3">
-    <h2 class="text-base font-semibold">Email</h2>
+    <h2 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Email</h2>
     {#if editingEmail}
       <form method="POST" action="?/requestEmailChange" use:enhance class="flex flex-col gap-2">
         {#if form?.emailError}
-          <p class="text-sm text-red-600">{form.emailError}</p>
+          <p class="text-sm font-bold text-red-600">{form.emailError}</p>
         {/if}
         <div class="flex gap-2">
           <input
             bind:this={emailInput}
             name="email"
             type="email"
-            class="flex-1 h-10 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            class="flex-1 h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
             placeholder="new@example.com"
           />
-          <button type="submit" class="h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90">
-            Send Verification
+          <button
+            use:pressPhysics={'dark'}
+            type="submit"
+            class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold cursor-pointer"
+          >
+            Verify
           </button>
-          <button type="button" onclick={() => editingEmail = false}
-            class="h-10 px-4 rounded-md border border-border text-sm hover:bg-muted">
+          <button
+            use:pressPhysics={'ghost'}
+            type="button"
+            onclick={() => editingEmail = false}
+            class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-transparent text-sm font-bold cursor-pointer"
+          >
             Cancel
           </button>
         </div>
-        <p class="text-xs text-muted-foreground">Your current email stays active until you click the verification link.</p>
+        <p class="text-xs font-semibold text-brand-text-muted">Your current email stays active until you click the verification link.</p>
       </form>
     {:else}
       <div class="flex items-center gap-3">
-        <span class="text-sm">{data.user.email}</span>
+        <span class="text-sm font-bold">{data.user.email}</span>
         <button type="button" onclick={() => editingEmail = true}
-          class="text-xs text-muted-foreground underline hover:text-foreground">
+          class="text-xs font-bold text-brand-text-muted underline hover:text-brand-text transition-colors">
           Change Email
         </button>
       </div>
@@ -138,26 +158,30 @@
 
   <!-- Data & Privacy section -->
   <section class="flex flex-col gap-4">
-    <h2 class="text-base font-semibold">Data & Privacy</h2>
+    <h2 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Data & Privacy</h2>
 
     <div class="flex flex-col gap-2">
-      <p class="text-sm text-muted-foreground">
+      <p class="text-sm font-semibold text-brand-text-mid">
         Download a copy of all your personal data stored in this service.
       </p>
       <button
+        use:pressPhysics={'ghost'}
         type="button"
         onclick={downloadExport}
-        class="self-start h-10 px-5 rounded-lg border border-border text-sm font-medium hover:bg-muted transition-colors"
+        class="self-start h-11 px-6 rounded-full border-[2.5px] border-brand-border-heavy bg-transparent text-sm font-bold transition-colors cursor-pointer"
       >
         Download My Data
       </button>
     </div>
 
-    <div class="rounded-lg border border-border bg-muted/40 p-4 flex flex-col gap-1">
-      <p class="text-sm font-medium">Delete My Account</p>
-      <p class="text-sm text-muted-foreground">
+    <div
+      class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-5 flex flex-col gap-1"
+      style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
+    >
+      <p class="text-sm font-bold">Delete My Account</p>
+      <p class="text-sm font-semibold text-brand-text-mid">
         To request deletion of your account and all associated data, contact your admin.
-        See the <a href="/privacy" class="underline hover:text-foreground">Privacy Policy</a> for details.
+        See the <a href="/privacy" class="underline hover:text-brand-text">Privacy Policy</a> for details.
       </p>
     </div>
   </section>

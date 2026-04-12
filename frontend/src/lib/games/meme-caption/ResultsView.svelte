@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { physCard } from '$lib/actions/physCard';
+  import { pressPhysics } from '$lib/actions/pressPhysics';
+  import { reveal } from '$lib/actions/reveal';
   import type { Submission, LeaderboardEntry } from '$lib/api/types';
 
   let {
@@ -15,46 +18,63 @@
 </script>
 
 <div class="flex flex-col gap-6">
-  <h3 class="font-semibold text-lg">Round Results</h3>
+  <h3 class="text-xl font-bold">Round Results</h3>
 
-  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-    {#each submissions as sub}
-      <div class="rounded-xl border border-border p-4 flex flex-col gap-2">
-        <p class="text-sm leading-relaxed">{sub.caption}</p>
-        <div class="flex items-center gap-2 text-xs text-muted-foreground mt-auto">
-          <span class="font-medium text-foreground">{sub.username}</span>
-          <span>·</span>
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    {#each submissions as sub, i}
+      <div
+        use:physCard
+        use:reveal={{ delay: i }}
+        class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-5 flex flex-col gap-2 cursor-default"
+        style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
+      >
+        <p class="text-sm font-bold leading-relaxed">{sub.caption}</p>
+        <div class="flex items-center gap-2 text-xs font-semibold text-brand-text-muted mt-auto">
+          <span class="font-bold text-brand-text">{sub.username}</span>
+          <span>&middot;</span>
           <span>{sub.votes_received ?? 0} vote{(sub.votes_received ?? 0) !== 1 ? 's' : ''}</span>
           {#if (sub.points_awarded ?? 0) > 0}
-            <span class="ml-auto text-green-600 font-medium">+{sub.points_awarded} pts</span>
+            <span
+              class="ml-auto font-bold rounded-full bg-brand-text text-brand-white px-3 py-0.5 text-xs"
+            >
+              +{sub.points_awarded}
+            </span>
           {/if}
         </div>
       </div>
     {/each}
   </div>
 
-  <div>
-    <h4 class="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-2">Leaderboard</h4>
-    <ol class="flex flex-col gap-1">
-      {#each leaderboard as entry, i}
-        <li class="flex items-center gap-3 text-sm py-1">
-          <span class="w-5 text-right text-muted-foreground">{i + 1}.</span>
-          <span class="flex-1">{entry.username}</span>
-          <span class="font-medium tabular-nums">{entry.total_score} pts</span>
-        </li>
-      {/each}
-    </ol>
+  <div use:reveal={{ delay: 2 }}>
+    <h4 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted mb-3">Leaderboard</h4>
+    <div
+      class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4"
+      style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
+    >
+      <ol class="flex flex-col gap-2">
+        {#each leaderboard as entry, i}
+          <li
+            class="flex items-center gap-3 rounded-full border-[2.5px] border-brand-border bg-brand-white px-4 py-2.5 text-sm"
+          >
+            <span class="w-5 text-right font-bold text-brand-text-muted">{i + 1}.</span>
+            <span class="flex-1 font-bold">{entry.username}</span>
+            <span class="font-bold tabular-nums">{entry.total_score} pts</span>
+          </li>
+        {/each}
+      </ol>
+    </div>
   </div>
 
   {#if isHost}
     <button
+      use:pressPhysics={'primary'}
       type="button"
       onclick={onNextRound}
-      class="h-11 rounded-lg bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors"
+      class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text font-bold transition-colors cursor-pointer"
     >
-      Next Round →
+      Next Round
     </button>
   {:else}
-    <p class="text-center text-sm text-muted-foreground">Waiting for host to continue…</p>
+    <p class="text-center text-sm font-bold text-brand-text-muted">Waiting for host to continue…</p>
   {/if}
 </div>

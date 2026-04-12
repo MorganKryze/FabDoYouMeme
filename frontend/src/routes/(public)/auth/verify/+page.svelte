@@ -21,19 +21,23 @@
   <div>
     <h1 class="text-2xl font-bold">Welcome back</h1>
     {#if !isExpired}
-      <p class="text-sm text-muted-foreground mt-1">Click below to log in to your account.</p>
+      <p class="text-sm font-semibold text-brand-text-muted mt-1">Click below to log in to your account.</p>
     {/if}
   </div>
 
   {#if isExpired}
-    <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+    <div
+      class="rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white px-5 py-3 text-sm font-bold"
+      style="box-shadow: 0 4px 0 rgba(0,0,0,0.06);"
+    >
       This link has expired or already been used.
     </div>
     <a
       href="/auth/magic-link"
-      class="inline-block h-11 rounded-lg bg-primary text-primary-foreground font-semibold leading-[2.75rem] hover:bg-primary/90 transition-colors px-6"
+      class="inline-flex items-center justify-center h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold px-7 transition-colors"
+      style="box-shadow: 0 5px 0 rgba(0,0,0,0.35);"
     >
-      Request a new link →
+      Request a new link
     </a>
   {:else}
     {#if data.token}
@@ -42,17 +46,21 @@
         <input type="hidden" name="next" value={data.next} />
         <button
           type="submit"
-          class="w-full h-11 rounded-lg bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors"
+          class="w-full h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold transition-colors cursor-pointer"
+          style="box-shadow: 0 5px 0 rgba(0,0,0,0.35);"
         >
           Log In
         </button>
       </form>
     {:else}
-      <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+      <div
+        class="rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white px-5 py-3 text-sm font-bold"
+        style="box-shadow: 0 4px 0 rgba(0,0,0,0.06);"
+      >
         No token found in this link. Please check the email and try again.
       </div>
-      <a href="/auth/magic-link" class="underline text-sm hover:text-foreground">
-        Request a new link →
+      <a href="/auth/magic-link" class="underline text-sm font-bold hover:text-brand-text text-brand-text-muted">
+        Request a new link
       </a>
     {/if}
   {/if}

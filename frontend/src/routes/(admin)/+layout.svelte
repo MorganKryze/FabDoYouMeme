@@ -14,12 +14,12 @@
   ] as const;
 </script>
 
-<div class="min-h-screen flex bg-background text-foreground">
+<div class="relative z-[2] min-h-screen flex text-brand-text">
   <!-- Sidebar -->
-  <nav class="w-48 shrink-0 border-r border-border flex flex-col py-4">
+  <nav class="w-48 shrink-0 border-r border-brand-border bg-brand-white flex flex-col py-4">
     <div class="px-4 mb-6">
       <a href="/" class="font-bold text-base">FabDoYouMeme</a>
-      <p class="text-xs text-muted-foreground mt-0.5">Admin</p>
+      <p class="text-xs text-brand-text-muted mt-0.5">Admin</p>
     </div>
 
     <ul class="flex flex-col gap-0.5 px-2">
@@ -27,7 +27,7 @@
         <li>
           <a
             href={item.href}
-            class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-brand-text-mid hover:text-brand-text transition-colors"
           >
             {item.label}
           </a>
@@ -36,7 +36,7 @@
       <li>
         <a
           href="/admin/notifications"
-          class="relative flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          class="relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-brand-text-mid hover:text-brand-text transition-colors"
         >
           Notifications
           {#if data.unreadNotifications > 0}
@@ -48,8 +48,8 @@
       </li>
     </ul>
 
-    <div class="mt-auto px-4 pt-4 border-t border-border">
-      <a href="/profile" class="text-xs text-muted-foreground hover:text-foreground transition-colors">
+    <div class="mt-auto px-4 pt-4 border-t border-brand-border">
+      <a href="/profile" class="text-xs text-brand-text-muted hover:text-brand-text transition-colors">
         {data.user.username}
       </a>
     </div>
