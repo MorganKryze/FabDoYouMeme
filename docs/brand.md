@@ -113,26 +113,41 @@ As of **2026-04-11**.
 
 ### Domains
 
-| TLD               | Status     | Notes                                                        |
-| ----------------- | ---------- | ------------------------------------------------------------ |
-| `memeforge.com`   | ❌ Taken   | Registered 2016, parking page at `/lander`. Squatter         |
-| `memeforge.org`   | ❌ Taken   | Registered 2016, GoDaddy                                     |
-| `memeforge.net`   | ❌ Taken   | Registered 2012, GoDaddy                                     |
-| `memeforge.io`    | ⚠️ Taken   | Registered 2025-06-14, blank — **recent speculation, risky** |
-| `memeforge.fun`   | ⚠️ Taken   | Registered 2025-12-18 — very recent                          |
-| `memeforge.gg`    | ❓ Unknown | Needs manual check                                           |
-| `memeforge.app`   | ❓ Unknown | Needs manual check                                           |
-| `memeforge.games` | ❓ Unknown | Needs manual check                                           |
-| `memeforge.dev`   | ❓ Unknown | Needs manual check                                           |
-| `memeforge.party` | ❓ Unknown | Needs manual check                                           |
-| `memeforge.club`  | ❓ Unknown | Needs manual check                                           |
-| `memeforge.live`  | ❓ Unknown | Needs manual check                                           |
+Availability verified on OVH (2026-04-12). Prices in € including tax, rounded.
 
-**Preferred TLD (pending verification):** `memeforge.gg` or `memeforge.games`. These signal "game" at the URL level.
+**Confirmed available** (under the 30€/yr sustainability ceiling):
 
-**Avoid:** `.io` and `.fun` — both recently grabbed, suggests competing interest in the name.
+| TLD               | 1st year | Renewal  | Notes                                             |
+| ----------------- | -------- | -------- | ------------------------------------------------- |
+| `memeforge.fr`    | 4.99€    | 7.79€    | French ccTLD — community signal                   |
+| `memeforge.be`    | 6.99€    | ~6.99€   | Belgian ccTLD                                     |
+| `memeforge.eu`    | 7.49€    | ~7.49€   | European TLD                                      |
+| `memeforge.cc`    | 9.99€    | ~9.99€   | Short, neutral, global                            |
+| `memeforge.click` | 12.59€   | 12.59€   | Generic, slightly click-bait feel                 |
+| `memeforge.games` | ~15€     | ~15€     | Literal "this is a game" signal                   |
+| `memeforge.party` | ~15€     | ~15€     | Genre-perfect for party games                     |
+| `memeforge.cloud` | 1.99€    | 19.29€   | Infrastructure vibe, wrong category               |
+| `memeforge.pro`   | 0.99€    | 19.29€   | Dated/corporate feel                              |
+| `memeforge.best`  | 19.29€   | 19.29€   | Marketing-y                                       |
+| `memeforge.bzh`   | 19.99€   | 19.99€   | Breton-specific                                   |
+| `memeforge.paris` | 24.99€   | 24.99€   | Paris-specific                                    |
+| `memeforge.space` | 0.99€    | 25.19€   | Generic                                           |
+| `memeforge.blog`  | 1.99€    | 25.99€   | Wrong category                                    |
 
-**Fallback:** if all gaming TLDs are taken, consider `memeforge.party` / `memeforge.club`.
+**Confirmed taken or avoided:**
+
+| TLD              | Status       | Note                                              |
+| ---------------- | ------------ | ------------------------------------------------- |
+| `memeforge.com`  | ❌ Taken     | 2016 squatter, parking page at `/lander`          |
+| `memeforge.org`  | ❌ Taken     | 2016 squatter                                     |
+| `memeforge.net`  | ❌ Taken     | 2012 squatter                                     |
+| `memeforge.io`   | ⚠️ Taken     | 2025-06 grab — speculative, avoid                 |
+| `memeforge.fun`  | ⚠️ Taken     | 2025-12 grab — speculative, avoid                 |
+| `memeforge.xyz`  | ⚠️ Aftermarket | 442€ — skip                                     |
+| `memeforge.tech` | ⚠️ Trap price | 0.99€ year 1, **56.29€/yr** renewal — skip       |
+| `memeforge.eco`  | ⚠️ Over budget | 43.99€/yr                                       |
+
+**Decision (current):** Subdomain on an existing domain for now — no new TLD purchased yet. The comparative analysis below drives the eventual decision when/if the project moves to its own apex domain.
 
 ### GitHub
 
@@ -151,6 +166,79 @@ As of **2026-04-11**.
 | Steam           | ✅ 0 results                                                                                                                                                |
 | itch.io         | ⚠️ 1 existing project: "MemeForge" by `animus1` — a Reddit video generator. Different category. Same-named projects are allowed on itch.io but worth noting |
 | npm `memeforge` | ❓ Unchecked — verify before publishing any packages                                                                                                        |
+
+### TLD strategy — meaning vs. impact
+
+A TLD is not neutral. It's a one-line tagline that renders before the page loads. This section compares the viable candidates (≤30€/yr, confirmed available, under consideration for eventual migration from subdomain).
+
+**Evaluation axes:**
+
+- **Semantic fit** — does the TLD reinforce "multiplayer meme game" without extra explanation?
+- **Community signal** — does it tell the visitor who the project is *for*?
+- **Memorability** — can someone hear it once and type it correctly?
+- **Geographic scope** — does it include or exclude an audience?
+- **Longevity** — will the meaning still make sense in 5 years?
+- **Cost sanity** — predictable, sustainable pricing (no trap renewals)
+
+#### Tier 1 — the three strong candidates
+
+| TLD       | Says…                                                | Strengths                                                                              | Weaknesses                                                                                 | Cost       |
+| --------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ---------- |
+| **`.fr`** | "Built by and for the French maker community"        | Cheapest, cultural authenticity, strong fit with fablab origin, signals community ownership | Implies French-only audience; may undersell the project to international players         | 7.79€/yr   |
+| **`.games`** | "This is a game, that's the entire point"        | Unambiguous semantic fit; works globally; gaming-native; ages well                     | Less distinctive — any game can use `.games`; slightly generic                             | ~15€/yr    |
+| **`.party`** | "This is a party game, bring friends"            | Perfect genre match; communicates mood, not just category; playful and memorable       | Can read as "clickbait" or "marketing site" to some; less mature feel                      | ~15€/yr    |
+
+**Head-to-head:**
+
+- **`.fr` vs `.games`** — community identity vs. product category. If the project is "the French fablab's meme game," pick `.fr`. If it's "an indie party game that happens to be French-made," pick `.games`. The first is an insider gift; the second is an invitation.
+- **`.games` vs `.party`** — literal vs. emotional. `.games` says *what it is*, `.party` says *how it feels*. MemeForge is explicitly a **party game genre**, so `.party` is arguably the more precise choice — but `.games` ages better if the platform adds non-party formats later.
+- **`.fr` vs `.party`** — cultural vs. tonal. `.fr` grounds the brand in a place; `.party` grounds it in a vibe. Not mutually exclusive (could own both and redirect), but only one becomes the canonical URL.
+
+#### Tier 2 — neutral fallbacks
+
+| TLD       | Says…                              | Strengths                                | Weaknesses                                   | Cost     |
+| --------- | ---------------------------------- | ---------------------------------------- | -------------------------------------------- | -------- |
+| **`.eu`** | "European, broader than French"    | More inclusive than `.fr`, still cheap   | Weaker community signal; feels institutional | 7.49€/yr |
+| **`.cc`** | "Short and neutral"                | Memorable, global, no cultural baggage   | No positive signal either — generic          | 9.99€/yr |
+| **`.be`** | "Belgian"                          | Cheap                                    | Only fits if the project is Belgium-based    | 6.99€/yr |
+
+These are safe but say nothing. Pick one only if Tier 1 is blocked for some reason.
+
+#### Tier 3 — hyper-local
+
+| TLD         | Context                                         | Cost     |
+| ----------- | ----------------------------------------------- | -------- |
+| **`.bzh`**  | Breton maker scene only                         | 19.99€   |
+| **`.paris`** | Paris-specific community only                  | 24.99€   |
+
+Only meaningful if the project has a concrete geographic anchor at that scale.
+
+#### Explicitly dismissed (and why)
+
+- **`.cloud`, `.pro`, `.space`, `.blog`, `.site`, `.biz`, `.best`, `.click`** — wrong category (infrastructure, corporate, generic web, marketing) or actively misleading for a party game
+- **`.tech`, `.eco`, `.christmas`, `.xyz`** — over the 30€/yr ceiling or aftermarket flip pricing
+- **`.com/.org/.net`** — squatted, not worth a buyout for a self-hosted OSS project
+- **`.io/.fun`** — recently speculated on (2025 grabs), too close to the name to feel safe
+
+#### Impact summary
+
+The three Tier 1 candidates each shape the brand differently:
+
+```
+.fr     → "A community artifact, from here, for us."
+.games  → "A game. Press play."
+.party  → "Pull up a chair, it's going to be fun."
+```
+
+None is wrong. The choice is about **what you want the URL to promise**. When you're ready to buy the apex domain, revisit this section and pick based on how the project actually feels at that moment — it may have evolved.
+
+#### Current decision
+
+**Subdomain on an existing domain**, deferred apex purchase. This keeps the project in "beta identity" mode without burning registration fees on a direction that might shift. Revisit when:
+
+1. The project has its first non-invite users and needs a memorable URL to share
+2. The visual identity is locked in (logo, palette) and the domain becomes a brand artifact
+3. You have a concrete answer to "is this French fablab culture, or global indie game?"
 
 ### Trademark
 
@@ -181,7 +269,7 @@ This means: invest in the MemeForge identity first, treat individual game identi
 
 These need user or designer input before locking in:
 
-- [ ] **TLD decision** — run the manual check on `.gg` / `.games` / `.app` / `.party`, pick one, register
+- [ ] **TLD decision** — deferred. Currently using a subdomain. Revisit when ready to commit to apex (see TLD strategy section for criteria)
 - [ ] **Logo direction** — DIY with Figma, or commission? Budget?
 - [ ] **Typography** — specific typefaces TBD, need licenses (or pick Google Fonts)
 - [ ] **Tagline** — pick one of the four candidates, or workshop more
@@ -194,3 +282,4 @@ These need user or designer input before locking in:
 ## Change log
 
 - **2026-04-11** — initial draft. Name `MemeForge` selected (previously `FabDoYouMeme`). Namespace audit captured. Visual direction sketched as hypothesis only.
+- **2026-04-12** — domain availability verified on OVH. `.com/.org/.net/.io/.fun` confirmed taken; `.fr/.games/.party` confirmed available under 30€/yr. Added TLD strategy section with meaning/impact comparison across tiers. Decision: defer apex purchase, use subdomain on existing domain for now.
