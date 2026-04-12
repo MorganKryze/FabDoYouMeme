@@ -81,8 +81,12 @@ services:
         condition: service_healthy
     environment:
       ORIGIN: ${FRONTEND_URL}
+      # SvelteKit SSR loads and the /api/* proxy in hooks.server.ts reach
+      # the backend via this internal URL. Browser code uses relative
+      # `/api/*` paths — the custom server.js forwards HTTP and tunnels
+      # WebSocket upgrades to API_URL, so the backend port never needs
+      # to be published to the host.
       API_URL: http://backend:8080
-      PUBLIC_API_URL: ${BACKEND_URL}
     expose:
       - 3000
     networks:

@@ -1,5 +1,4 @@
 import type { WsMessage } from '$lib/api/types';
-import { env } from '$env/dynamic/public';
 
 type WsStatus = 'connected' | 'reconnecting' | 'error' | 'closed';
 
@@ -26,11 +25,14 @@ class WsState {
     if (this.#ws) {
       this.#ws.close();
     }
-    const base = (env.PUBLIC_API_URL || 'http://localhost:8080').replace(
-      /^http/,
-      'ws'
+    // Same-origin WebSocket — the custom Node server in `frontend/server.js`
+    // tunnels `/api/ws/*` upgrades to the backend container. Deriving the
+    // URL from `window.location` means production (behind a reverse proxy)
+    // and dev (behind our custom server) both "just work" with no env var.
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    this.#ws = new WebSocket(
+      `${proto}//${window.location.host}/api/ws/rooms/${this.#roomCode}`
     );
-    this.#ws = new WebSocket(`${base}/api/ws/rooms/${this.#roomCode}`);
 
     this.#ws.addEventListener('open', () => {
       this.status = 'connected';

@@ -1,8 +1,60 @@
-import type { Handle, HandleFetch } from '@sveltejs/kit';
+import type { Handle, HandleFetch, RequestEvent } from '@sveltejs/kit';
 import { randomBytes } from 'node:crypto';
 import { API_BASE } from '$lib/server/backend';
 
+// RFC 7230 §6.1 hop-by-hop headers — a proxy must not forward them.
+const HOP_BY_HOP = [
+  'connection',
+  'keep-alive',
+  'proxy-authenticate',
+  'proxy-authorization',
+  'te',
+  'trailer',
+  'transfer-encoding',
+  'upgrade',
+  'host',
+];
+
+// Forwards /api/* to the backend. Mirrors the production reverse-proxy
+// topology in dev, so browser code can call relative URLs like
+// `/api/packs` even though the backend container port is never published
+// to the host. WebSocket upgrades on /api/ws/* are not handled here —
+// SvelteKit's `handle` hook only sees fully-parsed HTTP requests.
+async function proxyToBackend(event: RequestEvent): Promise<Response> {
+  const reqHeaders = new Headers(event.request.headers);
+  for (const h of HOP_BY_HOP) reqHeaders.delete(h);
+
+  const method = event.request.method;
+  const body =
+    method === 'GET' || method === 'HEAD'
+      ? undefined
+      : await event.request.arrayBuffer();
+
+  const url = `${API_BASE}${event.url.pathname}${event.url.search}`;
+
+  let res: Response;
+  try {
+    res = await fetch(url, { method, headers: reqHeaders, body, redirect: 'manual' });
+  } catch (e) {
+    console.error(`[api-proxy] ${method} ${event.url.pathname}`, e);
+    return new Response('Backend unreachable', { status: 502 });
+  }
+
+  const resHeaders = new Headers(res.headers);
+  for (const h of HOP_BY_HOP) resHeaders.delete(h);
+
+  return new Response(res.body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers: resHeaders,
+  });
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
+  if (event.url.pathname.startsWith('/api/')) {
+    return proxyToBackend(event);
+  }
+
   // Generate per-request CSP nonce
   const nonce = randomBytes(16).toString('base64');
   event.locals.nonce = nonce;

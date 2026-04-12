@@ -1,9 +1,9 @@
-import { browser } from '$app/environment';
-import { env } from '$env/dynamic/public';
-
-const BASE =
-  (browser ? env.PUBLIC_API_URL : process.env.PUBLIC_API_URL) ||
-  'http://localhost:8080';
+// Browser-side API calls travel through the SvelteKit server as a relative
+// URL (see the /api/* proxy in `hooks.server.ts`). The session cookie rides
+// along on the same origin and the handle hook forwards it to the backend.
+// There is no SSR consumer of this module — server loads use `apiFetch`
+// from `$lib/server/backend.ts` directly.
+const BASE = '';
 
 export class ApiError extends Error {
   constructor(
