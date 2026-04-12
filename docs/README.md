@@ -28,12 +28,13 @@ FabDoYouMeme is a self-hosted, invite-only multiplayer party game platform. It s
 
 ## Reference
 
-| Document                                               | What it covers                                                 |
-| ------------------------------------------------------ | -------------------------------------------------------------- |
-| [Error codes](reference/error-codes.md)                | Every `snake_case` error code — REST and WebSocket             |
-| [Architectural decisions](reference/decisions.md)      | ADR-001–ADR-010: why each non-obvious choice was made          |
-| [GDPR compliance](reference/gdpr.md)                   | Lawful basis, data inventory, subject rights, breach procedure |
-| [Privacy policy template](reference/privacy-policy.md) | Art. 13(1) stub — complete before inviting first users         |
+| Document                                               | What it covers                                                                  |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| [Brand & identity](brand.md)                           | Name rationale, voice, vocabulary, visual direction, namespace audit — living   |
+| [Error codes](reference/error-codes.md)                | Every `snake_case` error code — REST and WebSocket                              |
+| [Architectural decisions](reference/decisions.md)      | ADR-001–ADR-010: why each non-obvious choice was made                           |
+| [GDPR compliance](reference/gdpr.md)                   | Lawful basis, data inventory, subject rights, breach procedure                  |
+| [Privacy policy template](reference/privacy-policy.md) | Art. 13(1) stub — complete before inviting first users                          |
 
 ---
 

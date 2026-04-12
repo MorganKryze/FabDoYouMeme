@@ -84,6 +84,7 @@ FabDoYouMeme/
 | `docs/frontend.md`                        | SvelteKit routing, Svelte 5 state singletons, game plugin architecture  |
 | `docs/self-hosting.md`                    | Prerequisites, first boot, all environment variables                    |
 | `docs/operations.md`                      | Monitoring, logs, backups, CI, production checklist                     |
+| `docs/brand.md`                           | Brand & identity: name rationale, voice, vocabulary, namespace audit    |
 | `docs/reference/error-codes.md`           | Canonical `snake_case` error code table (REST + WebSocket)              |
 | `docs/reference/decisions.md`             | ADR-001–ADR-010: why no JWT, why chi, why sentinel UUID, etc.           |
 | `docs/reference/gdpr.md`                  | GDPR compliance: lawful basis, ROPA-lite, rights, DPA, breach procedure |

@@ -18,7 +18,7 @@
 
 2. **Set `SEED_ADMIN_EMAIL`** to a real inbox you control. On first startup, the backend detects that no admin exists and automatically creates the admin user + sends a magic link to that address. Subsequent restarts with the same env var are no-ops.
 
-   > **Do not leave this at the `.env.example` placeholder value.** The admin row is created once, keyed by email — if the magic link is sent to an address you do not own, you will not receive it and requesting another link from the login page will just route it to the same dead inbox. Recovery is a chore (edit `.env`, set a different `SEED_ADMIN_EMAIL`, restart the backend — this creates a *second* admin keyed by the new address; the first stays orphaned but harmless).
+   > **Do not leave this at the `.env.example` placeholder value.** The admin row is created once, keyed by email — if the magic link is sent to an address you do not own, you will not receive it and requesting another link from the login page will just route it to the same dead inbox. Recovery is a chore (edit `.env`, set a different `SEED_ADMIN_EMAIL`, restart the backend — this creates a _second_ admin keyed by the new address; the first stays orphaned but harmless).
 
 3. **Start the stack:**
 
@@ -76,12 +76,12 @@ All variables come from `.env`. Never commit this file.
 
 ### URLs & routing
 
-| Variable       | Required | Default | Description                                                                                              |
-| -------------- | -------- | ------- | -------------------------------------------------------------------------------------------------------- |
-| `FRONTEND_URL`        | yes      | —       | Full public URL, e.g. `https://meme.example.com` — used for CORS, cookie domain, and magic link base URL              |
-| `BACKEND_URL`         | yes      | —       | Full API URL, e.g. `https://meme.example.com/api`                                                                     |
-| `BACKEND_PORT`        | no       | `8080`  | Backend HTTP listen port                                                                                              |
-| `TRUSTED_WS_ORIGINS`  | no       | —       | Comma-separated extra origins accepted by the WebSocket upgrader (in addition to `FRONTEND_URL`). Trailing slashes are normalized. Example: `https://admin.meme.example.com,https://mobile.meme.example.com` |
+| Variable             | Required | Default | Description                                                                                                                                                                                                  |
+| -------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `FRONTEND_URL`       | yes      | —       | Full public URL, e.g. `https://meme.example.com` — used for CORS, cookie domain, and magic link base URL                                                                                                     |
+| `BACKEND_URL`        | yes      | —       | Full API URL, e.g. `https://meme.example.com/api`                                                                                                                                                            |
+| `BACKEND_PORT`       | no       | `8080`  | Backend HTTP listen port                                                                                                                                                                                     |
+| `TRUSTED_WS_ORIGINS` | no       | —       | Comma-separated extra origins accepted by the WebSocket upgrader (in addition to `FRONTEND_URL`). Trailing slashes are normalized. Example: `https://admin.meme.example.com,https://mobile.meme.example.com` |
 
 ### Email / SMTP
 
