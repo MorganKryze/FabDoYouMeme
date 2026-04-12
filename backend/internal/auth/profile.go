@@ -121,12 +121,12 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 	limit := int32(50)
 	offset := int32(0)
 	if l := r.URL.Query().Get("limit"); l != "" {
-		if lv, err := strconv.Atoi(l); err == nil && lv > 0 && lv <= 100 {
+		if lv, err := strconv.ParseInt(l, 10, 32); err == nil && lv > 0 && lv <= 100 {
 			limit = int32(lv)
 		}
 	}
 	if cursor := r.URL.Query().Get("after"); cursor != "" {
-		if ov, err := strconv.Atoi(cursor); err == nil && ov > 0 {
+		if ov, err := strconv.ParseInt(cursor, 10, 32); err == nil && ov > 0 {
 			offset = int32(ov)
 		}
 	}

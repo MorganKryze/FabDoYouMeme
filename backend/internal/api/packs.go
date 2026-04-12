@@ -89,13 +89,13 @@ func (h *PackHandler) List(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if u.Role == "admin" {
 		packs, err = h.db.ListAllPacksAdmin(r.Context(), db.ListAllPacksAdminParams{
-			Lim: int32(limit), Off: int32(offset),
+			Lim: limit, Off: offset,
 		})
 	} else {
 		packs, err = h.db.ListPacksForUser(r.Context(), db.ListPacksForUserParams{
 			UserID: pgtype.UUID{Bytes: userID, Valid: true},
-			Lim:    int32(limit),
-			Off:    int32(offset),
+			Lim:    limit,
+			Off:    offset,
 		})
 	}
 	if err != nil {
@@ -279,32 +279,32 @@ func decodeCursor(s string) (cursor, error) {
 	return c, json.Unmarshal(b, &c)
 }
 
-func parsePagination(r *http.Request) (limit, offset int) {
+func parsePagination(r *http.Request) (limit, offset int32) {
 	limit = 50
 	offset = 0
 	if l := r.URL.Query().Get("limit"); l != "" {
-		if v, err := strconv.Atoi(l); err == nil && v > 0 && v <= 100 {
-			limit = v
+		if v, err := strconv.ParseInt(l, 10, 32); err == nil && v > 0 && v <= 100 {
+			limit = int32(v)
 		}
 	}
 	if c := r.URL.Query().Get("after"); c != "" {
 		if decoded, err := decodeCursor(c); err == nil {
-			if v, err := strconv.Atoi(decoded.ID); err == nil {
-				offset = v
+			if v, err := strconv.ParseInt(decoded.ID, 10, 32); err == nil && v >= 0 {
+				offset = int32(v)
 			}
-		} else if v, err := strconv.Atoi(c); err == nil {
+		} else if v, err := strconv.ParseInt(c, 10, 32); err == nil && v >= 0 {
 			// Fallback: accept plain integer offset for backwards compatibility
-			offset = v
+			offset = int32(v)
 		}
 	}
 	return
 }
 
-func nextCursor(count, limit, offset int) string {
-	if count < limit {
+func nextCursor(count int, limit, offset int32) string {
+	if count < int(limit) {
 		return ""
 	}
-	c := cursor{CreatedAt: time.Now(), ID: strconv.Itoa(offset + count)}
+	c := cursor{CreatedAt: time.Now(), ID: strconv.Itoa(int(offset) + count)}
 	return encodeCursor(c)
 }
 

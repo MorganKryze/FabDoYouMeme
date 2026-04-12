@@ -50,7 +50,7 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	limit, offset := parsePagination(r)
 	users, err := h.db.ListUsers(r.Context(), db.ListUsersParams{
-		Search: &q, Lim: int32(limit), Off: int32(offset),
+		Search: &q, Lim: limit, Off: offset,
 	})
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to list users")
@@ -119,7 +119,7 @@ func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) ListInvites(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parsePagination(r)
 	invites, err := h.db.ListInvites(r.Context(), db.ListInvitesParams{
-		Lim: int32(limit), Off: int32(offset),
+		Lim: limit, Off: offset,
 	})
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to list invites")
@@ -209,8 +209,8 @@ func (h *AdminHandler) ListNotifications(w http.ResponseWriter, r *http.Request)
 	unreadOnly := r.URL.Query().Get("unread") == "true"
 	notifications, err := h.db.ListAdminNotifications(r.Context(), db.ListAdminNotificationsParams{
 		UnreadOnly: unreadOnly,
-		Lim:        int32(limit),
-		Off:        int32(offset),
+		Lim:        limit,
+		Off:        offset,
 	})
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to list notifications")

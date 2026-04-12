@@ -28,8 +28,8 @@ func (h *PackHandler) ListItems(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parsePagination(r)
 	items, err := h.db.ListItemsForPack(r.Context(), db.ListItemsForPackParams{
 		PackID: packID,
-		Lim:    int32(limit),
-		Off:    int32(offset),
+		Lim:    limit,
+		Off:    offset,
 	})
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to list items")
