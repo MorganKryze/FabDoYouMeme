@@ -28,7 +28,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25'
+          go-version: '1.26'
           cache: true
           cache-dependency-path: backend/go.sum
 
@@ -83,7 +83,7 @@ jobs:
       - name: Set up sqlc
         uses: sqlc-dev/setup-sqlc@v5
         with:
-          sqlc-version: '1.27.0'
+          sqlc-version: '1.30.0'
 
       # `sqlc diff` exits non-zero if the generated Go in db/sqlc is stale
       # relative to the queries in db/queries. This is our defense against
@@ -102,7 +102,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25'
+          go-version: '1.26'
           cache: true
           cache-dependency-path: backend/go.sum
 
@@ -139,7 +139,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25'
+          go-version: '1.26'
           cache: true
           cache-dependency-path: backend/go.sum
 
@@ -148,6 +148,22 @@ jobs:
       # fails only on new vulns. Known-accepted IDs must carry a rationale
       # comment in the ignore file. No untrusted GitHub event inputs are
       # used in this step.
+      #
+      # Reachability filter: govulncheck emits a `finding` record at three
+      # levels — module-imported, package-imported, and symbol-called. Only
+      # symbol-level findings (where `.finding.trace[0].function` is a real
+      # name rather than null) represent a vulnerable function your code
+      # actually calls. Module- and package-level findings are just
+      # "you import something that has a CVE somewhere inside it" and
+      # should not fail the build — if they did, every pinned upstream
+      # library with any known CVE would force a maintenance entry in
+      # .govulncheck-ignore regardless of whether the code was exploitable.
+      # The `?` operators are safe-traversal: records without a `finding`
+      # field (osv db entries, config records) are silently skipped.
+      #
+      # Informational pass: we also list module-level findings in the job
+      # log (without failing) so a new CVE in an imported library is still
+      # visible during code review, even though it doesn't gate the build.
       - name: Vulnerability check
         working-directory: backend
         run: |
@@ -157,16 +173,21 @@ jobs:
           echo "Ignoring vuln IDs:"
           printf '%s\n' "$ignore" | sed 's/^/  - /'
           report=$(govulncheck -format json ./... || true)
-          found=$(printf '%s' "$report" | jq -r 'select(.finding? != null) | .finding.osv // empty' | sort -u || true)
-          if [ -z "$found" ]; then
+          reachable=$(printf '%s' "$report" | jq -r 'select(.finding?.trace?[0]?.function != null) | .finding.osv // empty' | sort -u || true)
+          imported=$(printf '%s' "$report" | jq -r 'select(.finding? != null and .finding.trace?[0]?.function == null) | .finding.osv // empty' | sort -u || true)
+          if [ -n "$imported" ]; then
+            echo "govulncheck informational — imported modules with CVEs (not reachable from our code, not gating the build):"
+            printf '%s\n' "$imported" | sed 's/^/  - /'
+          fi
+          if [ -z "$reachable" ]; then
             echo "govulncheck: no reachable vulnerabilities"
             exit 0
           fi
           echo "govulncheck reachable IDs:"
-          printf '%s\n' "$found" | sed 's/^/  - /'
-          new=$(comm -23 <(printf '%s\n' "$found") <(printf '%s\n' "$ignore"))
+          printf '%s\n' "$reachable" | sed 's/^/  - /'
+          new=$(comm -23 <(printf '%s\n' "$reachable") <(printf '%s\n' "$ignore"))
           if [ -n "$new" ]; then
-            echo "::error::govulncheck found un-ignored vulnerabilities:"
+            echo "::error::govulncheck found un-ignored reachable vulnerabilities:"
             printf '%s\n' "$new"
             exit 1
           fi
