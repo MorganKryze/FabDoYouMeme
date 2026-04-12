@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { pressPhysics } from '$lib/actions/pressPhysics';
+  import { Save } from '$lib/icons';
 
   let { src, onSave }: { src: string | null; onSave: (blob: Blob) => void } = $props();
 
@@ -111,8 +113,13 @@
     ></canvas>
   </div>
 
-  <button type="button" onclick={save}
-    class="h-10 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
+  <button
+    type="button"
+    onclick={save}
+    use:pressPhysics={'dark'}
+    class="h-10 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center justify-center gap-1.5"
+  >
+    <Save size={14} strokeWidth={2.5} />
     Save as new version
   </button>
 </div>

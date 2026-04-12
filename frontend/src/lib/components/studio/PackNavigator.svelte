@@ -4,6 +4,8 @@
   import { user } from '$lib/state/user.svelte';
   import { toast } from '$lib/state/toast.svelte';
   import { createPack, listItems, updatePack } from '$lib/api/studio';
+  import { pressPhysics } from '$lib/actions/pressPhysics';
+  import { Plus, XCircle } from '$lib/icons';
   import type { Pack } from '$lib/api/types';
 
   let showNewPackForm = $state(false);
@@ -127,20 +129,33 @@
           class="h-8 rounded border border-brand-border-heavy bg-brand-white px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
         />
         <div class="flex gap-1">
-          <button type="button" onclick={submitNewPack} disabled={creating || !newPackName.trim()}
-            class="flex-1 h-8 rounded bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50">
+          <button
+            type="button"
+            onclick={submitNewPack}
+            disabled={creating || !newPackName.trim()}
+            use:pressPhysics={'dark'}
+            class="flex-1 h-8 rounded bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1">
+            <Plus size={12} strokeWidth={2.5} />
             {creating ? 'Creating…' : 'Create'}
           </button>
-          <button type="button" onclick={() => showNewPackForm = false}
-            class="h-8 px-3 rounded border border-brand-border text-xs hover:bg-muted">
+          <button
+            type="button"
+            onclick={() => showNewPackForm = false}
+            use:pressPhysics={'ghost'}
+            class="h-8 px-3 rounded border border-brand-border text-xs inline-flex items-center gap-1">
+            <XCircle size={12} strokeWidth={2.5} />
             Cancel
           </button>
         </div>
       </div>
     {:else}
-      <button type="button" onclick={() => showNewPackForm = true}
-        class="w-full text-left px-2 py-1.5 rounded-md text-sm text-brand-text-muted hover:text-brand-text hover:bg-muted transition-colors">
-        + New Pack
+      <button
+        type="button"
+        onclick={() => showNewPackForm = true}
+        use:pressPhysics={'ghost'}
+        class="w-full text-left px-2 py-1.5 rounded-md text-sm text-brand-text-muted hover:text-brand-text hover:bg-muted inline-flex items-center gap-1.5">
+        <Plus size={12} strokeWidth={2.5} />
+        New Pack
       </button>
     {/if}
   </div>

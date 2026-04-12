@@ -1,6 +1,10 @@
 <!-- frontend/src/routes/(public)/auth/verify/+page.svelte -->
 <script lang="ts">
   import { enhance } from '$app/forms';
+  import { reveal } from '$lib/actions/reveal';
+  import { pressPhysics } from '$lib/actions/pressPhysics';
+  import { hoverEffect } from '$lib/actions/hoverEffect';
+  import { LogIn, ArrowRight } from '$lib/icons';
   import type { ActionData, PageData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -17,7 +21,7 @@
   <title>Log In — FabDoYouMeme</title>
 </svelte:head>
 
-<div class="flex flex-col gap-6 text-center">
+<div class="flex flex-col gap-6 text-center" use:reveal>
   <div>
     <h1 class="text-2xl font-bold">Welcome back</h1>
     {#if !isExpired}
@@ -34,9 +38,11 @@
     </div>
     <a
       href="/auth/magic-link"
-      class="inline-flex items-center justify-center h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold px-7 transition-colors"
-      style="box-shadow: 0 5px 0 rgba(0,0,0,0.35);"
+      use:pressPhysics={'dark'}
+      use:hoverEffect={'swap'}
+      class="inline-flex items-center justify-center gap-2 h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold px-7"
     >
+      <ArrowRight size={18} strokeWidth={2.5} />
       Request a new link
     </a>
   {:else}
@@ -46,9 +52,11 @@
         <input type="hidden" name="next" value={data.next} />
         <button
           type="submit"
-          class="w-full h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold transition-colors cursor-pointer"
-          style="box-shadow: 0 5px 0 rgba(0,0,0,0.35);"
+          use:pressPhysics={'dark'}
+          use:hoverEffect={'swap'}
+          class="w-full h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold cursor-pointer inline-flex items-center justify-center gap-2"
         >
+          <LogIn size={18} strokeWidth={2.5} />
           Log In
         </button>
       </form>

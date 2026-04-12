@@ -4,6 +4,8 @@
   import { room } from '$lib/state/room.svelte';
   import { physCard } from '$lib/actions/physCard';
   import { pressPhysics } from '$lib/actions/pressPhysics';
+  import { hoverEffect } from '$lib/actions/hoverEffect';
+  import { Heart } from '$lib/icons';
   import type { Submission } from '$lib/api/types';
 
   let { submissions }: { submissions: Submission[] } = $props();
@@ -34,7 +36,7 @@
 
 <div class="flex flex-col gap-6">
   <div class="flex items-center justify-between">
-    <h3 class="text-xl font-bold">Pick the best one</h3>
+    <h3 class="stage-title">Pick the best one</h3>
     <div
       class="flex items-center gap-2 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 py-1.5"
       style="box-shadow: 0 4px 0 rgba(0,0,0,0.1);"
@@ -79,11 +81,13 @@
   {#if !voted}
     <button
       use:pressPhysics={'dark'}
+      use:hoverEffect={'bounce'}
       type="button"
       onclick={vote}
       disabled={!selectedId}
-      class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-50 transition-colors cursor-pointer"
+      class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-50 cursor-pointer inline-flex items-center justify-center gap-2"
     >
+      <Heart size={18} strokeWidth={2.5} />
       Vote
     </button>
   {:else}

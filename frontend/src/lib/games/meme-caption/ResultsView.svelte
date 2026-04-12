@@ -2,6 +2,8 @@
   import { physCard } from '$lib/actions/physCard';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { reveal } from '$lib/actions/reveal';
+  import { hoverEffect } from '$lib/actions/hoverEffect';
+  import { Trophy, ArrowRight } from '$lib/icons';
   import type { Submission, LeaderboardEntry } from '$lib/api/types';
 
   let {
@@ -18,7 +20,7 @@
 </script>
 
 <div class="flex flex-col gap-6">
-  <h3 class="text-xl font-bold">Round Results</h3>
+  <h3 class="stage-title">Round Results</h3>
 
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
     {#each submissions as sub, i}
@@ -46,7 +48,10 @@
   </div>
 
   <div use:reveal={{ delay: 2 }}>
-    <h4 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted mb-3">Leaderboard</h4>
+    <h4 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted mb-3 inline-flex items-center gap-2">
+      <Trophy size={12} strokeWidth={2.5} />
+      Leaderboard
+    </h4>
     <div
       class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4"
       style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
@@ -68,10 +73,12 @@
   {#if isHost}
     <button
       use:pressPhysics={'primary'}
+      use:hoverEffect={'rainbow'}
       type="button"
       onclick={onNextRound}
-      class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text font-bold transition-colors cursor-pointer"
+      class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text font-bold cursor-pointer inline-flex items-center justify-center gap-2"
     >
+      <ArrowRight size={18} strokeWidth={2.5} />
       Next Round
     </button>
   {:else}

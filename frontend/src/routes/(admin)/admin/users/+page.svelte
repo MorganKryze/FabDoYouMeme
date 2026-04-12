@@ -3,6 +3,9 @@
   import { goto } from '$app/navigation';
   import { untrack } from 'svelte';
   import { toast } from '$lib/state/toast.svelte';
+  import { reveal } from '$lib/actions/reveal';
+  import { hoverEffect } from '$lib/actions/hoverEffect';
+  import { Search, UserX } from '$lib/icons';
   import type { ActionData, PageData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -31,16 +34,19 @@
   <title>Users — Admin</title>
 </svelte:head>
 
-<div class="p-6 flex flex-col gap-4">
+<div class="p-6 flex flex-col gap-4" use:reveal>
   <div class="flex items-center gap-4">
     <h1 class="text-xl font-bold flex-1">Users</h1>
-    <input
-      type="search"
-      placeholder="Search users…"
-      bind:value={searchTerm}
-      oninput={onSearchInput}
-      class="h-9 w-56 rounded-md border border-brand-border-heavy bg-brand-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-    />
+    <div class="relative">
+      <Search size={14} strokeWidth={2.5} class="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-muted" />
+      <input
+        type="search"
+        placeholder="Search users…"
+        bind:value={searchTerm}
+        oninput={onSearchInput}
+        class="h-9 w-56 rounded-md border border-brand-border-heavy bg-brand-white pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+      />
+    </div>
   </div>
 
   <div class="rounded-xl border border-brand-border overflow-hidden">
@@ -145,9 +151,10 @@
                 </div>
               {:else}
                 <button type="button" onclick={() => confirmDeleteId = u.id}
-                  class="text-brand-text-muted hover:text-red-600 transition-colors text-lg leading-none"
+                  use:hoverEffect={'swap'}
+                  class="text-brand-text-muted hover:text-red-600 transition-colors inline-flex items-center p-1 rounded-full"
                   aria-label="Delete user">
-                  ×
+                  <UserX size={16} strokeWidth={2.5} />
                 </button>
               {/if}
             </td>

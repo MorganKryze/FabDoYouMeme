@@ -1,11 +1,10 @@
 import { redirect, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { GameType, Pack } from '$lib/api/types';
-import { API_BASE } from '$lib/server/backend';
+import { API_BASE, apiFetch } from '$lib/server/backend';
 
 export const load: PageServerLoad = async ({ fetch }) => {
-  const res = await fetch(`${API_BASE}/api/game-types`);
-  const gameTypes: GameType[] = res.ok ? await res.json() : [];
+  const gameTypes = await apiFetch<GameType[]>(fetch, '/api/game-types');
   return { gameTypes };
 };
 

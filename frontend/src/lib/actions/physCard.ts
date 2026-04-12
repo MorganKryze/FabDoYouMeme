@@ -5,10 +5,19 @@
  * hover tilt, dynamic shadow, and press-flat/spring-release physics.
  *
  * Respects `prefers-reduced-motion` — becomes a no-op when enabled.
+ *
+ * Branches on `(hover: hover) and (pointer: fine)`:
+ *   - Desktop/trackpad: full 3D cursor-tracked tilt + press physics
+ *   - Touch/coarse pointer: tap-scale-press with spring release only
+ * Both paths share the same release cubic-bezier so the feel is
+ * consistent across devices.
  */
 export function physCard(node: HTMLElement) {
   const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (prefersReduced) return {};
+
+  const canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  if (!canHover) return touchFallback(node);
 
   // Resting transition for leave/release animations
   const restTransition =
@@ -47,16 +56,7 @@ export function physCard(node: HTMLElement) {
     const rotateY = nx * 6;
     const rotateX = -ny * 4;
 
-    // Lift proportional to distance from center
-    const dist = Math.sqrt(nx * nx + ny * ny);
-    const lift = 4 + dist * 6;
-
-    // Dynamic shadow based on tilt
-    const shadowX = -nx * 10;
-    const shadowY = 8 + ny * 6;
-
-    node.style.transform = `translateY(-${lift}px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.01)`;
-    node.style.boxShadow = `${shadowX}px ${shadowY}px 20px -4px rgba(0,0,0,0.12), 0 5px 0 rgba(0,0,0,0.06)`;
+    node.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
   }
 
   function onMouseLeave() {
@@ -94,6 +94,42 @@ export function physCard(node: HTMLElement) {
       node.removeEventListener('mouseleave', onMouseLeave);
       node.removeEventListener('mousedown', onMouseDown);
       node.removeEventListener('mouseup', onMouseUp);
+    },
+  };
+}
+
+/**
+ * Touch / coarse-pointer fallback: tap-scale-press with spring release.
+ * No 3D tilt (no cursor to track), no DeviceOrientation (breaks "chill"
+ * feel and requires a permission prompt on iOS).
+ */
+function touchFallback(node: HTMLElement) {
+  const pressTransition = 'transform 0.08s ease';
+  const releaseTransition = 'transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)';
+
+  node.style.willChange = 'transform';
+
+  function onDown() {
+    node.style.transition = pressTransition;
+    node.style.transform = 'translateY(1px) scale(0.97)';
+  }
+
+  function onUp() {
+    node.style.transition = releaseTransition;
+    node.style.transform = '';
+  }
+
+  node.addEventListener('pointerdown', onDown);
+  node.addEventListener('pointerup', onUp);
+  node.addEventListener('pointercancel', onUp);
+  node.addEventListener('pointerleave', onUp);
+
+  return {
+    destroy() {
+      node.removeEventListener('pointerdown', onDown);
+      node.removeEventListener('pointerup', onUp);
+      node.removeEventListener('pointercancel', onUp);
+      node.removeEventListener('pointerleave', onUp);
     },
   };
 }

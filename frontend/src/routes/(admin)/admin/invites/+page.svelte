@@ -2,6 +2,10 @@
   import { enhance } from '$app/forms';
   import { untrack } from 'svelte';
   import { toast } from '$lib/state/toast.svelte';
+  import { reveal } from '$lib/actions/reveal';
+  import { pressPhysics } from '$lib/actions/pressPhysics';
+  import { hoverEffect } from '$lib/actions/hoverEffect';
+  import { Plus, Copy, Trash2 } from '$lib/icons';
   import type { ActionData, PageData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -41,12 +45,17 @@
   <title>Invites — Admin</title>
 </svelte:head>
 
-<div class="p-6 flex flex-col gap-4">
+<div class="p-6 flex flex-col gap-4" use:reveal>
   <div class="flex items-center gap-4">
     <h1 class="text-xl font-bold flex-1">Invites</h1>
-    <button type="button" onclick={() => showCreateForm = !showCreateForm}
-      class="h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90">
-      + Create Invite
+    <button
+      type="button"
+      onclick={() => showCreateForm = !showCreateForm}
+      use:pressPhysics={'dark'}
+      use:hoverEffect={'swap'}
+      class="h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center gap-1.5">
+      <Plus size={14} strokeWidth={2.5} />
+      Create Invite
     </button>
   </div>
 
@@ -118,14 +127,21 @@
             </td>
             <td class="px-4 py-3">
               <div class="flex gap-2 justify-end">
-                <button type="button" onclick={() => copyLink(inv.token)}
-                  class="text-xs text-brand-text-muted underline hover:text-brand-text">
+                <button
+                  type="button"
+                  onclick={() => copyLink(inv.token)}
+                  use:hoverEffect={'swap'}
+                  class="inline-flex items-center gap-1 text-xs text-brand-text-muted underline hover:text-brand-text px-2 py-1 rounded-full">
+                  <Copy size={12} strokeWidth={2.5} />
                   Copy Link
                 </button>
                 <form method="POST" action="?/revokeInvite" use:enhance
                   onsubmit={(e) => !confirm('Revoke this invite?') && e.preventDefault()}>
                   <input type="hidden" name="invite_id" value={inv.id} />
-                  <button type="submit" class="text-xs text-red-600 underline hover:text-red-800">
+                  <button
+                    type="submit"
+                    class="inline-flex items-center gap-1 text-xs text-red-600 underline hover:text-red-800">
+                    <Trash2 size={12} strokeWidth={2.5} />
                     Revoke
                   </button>
                 </form>

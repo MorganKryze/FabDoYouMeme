@@ -1,9 +1,10 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import type { Pack } from '$lib/api/types';
+import { apiFetch } from '$lib/server/backend';
 
 export const load: PageServerLoad = async ({ fetch }) => {
-  const res = await fetch('/api/packs?include_all=true');
-  const packs = res.ok ? await res.json() : [];
+  const packs = await apiFetch<Pack[]>(fetch, '/api/packs?include_all=true');
   return { packs };
 };
 

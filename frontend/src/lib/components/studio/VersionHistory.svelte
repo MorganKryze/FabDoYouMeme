@@ -3,6 +3,9 @@
   import { studio } from '$lib/state/studio.svelte';
   import { toast } from '$lib/state/toast.svelte';
   import { restoreVersion, softDeleteVersion } from '$lib/api/studio';
+  import { reveal } from '$lib/actions/reveal';
+  import { pressPhysics } from '$lib/actions/pressPhysics';
+  import { ChevronLeft, ChevronRight } from '$lib/icons';
   import type { ItemVersion } from '$lib/api/types';
 
   let open = $state(false);
@@ -46,12 +49,15 @@
 
   {#if open}
     <div class="flex flex-col divide-y divide-border/50">
-      {#each studio.versions as version}
+      {#each studio.versions as version, i}
         {@const isActive = version.id === activeVersionId}
         {@const isBinned = !!version.deleted_at}
         {@const isSelected = studio.selectedVersionIds.includes(version.id)}
 
-        <div class="px-4 py-2 flex flex-col gap-1 {isBinned ? 'opacity-50' : ''} {isSelected ? 'bg-primary/5' : ''}">
+        <div
+          use:reveal={{ delay: i }}
+          class="px-4 py-2 flex flex-col gap-1 {isBinned ? 'opacity-50' : ''} {isSelected ? 'bg-primary/5' : ''}"
+        >
           <div class="flex items-center gap-2 text-xs">
             <span class="font-medium">v{version.version_number}</span>
             <span class="text-brand-text-muted">{new Date(version.created_at).toLocaleDateString()}</span>
@@ -90,10 +96,13 @@
           type="button"
           disabled
           title="Side-by-side comparison coming soon"
-          class="w-full h-8 rounded-md bg-muted text-sm font-medium opacity-50 cursor-not-allowed"
+          use:pressPhysics={'ghost'}
+          class="w-full h-8 rounded-md bg-muted text-sm font-medium opacity-50 cursor-not-allowed inline-flex items-center justify-center gap-1"
         >
-          Compare v{studio.versions.find((v) => v.id === studio.selectedVersionIds[0])?.version_number}
+          <ChevronLeft size={12} strokeWidth={2.5} />
+          v{studio.versions.find((v) => v.id === studio.selectedVersionIds[0])?.version_number}
           vs v{studio.versions.find((v) => v.id === studio.selectedVersionIds[1])?.version_number}
+          <ChevronRight size={12} strokeWidth={2.5} />
         </button>
       </div>
     {/if}

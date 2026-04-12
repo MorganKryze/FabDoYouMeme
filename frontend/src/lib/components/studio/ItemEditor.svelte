@@ -3,6 +3,7 @@
   import { studio } from '$lib/state/studio.svelte';
   import { toast } from '$lib/state/toast.svelte';
   import { getUploadUrl, putToRustFS, confirmUpload, listVersions } from '$lib/api/studio';
+  import { reveal } from '$lib/actions/reveal';
   import ImageEditor from './ImageEditor.svelte';
   import TextEditor from './TextEditor.svelte';
   import VersionHistory from './VersionHistory.svelte';
@@ -58,7 +59,7 @@
   }
 </script>
 
-<div class="flex flex-col h-full">
+<div class="flex flex-col h-full" use:reveal>
   {#if item}
     <div class="px-4 py-3 border-b border-brand-border shrink-0">
       <p class="text-sm font-semibold truncate">{item.name}</p>

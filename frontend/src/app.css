@@ -100,3 +100,79 @@ body {
 .reveal.d2 { transition-delay: 0.16s; }
 .reveal.d3 { transition-delay: 0.24s; }
 .reveal.d4 { transition-delay: 0.32s; }
+
+/* ==========================================================================
+   Page transitions (L1 motion kernel)
+   ========================================================================== */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root) {
+    animation: pageOut 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  ::view-transition-new(root) {
+    animation: pageIn 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  @keyframes pageOut {
+    from { opacity: 1; transform: scale(1) translateY(0); }
+    to   { opacity: 0; transform: scale(1.05) translateY(-8px); }
+  }
+  @keyframes pageIn {
+    from { opacity: 0; transform: scale(0.93) translateY(16px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  html.page-exiting main { animation: pageOut 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+}
+
+/* ==========================================================================
+   Stage choreography (L1 motion kernel — in-game phase transitions)
+   ========================================================================== */
+.stage-wrap {
+  transition:
+    opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  transform: scale(1) translateY(0);
+  opacity: 1;
+}
+.stage-wrap.hidden {
+  opacity: 0;
+  transform: scale(0.93) translateY(16px);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-wrap { transition: none; }
+  .stage-wrap.hidden { opacity: 0; transform: none; }
+}
+
+/* ==========================================================================
+   Brand typography — hero scale
+   --------------------------------------------------------------------------
+   Source: docs/superpowers/specs/2026-04-12-brand-visual-design.md
+   --------------------------------------------------------------------------
+   .hero        — top-of-funnel marquee headline (landing, auth splash)
+   .hero-sub    — supporting line under a hero heading
+   .stage-title — mid-game stage heading (caption prompt, vote prompt, results)
+   ========================================================================== */
+.hero {
+  font-size: clamp(4rem, 10vw, 8rem);
+  line-height: 0.95;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--brand-text);
+}
+
+.hero-sub {
+  font-size: clamp(1.125rem, 2.2vw, 1.5rem);
+  line-height: 1.4;
+  font-weight: 500;
+  color: var(--brand-text-mid);
+}
+
+.stage-title {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: 1.05;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--brand-text);
+}

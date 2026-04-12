@@ -3,6 +3,8 @@
   import { ws } from '$lib/state/ws.svelte';
   import { room } from '$lib/state/room.svelte';
   import { pressPhysics } from '$lib/actions/pressPhysics';
+  import { hoverEffect } from '$lib/actions/hoverEffect';
+  import { Send } from '$lib/icons';
   import type { Round } from '$lib/api/types';
 
   let { round }: { round: Round } = $props();
@@ -108,11 +110,13 @@
         <span class="text-xs font-semibold text-brand-text-muted">{caption.length}/{MAX_CHARS}</span>
         <button
           use:pressPhysics={'dark'}
+          use:hoverEffect={'gradient'}
           type="button"
           onclick={submit}
           disabled={submitted || isExpired || caption.trim().length === 0}
-          class="h-11 px-7 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold disabled:opacity-50 transition-colors cursor-pointer"
+          class="h-11 px-7 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold disabled:opacity-50 cursor-pointer inline-flex items-center gap-2"
         >
+          <Send size={16} strokeWidth={2.5} />
           Submit
         </button>
       </div>

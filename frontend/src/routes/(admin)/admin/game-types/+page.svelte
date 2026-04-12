@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { reveal } from '$lib/actions/reveal';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
 </script>
@@ -7,7 +8,7 @@
   <title>Game Types — Admin</title>
 </svelte:head>
 
-<div class="p-6 flex flex-col gap-4">
+<div class="p-6 flex flex-col gap-4" use:reveal>
   <div class="flex items-center gap-4">
     <h1 class="text-xl font-bold flex-1">Game Types</h1>
     <p class="text-xs text-brand-text-muted">Read-only — game types are registered in code.</p>

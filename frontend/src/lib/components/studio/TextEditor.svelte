@@ -1,6 +1,8 @@
 <!-- frontend/src/lib/components/studio/TextEditor.svelte -->
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { pressPhysics } from '$lib/actions/pressPhysics';
+  import { Save } from '$lib/icons';
   const MAX_CHARS = 500;
   let { initialValue = '', onSave }: { initialValue?: string; onSave: (text: string) => void } = $props();
 
@@ -27,8 +29,10 @@
     type="button"
     onclick={() => onSave(value)}
     disabled={!value.trim()}
-    class="h-10 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 hover:bg-primary/90 transition-colors"
+    use:pressPhysics={'dark'}
+    class="h-10 rounded-lg bg-primary text-primary-foreground text-sm font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1.5"
   >
+    <Save size={14} strokeWidth={2.5} />
     Save as new version
   </button>
 </div>

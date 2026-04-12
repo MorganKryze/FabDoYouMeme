@@ -1,7 +1,8 @@
 import type { PageServerLoad } from './$types';
+import type { GameType } from '$lib/api/types';
+import { apiFetch } from '$lib/server/backend';
 
 export const load: PageServerLoad = async ({ fetch }) => {
-  const res = await fetch('/api/game-types');
-  const gameTypes = res.ok ? await res.json() : [];
+  const gameTypes = await apiFetch<GameType[]>(fetch, '/api/game-types');
   return { gameTypes };
 };

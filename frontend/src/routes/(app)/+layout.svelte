@@ -4,6 +4,8 @@
   import { ws } from '$lib/state/ws.svelte';
   import { user } from '$lib/state/user.svelte';
   import { page } from '$app/stores';
+  import { hoverEffect } from '$lib/actions/hoverEffect';
+  import { Play, Wrench, User, Shield } from '$lib/icons';
   import type { LayoutData } from './$types';
 
   let { children, data }: { children: any; data: LayoutData } = $props();
@@ -20,8 +22,8 @@
   };
 
   const navLinks = [
-    { href: '/', label: 'Play' },
-    { href: '/studio', label: 'Lab' },
+    { href: '/', label: 'Play', Icon: Play },
+    { href: '/studio', label: 'Lab', Icon: Wrench },
   ] as const;
 </script>
 
@@ -35,11 +37,13 @@
       {#each navLinks as link}
         <a
           href={link.href}
-          class="px-5 py-2.5 rounded-full text-sm font-bold transition-colors
+          use:hoverEffect={'swap'}
+          class="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-full text-sm font-bold transition-colors
             {$page.url.pathname === link.href
               ? 'underline underline-offset-4 decoration-[2.5px]'
               : 'opacity-50 hover:opacity-100'}"
         >
+          <link.Icon size={16} strokeWidth={2.5} />
           {link.label}
         </a>
       {/each}
@@ -63,16 +67,20 @@
 
       <a
         href="/profile"
-        class="px-4 py-2.5 rounded-full text-sm font-bold opacity-50 hover:opacity-100 transition-colors"
+        use:hoverEffect={'swap'}
+        class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-bold opacity-50 hover:opacity-100 transition-colors"
       >
+        <User size={16} strokeWidth={2.5} />
         {data.user.username}
       </a>
 
       {#if data.user.role === 'admin'}
         <a
           href="/admin"
-          class="px-4 py-2.5 rounded-full text-sm font-bold opacity-50 hover:opacity-100 transition-colors"
+          use:hoverEffect={'swap'}
+          class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-bold opacity-50 hover:opacity-100 transition-colors"
         >
+          <Shield size={16} strokeWidth={2.5} />
           Admin
         </a>
       {/if}

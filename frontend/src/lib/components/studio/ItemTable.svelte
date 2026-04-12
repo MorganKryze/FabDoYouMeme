@@ -3,6 +3,9 @@
   import { studio } from '$lib/state/studio.svelte';
   import { toast } from '$lib/state/toast.svelte';
   import { deleteItem, uploadImageItem, listVersions } from '$lib/api/studio';
+  import { reveal } from '$lib/actions/reveal';
+  import { pressPhysics } from '$lib/actions/pressPhysics';
+  import { Upload, Trash2, ImageIcon, Type } from '$lib/icons';
   import type { GameItem } from '$lib/api/types';
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -87,8 +90,12 @@
       <span class="text-brand-text-muted font-normal">({studio.items.length})</span>
     </h2>
 
-    <label class="h-8 px-3 rounded-md border border-brand-border text-xs font-medium cursor-pointer hover:bg-muted transition-colors flex items-center gap-1">
+    <label
+      use:pressPhysics={'ghost'}
+      class="h-8 px-3 rounded-md border border-brand-border text-xs font-medium cursor-pointer flex items-center gap-1.5"
+    >
       <input type="file" accept="image/jpeg,image/png,image/webp" multiple class="sr-only" onchange={onFileInput} />
+      <Upload size={12} strokeWidth={2.5} />
       Bulk Import
     </label>
   </div>
@@ -131,8 +138,9 @@
           </tr>
         </thead>
         <tbody>
-          {#each studio.items as item}
+          {#each studio.items as item, i}
             <tr
+              use:reveal={{ delay: i }}
               class="border-b border-brand-border/50 hover:bg-muted/40 cursor-pointer transition-colors
                 {studio.selectedItemId === item.id ? 'bg-primary/5' : ''}"
               onclick={() => selectItem(item)}
@@ -142,8 +150,12 @@
                   {#if item.thumbnail_url}
                     <img src={item.thumbnail_url} alt="" class="h-8 w-8 rounded object-cover shrink-0" />
                   {:else}
-                    <div class="h-8 w-8 rounded bg-muted shrink-0 flex items-center justify-center text-brand-text-muted text-xs">
-                      {item.type === 'image' ? 'img' : 'T'}
+                    <div class="h-8 w-8 rounded bg-muted shrink-0 flex items-center justify-center text-brand-text-muted">
+                      {#if item.type === 'image'}
+                        <ImageIcon size={14} strokeWidth={2.5} />
+                      {:else}
+                        <Type size={14} strokeWidth={2.5} />
+                      {/if}
                     </div>
                   {/if}
                   <span class="truncate max-w-[8rem]">{item.name}</span>
@@ -159,10 +171,10 @@
                 <button
                   type="button"
                   onclick={(e) => { e.stopPropagation(); handleDelete(item); }}
-                  class="text-brand-text-muted hover:text-red-600 transition-colors text-lg leading-none"
+                  class="text-brand-text-muted hover:text-red-600 transition-colors inline-flex items-center p-1 rounded-full"
                   aria-label="Delete item"
                 >
-                  ×
+                  <Trash2 size={14} strokeWidth={2.5} />
                 </button>
               </td>
             </tr>

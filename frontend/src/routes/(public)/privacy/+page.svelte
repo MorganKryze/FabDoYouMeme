@@ -1,9 +1,13 @@
 <!-- frontend/src/routes/(public)/privacy/+page.svelte -->
+<script lang="ts">
+  import { reveal } from '$lib/actions/reveal';
+</script>
+
 <svelte:head>
   <title>Privacy Policy — FabDoYouMeme</title>
 </svelte:head>
 
-<div class="flex flex-col gap-6 text-left w-full max-w-prose mx-auto py-8">
+<div class="flex flex-col gap-6 text-left w-full max-w-prose mx-auto py-8" use:reveal>
   <h1 class="text-3xl font-bold">Privacy Policy</h1>
   <p class="text-sm text-brand-text-muted">Last updated: [operator fills in date]</p>
 

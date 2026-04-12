@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { API_BASE } from '$lib/server/backend';
+import { apiFetch } from '$lib/server/backend';
 
 interface AdminStats {
   active_rooms: number;
@@ -9,8 +9,10 @@ interface AdminStats {
 }
 
 export const load: PageServerLoad = async ({ fetch }) => {
-  const notifRes = await fetch(`${API_BASE}/api/admin/notifications?unread=true&limit=1`);
-  const notifData = notifRes.ok ? await notifRes.json() : { total: 0 };
+  const notifData = await apiFetch<{ total: number }>(
+    fetch,
+    '/api/admin/notifications?unread=true&limit=1'
+  );
   return {
     unreadCount: notifData.total ?? 0,
     stats: null as AdminStats | null,

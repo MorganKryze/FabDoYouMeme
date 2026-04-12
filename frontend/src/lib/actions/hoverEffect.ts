@@ -1,16 +1,17 @@
 /**
  * Svelte action: button hover effects.
  *
- * Attach with `use:hoverEffect={'gradient'}` (or 'swap', 'glow', 'bounce').
- * Each variant adds a distinctive hover animation appropriate for different
- * action contexts per the brand spec.
+ * Attach with `use:hoverEffect={'gradient'}` (or 'swap', 'glow', 'bounce',
+ * 'rainbow'). Each variant adds a distinctive hover animation appropriate
+ * for different action contexts per the brand spec.
  *
  * - gradient: pastel gradient fades in behind text (primary CTAs)
  * - swap: white → dark color inversion (standard actions)
  * - glow: gradient halo breathes behind button (highlighted actions)
  * - bounce: scale(1.06) with elastic spring (playful secondary)
+ * - rainbow: animated rainbow border ring (reserved for one button — Next Round)
  */
-type HoverStyle = 'gradient' | 'swap' | 'glow' | 'bounce';
+type HoverStyle = 'gradient' | 'swap' | 'glow' | 'bounce' | 'rainbow';
 
 export function hoverEffect(node: HTMLElement, style: HoverStyle = 'swap') {
   const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -21,12 +22,16 @@ export function hoverEffect(node: HTMLElement, style: HoverStyle = 'swap') {
   let origColor = '';
   let origTransform = '';
   let origLetterSpacing = '';
+  let origBorderColor = '';
+  let origBoxShadow = '';
 
   function saveOriginals() {
     origBackground = node.style.background;
     origColor = node.style.color;
     origTransform = node.style.transform;
     origLetterSpacing = node.style.letterSpacing;
+    origBorderColor = node.style.borderColor;
+    origBoxShadow = node.style.boxShadow;
   }
 
   function restoreOriginals() {
@@ -34,6 +39,8 @@ export function hoverEffect(node: HTMLElement, style: HoverStyle = 'swap') {
     node.style.color = origColor;
     node.style.transform = origTransform;
     node.style.letterSpacing = origLetterSpacing;
+    node.style.borderColor = origBorderColor;
+    node.style.boxShadow = origBoxShadow;
     node.style.backgroundSize = '';
     node.style.animation = '';
   }
@@ -68,6 +75,20 @@ export function hoverEffect(node: HTMLElement, style: HoverStyle = 'swap') {
         node.style.transform = 'scale(1.06)';
         node.style.letterSpacing = '0.04em';
         break;
+
+      case 'rainbow': {
+        // Use a layered gradient background clipped to the border box plus
+        // a wide multi-colored box-shadow halo. The shadow runs the same
+        // gradientFlow keyframe so the ring feels animated.
+        node.style.transition = 'box-shadow 0.4s ease, transform 0.1s, background 0.4s ease';
+        node.style.background = 'linear-gradient(135deg, #F9B4AB, #FDDCB5, #B5E2D0, #A8D8EA, #D4A5C9)';
+        node.style.backgroundSize = '300% 300%';
+        node.style.animation = 'gradientFlow 3s ease-in-out infinite';
+        node.style.borderColor = 'transparent';
+        node.style.boxShadow =
+          '0 0 0 2px #F9B4AB, 0 0 0 4px #FDDCB5, 0 0 0 6px #B5E2D0, 0 0 0 8px #A8D8EA, 0 10px 24px -4px rgba(0,0,0,0.18)';
+        break;
+      }
     }
   }
 

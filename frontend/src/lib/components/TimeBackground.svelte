@@ -1,18 +1,21 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { theme } from '$lib/state/theme.svelte';
 
   /**
    * Time-aware animated gradient background + grain overlay.
    *
-   * Reads the clock every 60s and smoothly transitions :root CSS custom
-   * properties between four time bands. The 2s transition on :root (in
-   * app.css) ensures shifts are imperceptible.
+   * Reads `theme.active` (user-override aware) and smoothly transitions
+   * :root CSS custom properties between time bands. The 2s transition on
+   * :root (in app.css) ensures shifts are imperceptible.
    *
-   * Time bands:
-   *   06:00–11:59  Mint Garden (morning)
-   *   12:00–16:59  Afternoon blend
-   *   17:00–20:59  Warm Sunset (evening)
-   *   21:00–05:59  Lavender Dusk (night)
+   * The clock-to-band mapping and the clock tick both live in
+   * `theme.svelte.ts` — this component only applies the palette when
+   * `theme.active` changes.
+   *
+   * Note: the `afternoon` palette below is retained as a placeholder for
+   * the (still-pending) afternoon time band. ThemeState currently collapses
+   * 6:00–17:00 into `morning`, so `afternoon` is unreachable dead code
+   * until the afternoon palette decision lands.
    */
 
   interface TimePalette {
@@ -73,14 +76,6 @@
     },
   };
 
-  function getTimeBand(): string {
-    const hour = new Date().getHours();
-    if (hour >= 6 && hour < 12) return 'morning';
-    if (hour >= 12 && hour < 17) return 'afternoon';
-    if (hour >= 17 && hour < 21) return 'evening';
-    return 'night';
-  }
-
   function applyPalette(band: string) {
     const p = palettes[band];
     const root = document.documentElement.style;
@@ -97,20 +92,10 @@
     root.setProperty('--brand-grad-4', p.grad[3]);
   }
 
-  let currentBand = $state(getTimeBand());
-
-  onMount(() => {
-    applyPalette(currentBand);
-
-    const interval = setInterval(() => {
-      const band = getTimeBand();
-      if (band !== currentBand) {
-        currentBand = band;
-        applyPalette(band);
-      }
-    }, 60_000);
-
-    return () => clearInterval(interval);
+  $effect(() => {
+    if (typeof document !== 'undefined') {
+      applyPalette(theme.active);
+    }
   });
 
   const grainSvg =

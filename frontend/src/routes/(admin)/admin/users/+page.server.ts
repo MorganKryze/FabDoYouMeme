@@ -1,5 +1,9 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import type { User } from '$lib/api/types';
+import { apiFetch } from '$lib/server/backend';
+
+type AdminUser = User & { is_active: boolean; created_at: string };
 
 export const load: PageServerLoad = async ({ fetch, url }) => {
   const q = url.searchParams.get('q') ?? '';
@@ -8,8 +12,10 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
   if (q) qs.set('q', q);
   if (cursor) qs.set('cursor', cursor);
 
-  const res = await fetch(`/api/admin/users?${qs}`);
-  const data = res.ok ? await res.json() : { users: [], next_cursor: null };
+  const data = await apiFetch<{
+    users: AdminUser[];
+    next_cursor: string | null;
+  }>(fetch, `/api/admin/users?${qs}`);
 
   return { users: data.users ?? [], nextCursor: data.next_cursor ?? null, q };
 };

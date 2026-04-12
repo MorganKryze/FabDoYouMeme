@@ -1,6 +1,10 @@
 <!-- frontend/src/routes/(public)/auth/magic-link/+page.svelte -->
 <script lang="ts">
   import { enhance } from '$app/forms';
+  import { reveal } from '$lib/actions/reveal';
+  import { pressPhysics } from '$lib/actions/pressPhysics';
+  import { hoverEffect } from '$lib/actions/hoverEffect';
+  import { Send } from '$lib/icons';
   import type { ActionData } from './$types';
 
   let { form }: { form: ActionData } = $props();
@@ -16,7 +20,7 @@
   <title>Sign In — FabDoYouMeme</title>
 </svelte:head>
 
-<div class="flex flex-col gap-6">
+<div class="flex flex-col gap-6" use:reveal>
   <div class="text-center">
     <h1 class="text-2xl font-bold">Sign in</h1>
     <p class="text-sm font-semibold text-brand-text-muted mt-1">We'll email you a magic link.</p>
@@ -50,9 +54,11 @@
 
       <button
         type="submit"
-        class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold transition-colors cursor-pointer"
-        style="box-shadow: 0 5px 0 rgba(0,0,0,0.35);"
+        use:pressPhysics={'dark'}
+        use:hoverEffect={'swap'}
+        class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold cursor-pointer inline-flex items-center justify-center gap-2"
       >
+        <Send size={18} strokeWidth={2.5} />
         Send Magic Link
       </button>
     </form>

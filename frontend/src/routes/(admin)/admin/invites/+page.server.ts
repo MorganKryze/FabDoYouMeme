@@ -1,9 +1,10 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import type { Invite } from '$lib/api/types';
+import { apiFetch } from '$lib/server/backend';
 
 export const load: PageServerLoad = async ({ fetch }) => {
-  const res = await fetch('/api/admin/invites');
-  const invites = res.ok ? await res.json() : [];
+  const invites = await apiFetch<Invite[]>(fetch, '/api/admin/invites');
   return { invites };
 };
 

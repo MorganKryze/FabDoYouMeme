@@ -3,6 +3,10 @@
   import { toast } from '$lib/state/toast.svelte';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { reveal } from '$lib/actions/reveal';
+  import { physCard } from '$lib/actions/physCard';
+  import { hoverEffect } from '$lib/actions/hoverEffect';
+  import { Download, Save as SaveIcon, XCircle, Mail, Edit as EditIcon } from '$lib/icons';
+  import ThemeToggle from '$lib/components/ThemeToggle.svelte';
   import type { ActionData, PageData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -85,17 +89,21 @@
           />
           <button
             use:pressPhysics={'dark'}
+            use:hoverEffect={'swap'}
             type="submit"
-            class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold cursor-pointer"
+            class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold cursor-pointer inline-flex items-center gap-2"
           >
+            <SaveIcon size={16} strokeWidth={2.5} />
             Save
           </button>
           <button
             use:pressPhysics={'ghost'}
+            use:hoverEffect={'swap'}
             type="button"
             onclick={() => editingUsername = false}
-            class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-transparent text-sm font-bold cursor-pointer"
+            class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-transparent text-sm font-bold cursor-pointer inline-flex items-center gap-2"
           >
+            <XCircle size={16} strokeWidth={2.5} />
             Cancel
           </button>
         </div>
@@ -104,7 +112,8 @@
       <div class="flex items-center gap-3">
         <span class="text-sm font-bold">{data.user.username}</span>
         <button type="button" onclick={() => editingUsername = true}
-          class="text-xs font-bold text-brand-text-muted underline hover:text-brand-text transition-colors">
+          class="inline-flex items-center gap-1 text-xs font-bold text-brand-text-muted underline hover:text-brand-text transition-colors">
+          <EditIcon size={12} strokeWidth={2.5} />
           Edit
         </button>
       </div>
@@ -129,17 +138,21 @@
           />
           <button
             use:pressPhysics={'dark'}
+            use:hoverEffect={'swap'}
             type="submit"
-            class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold cursor-pointer"
+            class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold cursor-pointer inline-flex items-center gap-2"
           >
+            <Mail size={16} strokeWidth={2.5} />
             Verify
           </button>
           <button
             use:pressPhysics={'ghost'}
+            use:hoverEffect={'swap'}
             type="button"
             onclick={() => editingEmail = false}
-            class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-transparent text-sm font-bold cursor-pointer"
+            class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-transparent text-sm font-bold cursor-pointer inline-flex items-center gap-2"
           >
+            <XCircle size={16} strokeWidth={2.5} />
             Cancel
           </button>
         </div>
@@ -149,11 +162,21 @@
       <div class="flex items-center gap-3">
         <span class="text-sm font-bold">{data.user.email}</span>
         <button type="button" onclick={() => editingEmail = true}
-          class="text-xs font-bold text-brand-text-muted underline hover:text-brand-text transition-colors">
+          class="inline-flex items-center gap-1 text-xs font-bold text-brand-text-muted underline hover:text-brand-text transition-colors">
+          <EditIcon size={12} strokeWidth={2.5} />
           Change Email
         </button>
       </div>
     {/if}
+  </section>
+
+  <!-- Preferences section -->
+  <section class="flex flex-col gap-3">
+    <h2 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Theme</h2>
+    <ThemeToggle />
+    <p class="text-xs font-semibold text-brand-text-muted">
+      Auto matches the time of day. Override stays until you change it.
+    </p>
   </section>
 
   <!-- Data & Privacy section -->
@@ -166,15 +189,18 @@
       </p>
       <button
         use:pressPhysics={'ghost'}
+        use:hoverEffect={'swap'}
         type="button"
         onclick={downloadExport}
-        class="self-start h-11 px-6 rounded-full border-[2.5px] border-brand-border-heavy bg-transparent text-sm font-bold transition-colors cursor-pointer"
+        class="self-start h-11 px-6 rounded-full border-[2.5px] border-brand-border-heavy bg-transparent text-sm font-bold cursor-pointer inline-flex items-center gap-2"
       >
+        <Download size={16} strokeWidth={2.5} />
         Download My Data
       </button>
     </div>
 
     <div
+      use:physCard
       class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-5 flex flex-col gap-1"
       style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
     >

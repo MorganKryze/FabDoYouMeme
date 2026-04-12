@@ -5,6 +5,7 @@
   import { toast } from '$lib/state/toast.svelte';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { reveal } from '$lib/actions/reveal';
+  import { stage } from '$lib/motion/stage.svelte';
   import MemeCaptionSubmitForm from '$lib/games/meme-caption/SubmitForm.svelte';
   import MemeCaptionVoteForm from '$lib/games/meme-caption/VoteForm.svelte';
   import MemeCaptionResultsView from '$lib/games/meme-caption/ResultsView.svelte';
@@ -46,6 +47,10 @@
     }
   });
 
+  $effect(() => {
+    stage.sync(room.phase);
+  });
+
   async function kickPlayer(userId: string) {
     await fetch(`/api/rooms/${data.room.code}/kick`, {
       method: 'POST',
@@ -78,8 +83,10 @@
     </div>
   {/if}
 
+  <!-- Stage-wrapped phase branches (L1c) -->
+  <div class="stage-wrap" class:hidden={!stage.visible}>
   <!-- Lobby phase -->
-  {#if room.phase === 'idle' && room.state === 'lobby'}
+  {#if stage.displayPhase === 'idle' && room.state === 'lobby'}
     <div class="flex flex-col items-center gap-8 text-center" use:reveal>
       <p class="text-sm font-semibold text-brand-text-mid">
         {#if isHost}
@@ -112,15 +119,15 @@
     </div>
 
   <!-- Submission phase -->
-  {:else if room.phase === 'submitting' && room.currentRound}
+  {:else if stage.displayPhase === 'submitting' && room.currentRound}
     <MemeCaptionSubmitForm round={room.currentRound} />
 
   <!-- Voting phase -->
-  {:else if room.phase === 'voting'}
+  {:else if stage.displayPhase === 'voting'}
     <MemeCaptionVoteForm submissions={room.submissions} />
 
   <!-- Results phase -->
-  {:else if room.phase === 'results'}
+  {:else if stage.displayPhase === 'results'}
     <MemeCaptionResultsView
       submissions={room.submissions}
       leaderboard={room.leaderboard}
@@ -163,4 +170,5 @@
       </a>
     </div>
   {/if}
+  </div>
 </div>

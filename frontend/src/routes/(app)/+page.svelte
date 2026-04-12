@@ -3,6 +3,9 @@
   import { untrack } from 'svelte';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { reveal } from '$lib/actions/reveal';
+  import { physCard } from '$lib/actions/physCard';
+  import { hoverEffect } from '$lib/actions/hoverEffect';
+  import { Plus, Hash } from '$lib/icons';
   import type { ActionData, PageData } from './$types';
   import type { Pack, PaginatedResponse } from '$lib/api/types';
 
@@ -64,6 +67,7 @@
     <!-- Create Room Card -->
     <div
       use:reveal
+      use:physCard
       class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-6 flex flex-col gap-4 cursor-default"
       style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
     >
@@ -143,10 +147,12 @@
 
         <button
           use:pressPhysics={'dark'}
+          use:hoverEffect={'gradient'}
           type="submit"
           disabled={!selectedPackId}
-          class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-50 transition-colors cursor-pointer"
+          class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-50 cursor-pointer inline-flex items-center justify-center gap-2"
         >
+          <Plus size={18} strokeWidth={2.5} />
           Create Room
         </button>
       </form>
@@ -155,6 +161,7 @@
     <!-- Join Room Card -->
     <div
       use:reveal={{ delay: 1 }}
+      use:physCard
       class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-6 flex flex-col gap-4 cursor-default"
       style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
     >
@@ -188,9 +195,11 @@
 
         <button
           use:pressPhysics={'primary'}
+          use:hoverEffect={'glow'}
           type="submit"
-          class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text font-bold hover:bg-brand-white transition-colors cursor-pointer"
+          class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text font-bold cursor-pointer inline-flex items-center justify-center gap-2"
         >
+          <Hash size={18} strokeWidth={2.5} />
           Join Game
         </button>
       </form>

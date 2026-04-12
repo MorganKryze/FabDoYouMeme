@@ -246,15 +246,17 @@ Three variants, all pill-shaped with `2.5px` dark border:
 
 ### Button Hover Effects
 
-Five validated effects for different contexts:
+Five validated effects, each locked to a specific context (mapping confirmed 2026-04-12):
 
-| Style              | Effect                                          | Use for                         |
-| ------------------ | ----------------------------------------------- | ------------------------------- |
-| **Color Swap**     | White → dark inversion                          | Standard actions (Submit, Copy) |
-| **Gradient Fill**  | Pastel gradient fades in + shimmers behind text | Primary CTAs (Create a Room)    |
-| **Pulse Glow**     | Gradient halo breathes behind button            | Highlighted actions             |
-| **Bounce Expand**  | `scale(1.06)` with elastic spring               | Playful secondary actions       |
-| **Rainbow Border** | Border cycles through palette colors            | Special moments (game start)    |
+| Style              | Effect                                          | Locked to                                        |
+| ------------------ | ----------------------------------------------- | ------------------------------------------------ |
+| **Gradient Fill**  | Pastel gradient fades in + shimmers behind text | Primary CTAs (Create Room, Submit Caption)       |
+| **Pulse Glow**     | Gradient halo breathes behind button            | Secondary CTAs (Join Room)                       |
+| **Color Swap**     | White → dark inversion                          | All standard actions (admin, nav, forms, copy)   |
+| **Bounce Expand**  | `scale(1.06)` with elastic spring               | Playful choices (Vote)                           |
+| **Rainbow Border** | Border cycles through palette colors            | Reserved — **one button only** (Next Round)      |
+
+Reuse existing implementations in `frontend/src/lib/actions/hoverEffect.ts`. Never inline a new variant in a component — extend the action instead.
 
 ### Cards — 3D Physical Card Behavior
 
@@ -375,6 +377,6 @@ These need user or designer input before locking in:
 - [ ] **Vocabulary lock-in** — which of the community terms ship in v1 copy, which stay as flavour text
 - [ ] **"Do You Meme?" proximity** — decide if the name similarity to the Fuckjerry card game needs any explicit disclaimer or differentiation in public-facing copy
 - [ ] **Afternoon palette** — blend of morning + evening, or its own identity?
-- [ ] **Dark mode toggle** — can users override the auto time-based theme?
-- [ ] **Mobile adaptations** — touch-based card interaction instead of cursor tracking
+- [x] **Dark mode toggle** — resolved 2026-04-12. Users override the auto time-based theme via a four-way segmented pill on the profile page (`auto` / `morning` / `evening` / `night`). Preference is persisted in `localStorage` under `fdym:theme` and hydrated before `TimeBackground` mounts to prevent flash. Implemented in `frontend/src/lib/state/theme.svelte.ts` and `frontend/src/lib/components/ThemeToggle.svelte`.
+- [x] **Mobile adaptations** — resolved 2026-04-12. `physCard` branches on `(hover: hover) and (pointer: fine)`. Touch devices get a tap-scale-press fallback (`translateY(1px) scale(0.97)` on `pointerdown`, spring release on `pointerup` using the same `cubic-bezier(0.22, 1, 0.36, 1)` curve). Cursor-tracked 3D tilt is disabled on non-hover devices. No DeviceOrientation, no haptics. Tap targets already ≥44px per the spec.
 - [ ] **Sound design** — audio to accompany visual transitions

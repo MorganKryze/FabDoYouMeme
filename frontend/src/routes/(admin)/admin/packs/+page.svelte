@@ -2,6 +2,10 @@
   import { enhance } from '$app/forms';
   import { untrack } from 'svelte';
   import { toast } from '$lib/state/toast.svelte';
+  import { reveal } from '$lib/actions/reveal';
+  import { pressPhysics } from '$lib/actions/pressPhysics';
+  import { hoverEffect } from '$lib/actions/hoverEffect';
+  import { Plus, Trash2, XCircle } from '$lib/icons';
   import type { ActionData, PageData } from './$types';
   import type { Pack } from '$lib/api/types';
 
@@ -27,12 +31,17 @@
   <title>Packs — Admin</title>
 </svelte:head>
 
-<div class="p-6 flex flex-col gap-4">
+<div class="p-6 flex flex-col gap-4" use:reveal>
   <div class="flex items-center gap-4">
     <h1 class="text-xl font-bold flex-1">Packs</h1>
-    <button type="button" onclick={() => showNewRow = !showNewRow}
-      class="h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90">
-      + New Pack
+    <button
+      type="button"
+      onclick={() => showNewRow = !showNewRow}
+      use:pressPhysics={'dark'}
+      use:hoverEffect={'swap'}
+      class="h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center gap-1.5">
+      <Plus size={14} strokeWidth={2.5} />
+      New Pack
     </button>
   </div>
 
@@ -51,12 +60,21 @@
         <input id="new-pack-description" name="description" type="text" placeholder="Optional"
           class="h-9 rounded border border-brand-border-heavy bg-brand-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
       </div>
-      <button type="submit"
-        class="h-9 px-4 rounded bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 shrink-0">
+      <button
+        type="submit"
+        use:pressPhysics={'dark'}
+        use:hoverEffect={'swap'}
+        class="h-9 px-4 rounded bg-primary text-primary-foreground text-sm font-medium shrink-0 inline-flex items-center gap-1.5">
+        <Plus size={14} strokeWidth={2.5} />
         Create
       </button>
-      <button type="button" onclick={() => showNewRow = false}
-        class="h-9 px-4 rounded border border-brand-border text-sm hover:bg-muted shrink-0">
+      <button
+        type="button"
+        onclick={() => showNewRow = false}
+        use:pressPhysics={'ghost'}
+        use:hoverEffect={'swap'}
+        class="h-9 px-4 rounded border border-brand-border text-sm shrink-0 inline-flex items-center gap-1.5">
+        <XCircle size={14} strokeWidth={2.5} />
         Cancel
       </button>
     </form>
@@ -75,8 +93,8 @@
         </tr>
       </thead>
       <tbody>
-        {#each packs as pack}
-          <tr class="border-b border-brand-border/50 hover:bg-muted/20 transition-colors">
+        {#each packs as pack, i}
+          <tr use:reveal={{ delay: i }} class="border-b border-brand-border/50 hover:bg-muted/20 transition-colors">
             <td class="px-4 py-3">
               <a href="/admin/packs/{pack.id}" class="font-medium hover:underline">{pack.name}</a>
             </td>
@@ -99,10 +117,12 @@
                   if (!confirm('Delete this pack? In-use packs will no longer be available for new rooms.')) e.preventDefault();
                 }}>
                 <input type="hidden" name="pack_id" value={pack.id} />
-                <button type="submit"
-                  class="text-brand-text-muted hover:text-red-600 transition-colors text-lg leading-none"
+                <button
+                  type="submit"
+                  use:hoverEffect={'swap'}
+                  class="text-brand-text-muted hover:text-red-600 transition-colors inline-flex items-center p-1 rounded-full"
                   aria-label="Delete pack">
-                  ×
+                  <Trash2 size={14} strokeWidth={2.5} />
                 </button>
               </form>
             </td>

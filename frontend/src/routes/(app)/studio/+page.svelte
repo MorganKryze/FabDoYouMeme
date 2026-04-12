@@ -1,5 +1,6 @@
 <script lang="ts">
   import { studio } from '$lib/state/studio.svelte';
+  import { reveal } from '$lib/actions/reveal';
   import PackNavigator from '$lib/components/studio/PackNavigator.svelte';
   import ItemTable from '$lib/components/studio/ItemTable.svelte';
   import ItemEditor from '$lib/components/studio/ItemEditor.svelte';
@@ -16,7 +17,7 @@
   <title>Studio — FabDoYouMeme</title>
 </svelte:head>
 
-<div class="flex-1 flex overflow-hidden h-[calc(100vh-3.5rem)]">
+<div class="flex-1 flex overflow-hidden h-[calc(100vh-3.5rem)]" use:reveal>
   <!-- Left: Pack Navigator (fixed width) -->
   <div class="w-52 shrink-0 border-r border-brand-border overflow-y-auto">
     <PackNavigator />

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { reveal } from '$lib/actions/reveal';
+  import { physCard } from '$lib/actions/physCard';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
 </script>
@@ -7,7 +9,7 @@
   <title>Admin Dashboard — FabDoYouMeme</title>
 </svelte:head>
 
-<div class="p-6 flex flex-col gap-6">
+<div class="p-6 flex flex-col gap-6" use:reveal>
   <h1 class="text-2xl font-bold">Dashboard</h1>
 
   {#if data.stats}
@@ -17,8 +19,12 @@
         { label: 'Total Users', value: data.stats.total_users ?? 0 },
         { label: 'Total Packs', value: data.stats.total_packs ?? 0 },
         { label: 'Pending Invites', value: data.stats.pending_invites ?? 0 },
-      ] as card}
-        <div class="rounded-xl border border-brand-border bg-brand-white p-4">
+      ] as card, i}
+        <div
+          use:reveal={{ delay: i }}
+          use:physCard
+          class="rounded-xl border border-brand-border bg-brand-white p-4"
+        >
           <p class="text-sm text-brand-text-muted">{card.label}</p>
           <p class="text-3xl font-bold mt-1">{card.value}</p>
         </div>

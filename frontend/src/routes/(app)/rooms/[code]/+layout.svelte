@@ -2,6 +2,8 @@
   import { onMount, onDestroy } from 'svelte';
   import { ws } from '$lib/state/ws.svelte';
   import { room } from '$lib/state/room.svelte';
+  import { hoverEffect } from '$lib/actions/hoverEffect';
+  import { Copy, CheckCircle } from '$lib/icons';
   import type { WsMessage } from '$lib/api/types';
   import type { LayoutData } from './$types';
 
@@ -38,10 +40,17 @@
       <button
         type="button"
         onclick={copyRoomCode}
-        class="text-xs font-bold text-brand-text-muted hover:text-brand-text transition-colors"
+        use:hoverEffect={'swap'}
+        class="inline-flex items-center gap-1.5 text-xs font-bold text-brand-text-muted hover:text-brand-text transition-colors px-2 py-1 rounded-full"
         title="Copy room code"
       >
-        {copied ? 'Copied!' : 'Copy'}
+        {#if copied}
+          <CheckCircle size={14} strokeWidth={2.5} />
+          Copied!
+        {:else}
+          <Copy size={14} strokeWidth={2.5} />
+          Copy
+        {/if}
       </button>
     </div>
 

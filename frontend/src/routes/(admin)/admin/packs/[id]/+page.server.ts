@@ -1,17 +1,14 @@
-import { error, fail } from '@sveltejs/kit';
+import { fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import type { Pack, GameItem } from '$lib/api/types';
+import { apiFetch } from '$lib/server/backend';
 
 export const load: PageServerLoad = async ({ params, fetch }) => {
-  const [packRes, itemsRes] = await Promise.all([
-    fetch(`/api/packs/${params.id}`),
-    fetch(`/api/packs/${params.id}/items`)
+  const [pack, items] = await Promise.all([
+    apiFetch<Pack>(fetch, `/api/packs/${params.id}`),
+    apiFetch<GameItem[]>(fetch, `/api/packs/${params.id}/items`)
   ]);
-
-  if (!packRes.ok) throw error(404, 'Pack not found');
-  return {
-    pack: await packRes.json(),
-    items: itemsRes.ok ? await itemsRes.json() : []
-  };
+  return { pack, items };
 };
 
 export const actions: Actions = {
