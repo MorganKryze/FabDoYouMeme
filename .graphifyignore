@@ -1,40 +1,35 @@
 .env
-*.env.local
-*.env.production
+_.env.local
+_.env.production
 
 # Go
+
 backend/vendor/
 backend/tmp/
 backend/server
-*.test
-*.out
+_.test
+_.out
 
 # Node
+
 frontend/node_modules/
 frontend/.svelte-kit/
 frontend/build/
 
 # IDE
+
 .idea/
 .vscode/settings.json
-*.swp
+\*.swp
 
 # OS
+
 .DS_Store
 Thumbs.db
 
 # Docker
+
 postgres_data/
 .env.dev
 .env.preprod
 .env.prod
-
-# graphify
-graphify-out/
-
-# Local-only scratch files (checklists, drafts, tool reports) — never pushed
-*.local.*
-
-# Claude
-.claude/
-.superpowers/

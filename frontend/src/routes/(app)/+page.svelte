@@ -1,208 +1,100 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import { untrack } from 'svelte';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { reveal } from '$lib/actions/reveal';
   import { physCard } from '$lib/actions/physCard';
   import { hoverEffect } from '$lib/actions/hoverEffect';
-  import { Plus, Hash } from '$lib/icons';
+  import RoomCodeInput from '$lib/components/RoomCodeInput.svelte';
+  import { Play, Sparkles } from '$lib/icons';
   import type { ActionData, PageData } from './$types';
-  import type { Pack, PaginatedResponse } from '$lib/api/types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
-  // Default to the first loaded game type; user can change it afterwards.
-  let selectedGameTypeId = $state(untrack(() => data.gameTypes[0]?.id ?? ''));
-  let packs = $state<Pack[]>([]);
-  let selectedPackId = $state('');
-  let isSolo = $state(false);
-  let roundCount = $state(5);
-  let roundDuration = $state(60);
-  let votingDuration = $state(30);
-  let loadingPacks = $state(false);
-  let currentAbortController: AbortController | null = null;
-  // Imperative focus for the Join-room code input — replaces the raw
-  // `autofocus` attribute so screen readers announce the focus change
-  // (a11y_autofocus).
-  let roomCodeInput = $state<HTMLInputElement | null>(null);
-  $effect(() => {
-    if (roomCodeInput) roomCodeInput.focus();
-  });
+  let code = $state('');
+  let joinForm = $state<HTMLFormElement | null>(null);
 
-  const selectedGameType = $derived(
-    data.gameTypes.find((gt) => gt.id === selectedGameTypeId) ?? null
-  );
-
-  async function loadPacks() {
-    if (!selectedGameTypeId) return;
-    currentAbortController?.abort();
-    currentAbortController = new AbortController();
-    const signal = currentAbortController.signal;
-    loadingPacks = true;
-    try {
-      const res = await fetch(`/api/packs?game_type_id=${selectedGameTypeId}`, { signal });
-      if (!res.ok) { packs = []; return; }
-      const body: PaginatedResponse<Pack> = await res.json();
-      packs = body.data ?? [];
-      selectedPackId = packs[0]?.id ?? '';
-    } catch (err) {
-      if ((err as Error).name !== 'AbortError') { packs = []; }
-    } finally {
-      loadingPacks = false;
-    }
+  function submitJoin(next: string) {
+    code = next;
+    if (next.length === 4 && joinForm) joinForm.requestSubmit();
   }
-
-  $effect(() => {
-    void loadPacks();
-  });
 </script>
 
 <svelte:head>
-  <title>Lobby — FabDoYouMeme</title>
+  <title>FabDoYouMeme</title>
 </svelte:head>
 
-<div class="flex-1 flex items-start justify-center p-6 pt-8">
-  <div class="w-full max-w-3xl grid grid-cols-1 md:grid-cols-2 gap-5">
+<div class="flex-1 flex items-start justify-center p-6 pt-10">
+  <div class="w-full max-w-3xl flex flex-col gap-10">
 
-    <!-- Create Room Card -->
-    <div
-      use:reveal
-      use:physCard
-      class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-6 flex flex-col gap-4 cursor-default"
-      style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
-    >
-      <h2 class="text-xl font-bold">Create a Room</h2>
-
-      {#if form?.error}
-        <div
-          class="rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-5 py-3 text-sm font-bold"
-          style="box-shadow: 0 4px 0 rgba(0,0,0,0.06);"
-        >
-          {form.error}
-        </div>
-      {/if}
-
-      <form method="POST" action="?/createRoom" use:enhance class="flex flex-col gap-4">
-        <div class="flex flex-col gap-1">
-          <label for="game_type" class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Game Type</label>
-          <select
-            id="game_type"
-            name="game_type_id"
-            bind:value={selectedGameTypeId}
-            class="h-11 rounded-lg border-[2.5px] border-brand-border-heavy bg-brand-white px-3 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
-          >
-            {#each data.gameTypes as gt}
-              <option value={gt.id}>{gt.name}</option>
-            {/each}
-          </select>
-        </div>
-
-        <div class="flex flex-col gap-1">
-          <label for="pack" class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Pack</label>
-          {#if loadingPacks}
-            <p class="text-sm font-semibold text-brand-text-muted">Loading packs…</p>
-          {:else if packs.length === 0}
-            <p class="text-sm font-semibold text-brand-text-muted">No compatible packs found for this game type.</p>
-          {:else}
-            <select
-              id="pack"
-              name="pack_id"
-              bind:value={selectedPackId}
-              class="h-11 rounded-lg border-[2.5px] border-brand-border-heavy bg-brand-white px-3 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
-            >
-              {#each packs as p}
-                <option value={p.id}>{p.name}</option>
-              {/each}
-            </select>
-          {/if}
-        </div>
-
-        {#if selectedGameType?.supports_solo}
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" bind:checked={isSolo} class="h-4 w-4 rounded border-brand-border-heavy" />
-            <span class="text-sm font-semibold">Solo mode</span>
-          </label>
-          <input type="hidden" name="is_solo" value={String(isSolo)} />
-        {:else}
-          <input type="hidden" name="is_solo" value="false" />
-        {/if}
-
-        <div class="flex flex-col gap-1">
-          <label for="round_count" class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Rounds: {roundCount}</label>
-          <input id="round_count" type="range" name="round_count" min={1} max={50} bind:value={roundCount}
-            class="accent-brand-accent" />
-        </div>
-
-        <div class="flex flex-col gap-1">
-          <label for="round_duration_seconds" class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Submission time: {roundDuration}s</label>
-          <input id="round_duration_seconds" type="range" name="round_duration_seconds" min={15} max={300} step={5}
-            bind:value={roundDuration} class="accent-brand-accent" />
-        </div>
-
-        <div class="flex flex-col gap-1">
-          <label for="voting_duration_seconds" class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Voting time: {votingDuration}s</label>
-          <input id="voting_duration_seconds" type="range" name="voting_duration_seconds" min={10} max={120} step={5}
-            bind:value={votingDuration} class="accent-brand-accent" />
-        </div>
-
-        <button
-          use:pressPhysics={'dark'}
-          use:hoverEffect={'gradient'}
-          type="submit"
-          disabled={!selectedPackId}
-          class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-50 cursor-pointer inline-flex items-center justify-center gap-2"
-        >
-          <Plus size={18} strokeWidth={2.5} />
-          Create Room
-        </button>
-      </form>
-    </div>
-
-    <!-- Join Room Card -->
-    <div
-      use:reveal={{ delay: 1 }}
-      use:physCard
-      class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-6 flex flex-col gap-4 cursor-default"
-      style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
-    >
-      <h2 class="text-xl font-bold">Join a Room</h2>
+    <!-- ─── Join pill (the dominant path) ─────────────────────── -->
+    <section use:reveal class="flex flex-col gap-4">
+      <div class="text-center">
+        <h1 class="text-3xl font-bold">Got a code?</h1>
+        <p class="text-sm font-semibold text-brand-text-muted mt-1">
+          Drop it in and jump straight into the room.
+        </p>
+      </div>
 
       {#if form?.joinError}
         <div
-          class="rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-5 py-3 text-sm font-bold"
+          class="rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-5 py-3 text-sm font-bold text-center"
           style="box-shadow: 0 4px 0 rgba(0,0,0,0.06);"
         >
           {form.joinError}
         </div>
       {/if}
 
-      <form method="POST" action="?/joinRoom" use:enhance class="flex flex-col gap-4">
-        <div class="flex flex-col gap-1">
-          <label for="room-code" class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Room Code</label>
-          <input
-            id="room-code"
-            name="code"
-            bind:this={roomCodeInput}
-            type="text"
-            inputmode="text"
-            autocapitalize="characters"
-            maxlength={4}
-            placeholder="WXYZ"
-            class="h-16 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-6 text-center text-2xl font-mono font-bold tracking-widest uppercase focus:outline-none focus:border-brand-text transition-colors"
-            style="box-shadow: 0 4px 0 rgba(0,0,0,0.06);"
-          />
-        </div>
-
+      <form
+        bind:this={joinForm}
+        method="POST"
+        action="?/joinRoom"
+        use:enhance
+        class="grid grid-cols-[1fr_auto] gap-3 items-end"
+      >
+        <RoomCodeInput bind:value={code} autofocus onenter={submitJoin} />
         <button
-          use:pressPhysics={'primary'}
-          use:hoverEffect={'glow'}
+          use:pressPhysics={'dark'}
+          use:hoverEffect={'gradient'}
           type="submit"
-          class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text font-bold cursor-pointer inline-flex items-center justify-center gap-2"
+          disabled={code.length !== 4}
+          class="h-16 px-7 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-40 cursor-pointer inline-flex items-center justify-center gap-2"
         >
-          <Hash size={18} strokeWidth={2.5} />
-          Join Game
+          <Play size={18} strokeWidth={2.5} />
+          Play
         </button>
       </form>
+    </section>
+
+    <!-- ─── Divider ──────────────────────────────────────────── -->
+    <div use:reveal={{ delay: 1 }} class="flex items-center gap-4 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+      <span class="flex-1 h-px bg-brand-border-heavy/40"></span>
+      <span>or host a new game</span>
+      <span class="flex-1 h-px bg-brand-border-heavy/40"></span>
     </div>
+
+    <!-- ─── Game tile grid ───────────────────────────────────── -->
+    <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+      {#each data.gameTypes as gt, i}
+        <a
+          href={`/host?game_type=${gt.slug}`}
+          use:reveal={{ delay: i + 2 }}
+          use:physCard
+          use:hoverEffect={'gradient'}
+          class="group rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-6 flex flex-col gap-3 cursor-pointer"
+          style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
+        >
+          <div class="inline-flex items-center gap-2 text-lg font-bold">
+            <Sparkles size={18} strokeWidth={2.5} />
+            {gt.name}
+          </div>
+          {#if gt.description}
+            <p class="text-sm font-semibold text-brand-text-muted line-clamp-3">{gt.description}</p>
+          {/if}
+          <div class="mt-auto text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+            Host this →
+          </div>
+        </a>
+      {/each}
+    </section>
   </div>
 </div>

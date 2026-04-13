@@ -15,6 +15,7 @@ export class RoomState {
   leaderboard = $state<LeaderboardEntry[]>([]);
   endReason = $state<string | null>(null);
   hostUserId = $state<string | null>(null);
+  rematchWindowExpiresAt = $state<string | null>(null);
 
   hasSubmitted = $state(false);
   hasVoted = $state(false);
@@ -70,11 +71,34 @@ export class RoomState {
         const d = msg.data as {
           reason: string;
           leaderboard: LeaderboardEntry[];
+          rematch_window_expires_at?: string;
         };
         this.state = 'finished';
         this.phase = 'idle';
         this.endReason = d.reason;
         this.leaderboard = d.leaderboard ?? [];
+        this.rematchWindowExpiresAt = d.rematch_window_expires_at ?? null;
+        break;
+      }
+      case 'rematch_started': {
+        const d = msg.data as { room_state?: { state: RoomStatus; players: Player[]; host_id?: string } };
+        this.state = 'lobby';
+        this.phase = 'idle';
+        this.currentRound = null;
+        this.submissions = [];
+        this.leaderboard = [];
+        this.endReason = null;
+        this.rematchWindowExpiresAt = null;
+        this.hasSubmitted = false;
+        this.hasVoted = false;
+        if (d.room_state) {
+          if (d.room_state.host_id) this.hostUserId = d.room_state.host_id;
+          this.players = (d.room_state.players ?? []).map(p => ({
+            ...p,
+            is_host: p.user_id === this.hostUserId
+          }));
+        }
+        toast.show('Rematch started — back to the lobby', 'success');
         break;
       }
       case 'room_state': {
@@ -112,6 +136,7 @@ export class RoomState {
     this.leaderboard = [];
     this.endReason = null;
     this.hostUserId = null;
+    this.rematchWindowExpiresAt = null;
     this.hasSubmitted = false;
     this.hasVoted = false;
   }

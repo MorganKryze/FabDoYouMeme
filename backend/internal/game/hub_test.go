@@ -185,7 +185,7 @@ func newHubEnvWith(t *testing.T, opts hubEnvOpts) *hubEnv {
 	// Passing [""] means the empty Origin (no header set by the test dialer)
 	// normalizes to "" and matches — same semantic as the old empty-string
 	// constructor argument before P2.6.
-	wsHandler := api.NewWSHandler(manager, []string{""})
+	wsHandler := api.NewWSHandler(manager, q, []string{""})
 	r := chi.NewRouter()
 	r.Get("/ws/{code}", func(w http.ResponseWriter, req *http.Request) {
 		userID := req.Header.Get("X-Test-User-ID")
@@ -500,5 +500,109 @@ func TestHub_Disconnect_GraceExpired_BroadcastsPlayerLeft(t *testing.T) {
 	data, _ := m["data"].(map[string]any)
 	if data["user_id"] != p2ID {
 		t.Errorf("want player_left.user_id=%s, got %v", p2ID, data["user_id"])
+	}
+}
+
+// TestHub_Rematch_NonHost_ReturnsError verifies only the host can initiate
+// a rematch — non-hosts get a not_host error code.
+func TestHub_Rematch_NonHost_ReturnsError(t *testing.T) {
+	env := newHubEnv(t)
+
+	nonHostID := "00000000-0000-0000-0000-000000000066"
+	conn := dial(t, env, nonHostID, "nothost")
+	defer conn.Close()
+	readUntilType(t, conn, "player_joined")
+
+	sendMsg(t, conn, "rematch_request", nil)
+
+	m := readUntilType(t, conn, "error")
+	data, _ := m["data"].(map[string]any)
+	if data["code"] != "not_host" {
+		t.Errorf("want code=not_host, got %v", data["code"])
+	}
+}
+
+// TestHub_Rematch_BeforeGameEnd_ReturnsError verifies the host cannot
+// resurrect a room that has not finished — rematch_not_available.
+func TestHub_Rematch_BeforeGameEnd_ReturnsError(t *testing.T) {
+	env := newHubEnv(t)
+
+	conn := dial(t, env, env.hostID, "host")
+	defer conn.Close()
+	readUntilType(t, conn, "player_joined")
+
+	sendMsg(t, conn, "rematch_request", nil)
+
+	m := readUntilType(t, conn, "error")
+	data, _ := m["data"].(map[string]any)
+	if data["code"] != "rematch_not_available" {
+		t.Errorf("want code=rematch_not_available, got %v", data["code"])
+	}
+}
+
+// TestE2E_Rematch_FullCycle drives a room through to game_ended via the
+// host-disconnect shortcut (same fake-clock rig as TestE2E_HostDisconnectFinishesGame),
+// then the host reconnects and sends rematch_request. The hub should broadcast
+// rematch_started with a fresh room_state that still includes the surviving
+// player — proving in-memory state was reset and the DB transition happened.
+func TestE2E_Rematch_FullCycle(t *testing.T) {
+	fake := clock.NewFake(time.Now().UTC())
+
+	env := newHubEnvWith(t, hubEnvOpts{
+		roundCount:            3,
+		roundDurationSeconds:  15,
+		votingDurationSeconds: 10,
+		reconnectGrace:        500 * time.Millisecond,
+		packItemCount:         3,
+		clk:                   fake,
+	})
+
+	hostConn := dial(t, env, env.hostID, "host")
+	defer hostConn.Close()
+	readUntilType(t, hostConn, "player_joined")
+
+	p2ID := "00000000-0000-0000-0000-000000000044"
+	p2Conn := dial(t, env, p2ID, "player2")
+	defer p2Conn.Close()
+	readUntilType(t, hostConn, "player_joined")
+	readUntilType(t, p2Conn, "player_joined")
+
+	sendMsg(t, hostConn, "start", nil)
+	readUntilType(t, hostConn, "game_started")
+	readUntilType(t, p2Conn, "game_started")
+	readUntilType(t, p2Conn, "round_started")
+
+	// Kill the host and age past the grace window to finish the room.
+	hostConn.Close()
+	readUntilType(t, p2Conn, "reconnecting")
+	fake.Advance(501 * time.Millisecond)
+	readUntilType(t, p2Conn, "player_left")
+
+	gameEnded := readUntilType(t, p2Conn, "game_ended")
+	endData, _ := gameEnded["data"].(map[string]any)
+	if _, ok := endData["rematch_window_expires_at"].(string); !ok {
+		t.Fatalf("want game_ended.rematch_window_expires_at to be a string, got %v", endData["rematch_window_expires_at"])
+	}
+
+	// Host reconnects — GetOrLoad hits the fast path because the hub is still
+	// alive, and handleRegister accepts the new connection even though the
+	// hub is in HubFinished state (reconnect logic looks up by player ID).
+	hostReconnect := dial(t, env, env.hostID, "host")
+	defer hostReconnect.Close()
+	// Drain any immediate room_state / player_joined echoes.
+	readUntilType(t, hostReconnect, "player_joined")
+
+	sendMsg(t, hostReconnect, "rematch_request", nil)
+
+	// Both the host and the surviving player should see rematch_started.
+	rematched := readUntilType(t, p2Conn, "rematch_started")
+	rmData, _ := rematched["data"].(map[string]any)
+	roomState, _ := rmData["room_state"].(map[string]any)
+	if roomState["state"] != "lobby" {
+		t.Errorf("want rematch_started.room_state.state=lobby, got %v", roomState["state"])
+	}
+	players, _ := roomState["players"].([]any)
+	if len(players) < 1 {
+		t.Errorf("want at least 1 player in rematch_started room_state, got %d", len(players))
 	}
 }

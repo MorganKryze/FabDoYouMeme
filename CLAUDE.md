@@ -74,21 +74,21 @@ FabDoYouMeme/
 
 ## Docs
 
-| File                                      | Contents                                                                |
-| ----------------------------------------- | ----------------------------------------------------------------------- |
-| `docs/overview.md`                        | Goals, tech stack rationale, key design decisions                       |
-| `docs/architecture.md`                    | System components, DB schema, storage, middleware, startup behaviour    |
-| `docs/auth-and-identity.md`               | Auth flow, invite system, session management, security controls         |
-| `docs/game-engine.md`                     | Room/round lifecycle, WebSocket hub, game type handler interface        |
-| `docs/api.md`                             | REST endpoints, WebSocket protocol, error model                         |
-| `docs/frontend.md`                        | SvelteKit routing, Svelte 5 state singletons, game plugin architecture  |
-| `docs/self-hosting.md`                    | Prerequisites, first boot, all environment variables                    |
-| `docs/operations.md`                      | Monitoring, logs, backups, CI, production checklist                     |
-| `docs/brand.md`                           | Brand & identity: name rationale, voice, vocabulary, namespace audit    |
-| `docs/reference/error-codes.md`           | Canonical `snake_case` error code table (REST + WebSocket)              |
-| `docs/reference/decisions.md`             | ADR-001–ADR-010: why no JWT, why chi, why sentinel UUID, etc.           |
-| `docs/reference/gdpr.md`                  | GDPR compliance: lawful basis, ROPA-lite, rights, DPA, breach procedure |
-| `docs/reference/privacy-policy.md`        | Art. 13(1) Privacy Policy stub template for operator to complete        |
+| File                               | Contents                                                                |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| `docs/overview.md`                 | Goals, tech stack rationale, key design decisions                       |
+| `docs/architecture.md`             | System components, DB schema, storage, middleware, startup behaviour    |
+| `docs/auth-and-identity.md`        | Auth flow, invite system, session management, security controls         |
+| `docs/game-engine.md`              | Room/round lifecycle, WebSocket hub, game type handler interface        |
+| `docs/api.md`                      | REST endpoints, WebSocket protocol, error model                         |
+| `docs/frontend.md`                 | SvelteKit routing, Svelte 5 state singletons, game plugin architecture  |
+| `docs/self-hosting.md`             | Prerequisites, first boot, all environment variables                    |
+| `docs/operations.md`               | Monitoring, logs, backups, CI, production checklist                     |
+| `docs/brand.md`                    | Brand & identity: name rationale, voice, vocabulary, namespace audit    |
+| `docs/reference/error-codes.md`    | Canonical `snake_case` error code table (REST + WebSocket)              |
+| `docs/reference/decisions.md`      | ADR-001–ADR-010: why no JWT, why chi, why sentinel UUID, etc.           |
+| `docs/reference/gdpr.md`           | GDPR compliance: lawful basis, ROPA-lite, rights, DPA, breach procedure |
+| `docs/reference/privacy-policy.md` | Art. 13(1) Privacy Policy stub template for operator to complete        |
 
 ---
 
@@ -180,3 +180,13 @@ This applies to all files under `docs/superpowers/plans/`.
 - **Least Attack Surface**: no passwords, no public asset access, secrets via env only
 - **Multi-game Extensibility**: game types are registered handler units; adding one requires no schema or protocol changes
 - **Minimal Impact**: changes should touch only what's necessary
+
+## graphify
+
+This project has a graphify knowledge graph at graphify-out/.
+
+Rules:
+
+- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
+- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
+- After modifying code files in this session, run `python3 -c "from graphify.watch import _rebuild_code; from pathlib import Path; _rebuild_code(Path('.'))"` to keep the graph current

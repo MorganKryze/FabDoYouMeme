@@ -9,6 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 
+	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
+	"github.com/MorganKryze/FabDoYouMeme/backend/internal/auth"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/config"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/game"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
@@ -17,18 +19,21 @@ import (
 // WSHandler handles WS /api/ws/rooms/:code.
 type WSHandler struct {
 	manager        *game.Manager
+	queries        *db.Queries
 	allowedOrigins []string
 }
 
 // NewWSHandler takes the pre-normalized allowlist produced by
 // config.buildAllowedOrigins. Passing raw strings here is fine too — the
 // constructor re-normalizes defensively so tests and main() share one rule.
-func NewWSHandler(manager *game.Manager, allowedOrigins []string) *WSHandler {
+// The queries handle may be nil in tests that don't exercise the guest path;
+// in that case a guest_token query param will be rejected with an auth error.
+func NewWSHandler(manager *game.Manager, queries *db.Queries, allowedOrigins []string) *WSHandler {
 	normalized := make([]string, 0, len(allowedOrigins))
 	for _, o := range allowedOrigins {
 		normalized = append(normalized, config.NormalizeOrigin(o))
 	}
-	return &WSHandler{manager: manager, allowedOrigins: normalized}
+	return &WSHandler{manager: manager, queries: queries, allowedOrigins: normalized}
 }
 
 // checkOrigin is the exact policy used by the upgrader. Extracted as a
@@ -46,16 +51,20 @@ func (h *WSHandler) checkOrigin(r *http.Request) bool {
 	return false
 }
 
-// ServeHTTP upgrades to WebSocket, authenticates via session cookie,
-// looks up the room, and adds the connection to the hub.
+// ServeHTTP upgrades to WebSocket, resolves the caller's identity (registered
+// user via session cookie OR guest via ?guest_token=), looks up the room, and
+// adds the connection to the hub. Guests must have obtained their token via
+// POST /api/rooms/{code}/guest-join — the token is validated against the
+// guest_players row and must be scoped to the same room.
 func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	u, ok := middleware.GetSessionUser(r)
-	if !ok {
-		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
+	roomCode := chi.URLParam(r, "code")
+
+	ident, err := h.resolveIdentity(r, roomCode)
+	if err != nil {
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", err.Error())
 		return
 	}
 
-	roomCode := chi.URLParam(r, "code")
 	hub, err := h.manager.GetOrLoad(r.Context(), roomCode)
 	if err != nil {
 		// Room lookup failed OR the room exists but is finished. Both map to
@@ -75,5 +84,55 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 5s timeout for hub join — prevents slow hubs from blocking goroutines.
 	joinCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
-	hub.Join(joinCtx, u.UserID, u.Username, conn)
+	hub.Join(joinCtx, ident, conn)
 }
+
+// resolveIdentity returns a PlayerIdentity for the caller, consulting the
+// session user first and falling back to a guest token. The guest token must
+// match a guest_players row scoped to the requested room.
+func (h *WSHandler) resolveIdentity(r *http.Request, roomCode string) (game.PlayerIdentity, error) {
+	if u, ok := middleware.GetSessionUser(r); ok {
+		return game.PlayerIdentity{
+			ID:          u.UserID,
+			DisplayName: u.Username,
+			IsGuest:     false,
+		}, nil
+	}
+
+	token := r.URL.Query().Get("guest_token")
+	if token == "" {
+		return game.PlayerIdentity{}, errAuthRequired
+	}
+	if h.queries == nil {
+		return game.PlayerIdentity{}, errAuthRequired
+	}
+
+	hash := auth.HashToken(token)
+	gp, err := h.queries.GetGuestPlayerByTokenHash(r.Context(), hash)
+	if err != nil {
+		return game.PlayerIdentity{}, errAuthRequired
+	}
+
+	// Cross-room token replay protection: the guest_players row is scoped to
+	// a single room at mint time. The WS handshake must match that room.
+	room, err := h.queries.GetRoomByCode(r.Context(), roomCode)
+	if err != nil || room.ID != gp.RoomID {
+		return game.PlayerIdentity{}, errAuthRequired
+	}
+
+	return game.PlayerIdentity{
+		ID:          gp.ID.String(),
+		DisplayName: gp.DisplayName,
+		IsGuest:     true,
+	}, nil
+}
+
+// errAuthRequired is a stable sentinel so the handler returns a single
+// opaque error message regardless of which gate (cookie, token, room scope)
+// actually failed. Leaking the distinction would help attackers enumerate
+// live guest sessions.
+var errAuthRequired = wsAuthError("Authentication required")
+
+type wsAuthError string
+
+func (e wsAuthError) Error() string { return string(e) }

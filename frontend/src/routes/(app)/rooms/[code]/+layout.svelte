@@ -92,7 +92,12 @@
             >
               {player.username.slice(0, 2).toUpperCase()}
             </span>
-            <span class="truncate text-sm font-bold">{player.username}</span>
+            <span class="truncate text-sm font-bold">
+              {player.username}
+              {#if player.is_guest}
+                <span class="text-[0.6rem] font-bold text-brand-text-muted uppercase tracking-[0.1em] ml-1">guest</span>
+              {/if}
+            </span>
             {#if player.is_host}
               <span class="text-[0.7rem] font-semibold text-brand-text-muted ml-auto">Host</span>
             {/if}

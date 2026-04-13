@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/clock"
@@ -16,18 +17,48 @@ import (
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
 )
 
+// PlayerIdentity is the minimum info the hub needs to register a connection.
+// A player is either a registered user (IsGuest=false, ID is users.id) or a
+// guest participant (IsGuest=true, ID is guest_players.id). Hosts are always
+// users — the B1 plan explicitly forbids guests from hosting.
+type PlayerIdentity struct {
+	ID          string
+	DisplayName string
+	IsGuest     bool
+}
+
+// pgUUID converts a plain UUID string to a pgtype.UUID value for sqlc params
+// that were made nullable in migration 004 (the B1 player identity refactor).
+// If the string is not a parseable UUID, Valid is false — the sqlc call will
+// then fail cleanly at the DB layer rather than panic here.
+func pgUUID(s string) pgtype.UUID {
+	id, err := uuid.Parse(s)
+	if err != nil {
+		return pgtype.UUID{}
+	}
+	return pgtype.UUID{Bytes: id, Valid: true}
+}
+
 // HubState tracks in-memory room lifecycle.
 type HubState string
 
 const (
-	HubLobby   HubState = "lobby"
-	HubPlaying HubState = "playing"
+	HubLobby    HubState = "lobby"
+	HubPlaying  HubState = "playing"
+	HubFinished HubState = "finished" // game ended; awaiting rematch or window expiry
 )
+
+// RematchWindowDuration is how long a finished room remains resurrectable.
+// Picked to be long enough for a host to re-read the end screen and decide,
+// but short enough that zombie hubs don't pile up on a live server. The
+// plan's B2 layer specifies 5 minutes.
+const RematchWindowDuration = 5 * time.Minute
 
 // graceExpiredMsg is sent to the Run goroutine when a reconnect grace window expires.
 type graceExpiredMsg struct {
 	userID   string
 	username string
+	isGuest  bool
 }
 
 // hubRoundPhase tracks the current phase of a round.
@@ -93,7 +124,15 @@ type Hub struct {
 	clock    clock.Clock
 
 	state   HubState
-	players map[string]*connectedPlayer // userID → player
+	players map[string]*connectedPlayer // playerID → player (user OR guest UUID)
+
+	// playerTypes remembers whether each playerID is a guest, for the duration
+	// of the hub's lifetime. This lets the scoring loop branch between
+	// UpdatePlayerScore and UpdateGuestPlayerScore even after a player
+	// disconnects and drops out of the players map (e.g. mid-round grace
+	// expiration). Populated on first register; never cleared until the hub
+	// goroutine itself exits.
+	playerTypes map[string]bool // playerID → isGuest
 
 	register     chan *connectedPlayer
 	unregister   chan *connectedPlayer
@@ -112,12 +151,22 @@ type Hub struct {
 	// It is set by startGame and cleared by finishRoom. Accessed only from
 	// the Run() goroutine, so no mutex is needed despite the function type.
 	roundsCancel context.CancelFunc
+
+	// rematchWindowExpires marks the deadline after which rematch_request is
+	// rejected. Set by finishRoom, cleared by the rematch handler. Zero value
+	// means the hub is not in a rematchable window. Accessed only from the
+	// Run() goroutine — no mutex needed.
+	rematchWindowExpires time.Time
 }
 
-// connectedPlayer is hub-internal player state.
+// connectedPlayer is hub-internal player state. userID is really a generic
+// "player ID" since the B1 refactor — for registered users it matches
+// users.id, for guests it matches guest_players.id. The name is preserved to
+// minimise churn in existing tests and broadcast field names.
 type connectedPlayer struct {
 	userID       string
 	username     string
+	isGuest      bool
 	conn         *websocket.Conn
 	send         chan []byte
 	reconnecting bool
@@ -161,6 +210,7 @@ func NewHub(hc HubConfig) *Hub {
 		clock:        clk,
 		state:            HubLobby,
 		players:          make(map[string]*connectedPlayer),
+		playerTypes:      make(map[string]bool),
 		register:         make(chan *connectedPlayer, 8),   // burst: ≤8 simultaneous joins before blocking
 		unregister:       make(chan *connectedPlayer, 8),   // burst: ≤8 simultaneous disconnects
 		incoming:         make(chan playerMessage, 64),     // 64 msgs queued before readPump blocks
@@ -172,12 +222,15 @@ func NewHub(hc HubConfig) *Hub {
 	}
 }
 
-// Join is called from the HTTP handler (outside Run goroutine) to add a new WS connection.
-// It blocks until the player is registered or the context is cancelled.
-func (h *Hub) Join(ctx context.Context, userID, username string, conn *websocket.Conn) {
+// Join is called from the HTTP handler (outside Run goroutine) to add a new
+// WS connection. It blocks until the player is registered or the context is
+// cancelled. The identity tells the hub whether this connection represents a
+// logged-in user or a guest participant.
+func (h *Hub) Join(ctx context.Context, ident PlayerIdentity, conn *websocket.Conn) {
 	p := &connectedPlayer{
-		userID:   userID,
-		username: username,
+		userID:   ident.ID,
+		username: ident.DisplayName,
+		isGuest:  ident.IsGuest,
 		conn:     conn,
 		send:     make(chan []byte, 64),
 	}
@@ -226,23 +279,26 @@ func (h *Hub) handleRegister(p *connectedPlayer) {
 		// that would race with the old writePump goroutine.
 		close(existing.send)
 		h.players[p.userID] = p
+		h.playerTypes[p.userID] = p.isGuest
 		p.reconnecting = false
 		h.sendTo(p, buildMessage("room_state", h.buildRoomState()))
-		h.broadcast(buildMessage("player_joined", map[string]string{
-			"user_id": p.userID, "username": p.username,
-		}))
+		h.broadcast(buildMessage("player_joined", playerJoinedPayload(p)))
 		go h.readPump(p)
 		go h.writePump(p)
 		return
 	}
 
-	if h.state != HubLobby {
+	if h.state == HubPlaying {
 		writeWS(p.conn, buildMessage("error", map[string]string{
 			"code": "game_already_started", "message": "Game is already in progress",
 		}))
 		p.conn.Close()
 		return
 	}
+	// HubFinished: new joins are permitted so the host can reconnect to
+	// request a rematch and players who bounced can return before the
+	// rematch window closes. If no rematch happens, these connections
+	// simply drain when the hub eventually shuts down.
 
 	// Reject the join once the handler's per-room cap is reached. MaxPlayers==0
 	// means "no explicit cap" — current behaviour for handlers that haven't
@@ -258,11 +314,23 @@ func (h *Hub) handleRegister(p *connectedPlayer) {
 	}
 
 	h.players[p.userID] = p
-	h.broadcast(buildMessage("player_joined", map[string]string{
-		"user_id": p.userID, "username": p.username,
-	}))
+	h.playerTypes[p.userID] = p.isGuest
+	h.broadcast(buildMessage("player_joined", playerJoinedPayload(p)))
 	go h.readPump(p)
 	go h.writePump(p)
+}
+
+// playerJoinedPayload emits both the legacy (user_id / username) and the new
+// (player_id / display_name / is_guest) field sets so that existing tests and
+// the pre-F3 frontend keep working while the in-room rewrite catches up.
+func playerJoinedPayload(p *connectedPlayer) map[string]any {
+	return map[string]any{
+		"user_id":      p.userID,
+		"username":     p.username,
+		"player_id":    p.userID,
+		"display_name": p.username,
+		"is_guest":     p.isGuest,
+	}
 }
 
 func (h *Hub) handleUnregister(p *connectedPlayer) {
@@ -270,13 +338,17 @@ func (h *Hub) handleUnregister(p *connectedPlayer) {
 		return
 	}
 	p.reconnecting = true
-	h.broadcast(buildMessage("reconnecting", map[string]string{
-		"user_id": p.userID, "username": p.username,
+	h.broadcast(buildMessage("reconnecting", map[string]any{
+		"user_id":      p.userID,
+		"username":     p.username,
+		"player_id":    p.userID,
+		"display_name": p.username,
+		"is_guest":     p.isGuest,
 	}))
 	// AfterFunc avoids a goroutine leak: the fake/real timer fires once and
 	// exits. All state changes still happen inside Run() because the send
 	// is into a buffered channel read by Run().
-	userID, username := p.userID, p.username
+	userID, username, isGuest := p.userID, p.username, p.isGuest
 	grace := h.cfg.ReconnectGraceWindow
 	h.clock.AfterFunc(grace, func() {
 		// Non-blocking send: if graceExpired is full (16 concurrent
@@ -284,7 +356,7 @@ func (h *Hub) handleUnregister(p *connectedPlayer) {
 		// flagged reconnecting=true until the next expiration cycle or a
 		// real reconnect arrives. Finding 4.G in the 2026-04-10 review.
 		select {
-		case h.graceExpired <- graceExpiredMsg{userID: userID, username: username}:
+		case h.graceExpired <- graceExpiredMsg{userID: userID, username: username, isGuest: isGuest}:
 		default:
 			if h.log != nil {
 				h.log.Warn("hub: graceExpired channel full, dropping expiry",
@@ -300,11 +372,15 @@ func (h *Hub) handleGraceExpired(ctx context.Context, msg graceExpiredMsg) {
 		return // player reconnected in time — ignore
 	}
 	delete(h.players, msg.userID)
-	h.broadcast(buildMessage("player_left", map[string]string{
-		"user_id": msg.userID, "username": msg.username,
+	h.broadcast(buildMessage("player_left", map[string]any{
+		"user_id":      msg.userID,
+		"username":     msg.username,
+		"player_id":    msg.userID,
+		"display_name": msg.username,
+		"is_guest":     msg.isGuest,
 	}))
 	if msg.userID == h.hostUserID && h.state == HubPlaying {
-		h.finishRoom(ctx, "host_disconnected")
+		h.finishRoom(ctx, "host_disconnected", nil)
 	}
 }
 
@@ -335,6 +411,9 @@ func (h *Hub) handleMessage(ctx context.Context, msg playerMessage) {
 		case h.roundCtrl <- roundCtrlAdvance{}:
 		default:
 		}
+
+	case "rematch_request":
+		h.handleRematchRequest(ctx, msg)
 
 	case "ping":
 		h.sendTo(msg.player, buildMessage("pong", nil))
@@ -419,12 +498,24 @@ func (h *Hub) handleRoundCtrl(ctx context.Context, ctrl roundCtrlMsg) {
 			votes := votesMapToSlice(h.roundVotes)
 			scores := handler.CalculateRoundScores(submissions, votes)
 			for playerID, pts := range scores {
-				if _, err := h.db.UpdatePlayerScore(ctx, db.UpdatePlayerScoreParams{
-					RoomID: h.roomID,
-					UserID: playerID,
-					Score:  int32(pts),
-				}); err != nil && h.log != nil {
-					h.log.Error("hub: update player score", "error", err)
+				pgID := pgtype.UUID{Bytes: playerID, Valid: true}
+				isGuest := h.playerTypes[playerID.String()]
+				if isGuest {
+					if _, err := h.db.UpdateGuestPlayerScore(ctx, db.UpdateGuestPlayerScoreParams{
+						RoomID:        h.roomID,
+						GuestPlayerID: pgID,
+						Score:         int32(pts),
+					}); err != nil && h.log != nil {
+						h.log.Error("hub: update guest player score", "error", err)
+					}
+				} else {
+					if _, err := h.db.UpdatePlayerScore(ctx, db.UpdatePlayerScoreParams{
+						RoomID: h.roomID,
+						UserID: pgID,
+						Score:  int32(pts),
+					}); err != nil && h.log != nil {
+						h.log.Error("hub: update player score", "error", err)
+					}
 				}
 			}
 			resultsPayload, err := handler.BuildVoteResultsPayload(submissions, votes, scores)
@@ -441,11 +532,9 @@ func (h *Hub) handleRoundCtrl(ctx context.Context, ctrl roundCtrlMsg) {
 
 	case roundCtrlEndGame:
 		leaderboard, _ := h.db.GetRoomLeaderboard(ctx, h.roomID)
-		h.finishRoom(ctx, "game_complete")
-		h.broadcast(buildMessage("game_ended", map[string]any{
-			"reason":      "game_complete",
+		h.finishRoom(ctx, "game_complete", map[string]any{
 			"leaderboard": leaderboard,
-		}))
+		})
 	}
 }
 
@@ -612,7 +701,17 @@ func (h *Hub) runRounds(ctx context.Context) {
 	h.sendRoundCtrl(ctx, roundCtrlEndGame{})
 }
 
-func (h *Hub) finishRoom(ctx context.Context, reason string) {
+// finishRoom transitions the hub and the persisted room row to "finished",
+// stamps a rematch window, and broadcasts game_ended. The extra map is
+// merged into the broadcast payload — callers use it to attach the final
+// leaderboard when they have one handy.
+//
+// The hub itself is NOT torn down. Its Run() goroutine keeps draining
+// channels so that host players can still send rematch_request during the
+// window. Zombie hubs that nobody rematches simply stay idle until the
+// server restarts; this matches pre-B2 behaviour and is acceptable given
+// the single-machine topology.
+func (h *Hub) finishRoom(ctx context.Context, reason string, extra map[string]any) {
 	// Cancel the round loop before touching anything else. This is called
 	// from three paths — host grace expiry, normal game completion, and
 	// error branches inside handleRoundCtrl — so the cancel must be the
@@ -622,12 +721,95 @@ func (h *Hub) finishRoom(ctx context.Context, reason string) {
 		h.roundsCancel()
 		h.roundsCancel = nil
 	}
+
+	h.state = HubFinished
+	h.rematchWindowExpires = h.clock.Now().Add(RematchWindowDuration)
+	rematchExpiresPG := pgtype.Timestamptz{Time: h.rematchWindowExpires, Valid: true}
+
 	if _, err := h.db.SetRoomState(ctx, db.SetRoomStateParams{
 		ID: h.roomID, State: "finished",
 	}); err != nil {
 		h.log.Error("hub: set room state finished", "error", err)
 	}
-	h.broadcast(buildMessage("game_ended", map[string]string{"reason": reason}))
+	if _, err := h.db.SetRematchWindow(ctx, db.SetRematchWindowParams{
+		ID:                     h.roomID,
+		RematchWindowExpiresAt: rematchExpiresPG,
+	}); err != nil {
+		h.log.Error("hub: set rematch window", "error", err)
+	}
+
+	data := map[string]any{
+		"reason":                    reason,
+		"rematch_window_expires_at": h.rematchWindowExpires.UTC().Format(time.RFC3339),
+	}
+	for k, v := range extra {
+		data[k] = v
+	}
+	h.broadcast(buildMessage("game_ended", data))
+}
+
+// handleRematchRequest runs inside the Run goroutine when the host asks to
+// resurrect the room. The DB gate in ResurrectRoom is the authoritative
+// check (state=finished, within window, host match); the in-memory pre-checks
+// here exist to produce friendlier error codes to the client.
+func (h *Hub) handleRematchRequest(ctx context.Context, msg playerMessage) {
+	if msg.player.userID != h.hostUserID {
+		h.safeSend(msg.player, buildMessage("error", map[string]string{
+			"code": "not_host", "message": "Only the host can request a rematch",
+		}))
+		return
+	}
+	if h.state != HubFinished {
+		h.safeSend(msg.player, buildMessage("error", map[string]string{
+			"code": "rematch_not_available", "message": "Rematch is only available after the game ends",
+		}))
+		return
+	}
+	if h.rematchWindowExpires.IsZero() || !h.clock.Now().Before(h.rematchWindowExpires) {
+		h.safeSend(msg.player, buildMessage("error", map[string]string{
+			"code": "rematch_window_expired", "message": "Rematch window has closed",
+		}))
+		return
+	}
+
+	hostUUID, err := uuid.Parse(h.hostUserID)
+	if err != nil {
+		h.safeSend(msg.player, buildMessage("error", map[string]string{
+			"code": "internal_error", "message": "Host identity unparseable",
+		}))
+		return
+	}
+	if _, err := h.db.ResurrectRoom(ctx, db.ResurrectRoomParams{
+		ID:     h.roomID,
+		HostID: pgtype.UUID{Bytes: hostUUID, Valid: true},
+	}); err != nil {
+		// No rows returned means the DB-level gate failed (window expired
+		// between the memory check and this query, host_id mismatch, etc.).
+		// Treat all DB failures here as "window expired" — the client's
+		// next move is the same: abandon rematch and return to home.
+		h.safeSend(msg.player, buildMessage("error", map[string]string{
+			"code": "rematch_window_expired", "message": "Rematch window has closed",
+		}))
+		return
+	}
+	if err := h.db.ResetRoomPlayerScores(ctx, h.roomID); err != nil && h.log != nil {
+		h.log.Error("hub: reset player scores for rematch", "error", err)
+	}
+
+	// Reset in-memory round state. Players map is preserved — everyone who
+	// is still connected stays connected. The meme_caption handler itself
+	// is stateless, so there is no handler-level reset to perform.
+	h.state = HubLobby
+	h.roundPhase = phaseIdle
+	h.roundNum = 0
+	h.currentRound = nil
+	h.roundSubmissions = make(map[string]Submission)
+	h.roundVotes = make(map[string]Vote)
+	h.rematchWindowExpires = time.Time{}
+
+	h.broadcast(buildMessage("rematch_started", map[string]any{
+		"room_state": h.buildRoomState(),
+	}))
 }
 
 func (h *Hub) handleGameMessage(ctx context.Context, msg playerMessage) {
@@ -662,13 +844,24 @@ func (h *Hub) handleGameMessage(ctx context.Context, msg playerMessage) {
 			return
 		}
 		uid, _ := uuid.Parse(msg.player.userID)
-		sub, err := h.db.CreateSubmission(ctx, db.CreateSubmissionParams{
-			RoundID: h.currentRound.ID,
-			UserID:  uid,
-			Payload: msg.data,
-		})
-		if err != nil && h.log != nil {
-			h.log.Error("hub: create submission", "error", err)
+		pgID := pgtype.UUID{Bytes: uid, Valid: true}
+		var sub db.Submission
+		var subErr error
+		if msg.player.isGuest {
+			sub, subErr = h.db.CreateGuestSubmission(ctx, db.CreateGuestSubmissionParams{
+				RoundID:       h.currentRound.ID,
+				GuestPlayerID: pgID,
+				Payload:       msg.data,
+			})
+		} else {
+			sub, subErr = h.db.CreateSubmission(ctx, db.CreateSubmissionParams{
+				RoundID: h.currentRound.ID,
+				UserID:  pgID,
+				Payload: msg.data,
+			})
+		}
+		if subErr != nil && h.log != nil {
+			h.log.Error("hub: create submission", "error", subErr)
 		}
 		h.roundSubmissions[msg.player.userID] = Submission{
 			ID:      sub.ID,
@@ -722,13 +915,23 @@ func (h *Hub) handleGameMessage(ctx context.Context, msg playerMessage) {
 			}))
 			return
 		}
-		_, err := h.db.CreateVote(ctx, db.CreateVoteParams{
-			SubmissionID: submissionID,
-			VoterID:      voterID,
-			Value:        json.RawMessage(`{"points":1}`),
-		})
-		if err != nil && h.log != nil {
-			h.log.Error("hub: create vote", "error", err)
+		pgVoterID := pgtype.UUID{Bytes: voterID, Valid: true}
+		var voteErr error
+		if msg.player.isGuest {
+			_, voteErr = h.db.CreateGuestVote(ctx, db.CreateGuestVoteParams{
+				SubmissionID: submissionID,
+				GuestVoterID: pgVoterID,
+				Value:        json.RawMessage(`{"points":1}`),
+			})
+		} else {
+			_, voteErr = h.db.CreateVote(ctx, db.CreateVoteParams{
+				SubmissionID: submissionID,
+				VoterID:      pgVoterID,
+				Value:        json.RawMessage(`{"points":1}`),
+			})
+		}
+		if voteErr != nil && h.log != nil {
+			h.log.Error("hub: create vote", "error", voteErr)
 		}
 		h.roundVotes[msg.player.userID] = Vote{
 			SubmissionID: submissionID,
@@ -884,10 +1087,14 @@ func (h *Hub) KickPlayer(ctx context.Context, userID string) error {
 }
 
 func (h *Hub) buildRoomState() map[string]any {
-	players := make([]map[string]string, 0, len(h.players))
+	players := make([]map[string]any, 0, len(h.players))
 	for _, p := range h.players {
-		players = append(players, map[string]string{
-			"user_id": p.userID, "username": p.username,
+		players = append(players, map[string]any{
+			"user_id":      p.userID,
+			"username":     p.username,
+			"player_id":    p.userID,
+			"display_name": p.username,
+			"is_guest":     p.isGuest,
 		})
 	}
 	return map[string]any{

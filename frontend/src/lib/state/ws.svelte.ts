@@ -1,4 +1,5 @@
 import type { WsMessage } from '$lib/api/types';
+import { guest } from './guest.svelte';
 
 type WsStatus = 'connected' | 'reconnecting' | 'error' | 'closed';
 
@@ -30,8 +31,13 @@ class WsState {
     // URL from `window.location` means production (behind a reverse proxy)
     // and dev (behind our custom server) both "just work" with no env var.
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    // If we hold a guest token for this room, append it as a query param so
+    // the backend handshake in api/ws.go can resolve identity without a
+    // session cookie. Registered users hit the same endpoint cookie-only.
+    const token = this.#roomCode ? guest.token(this.#roomCode) : null;
+    const qs = token ? `?guest_token=${encodeURIComponent(token)}` : '';
     this.#ws = new WebSocket(
-      `${proto}//${window.location.host}/api/ws/rooms/${this.#roomCode}`
+      `${proto}//${window.location.host}/api/ws/rooms/${this.#roomCode}${qs}`
     );
 
     this.#ws.addEventListener('open', () => {

@@ -15,13 +15,35 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addGuestRoomPlayer = `-- name: AddGuestRoomPlayer :one
+INSERT INTO room_players (room_id, guest_player_id) VALUES ($1, $2) RETURNING room_id, user_id, score, joined_at, guest_player_id
+`
+
+type AddGuestRoomPlayerParams struct {
+	RoomID        uuid.UUID   `json:"room_id"`
+	GuestPlayerID pgtype.UUID `json:"guest_player_id"`
+}
+
+func (q *Queries) AddGuestRoomPlayer(ctx context.Context, arg AddGuestRoomPlayerParams) (RoomPlayer, error) {
+	row := q.db.QueryRow(ctx, addGuestRoomPlayer, arg.RoomID, arg.GuestPlayerID)
+	var i RoomPlayer
+	err := row.Scan(
+		&i.RoomID,
+		&i.UserID,
+		&i.Score,
+		&i.JoinedAt,
+		&i.GuestPlayerID,
+	)
+	return i, err
+}
+
 const addRoomPlayer = `-- name: AddRoomPlayer :one
-INSERT INTO room_players (room_id, user_id) VALUES ($1, $2) RETURNING room_id, user_id, score, joined_at
+INSERT INTO room_players (room_id, user_id) VALUES ($1, $2) RETURNING room_id, user_id, score, joined_at, guest_player_id
 `
 
 type AddRoomPlayerParams struct {
-	RoomID uuid.UUID `json:"room_id"`
-	UserID uuid.UUID `json:"user_id"`
+	RoomID uuid.UUID   `json:"room_id"`
+	UserID pgtype.UUID `json:"user_id"`
 }
 
 func (q *Queries) AddRoomPlayer(ctx context.Context, arg AddRoomPlayerParams) (RoomPlayer, error) {
@@ -32,6 +54,55 @@ func (q *Queries) AddRoomPlayer(ctx context.Context, arg AddRoomPlayerParams) (R
 		&i.UserID,
 		&i.Score,
 		&i.JoinedAt,
+		&i.GuestPlayerID,
+	)
+	return i, err
+}
+
+const createGuestSubmission = `-- name: CreateGuestSubmission :one
+INSERT INTO submissions (round_id, guest_player_id, payload) VALUES ($1, $2, $3) RETURNING id, round_id, user_id, payload, created_at, guest_player_id
+`
+
+type CreateGuestSubmissionParams struct {
+	RoundID       uuid.UUID       `json:"round_id"`
+	GuestPlayerID pgtype.UUID     `json:"guest_player_id"`
+	Payload       json.RawMessage `json:"payload"`
+}
+
+func (q *Queries) CreateGuestSubmission(ctx context.Context, arg CreateGuestSubmissionParams) (Submission, error) {
+	row := q.db.QueryRow(ctx, createGuestSubmission, arg.RoundID, arg.GuestPlayerID, arg.Payload)
+	var i Submission
+	err := row.Scan(
+		&i.ID,
+		&i.RoundID,
+		&i.UserID,
+		&i.Payload,
+		&i.CreatedAt,
+		&i.GuestPlayerID,
+	)
+	return i, err
+}
+
+const createGuestVote = `-- name: CreateGuestVote :one
+INSERT INTO votes (submission_id, guest_voter_id, value) VALUES ($1, $2, $3) RETURNING id, submission_id, voter_id, value, created_at, guest_voter_id
+`
+
+type CreateGuestVoteParams struct {
+	SubmissionID uuid.UUID       `json:"submission_id"`
+	GuestVoterID pgtype.UUID     `json:"guest_voter_id"`
+	Value        json.RawMessage `json:"value"`
+}
+
+func (q *Queries) CreateGuestVote(ctx context.Context, arg CreateGuestVoteParams) (Vote, error) {
+	row := q.db.QueryRow(ctx, createGuestVote, arg.SubmissionID, arg.GuestVoterID, arg.Value)
+	var i Vote
+	err := row.Scan(
+		&i.ID,
+		&i.SubmissionID,
+		&i.VoterID,
+		&i.Value,
+		&i.CreatedAt,
+		&i.GuestVoterID,
 	)
 	return i, err
 }
@@ -40,7 +111,7 @@ const createRoom = `-- name: CreateRoom :one
 
 INSERT INTO rooms (code, game_type_id, pack_id, host_id, mode, config)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at
+RETURNING id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at
 `
 
 type CreateRoomParams struct {
@@ -74,6 +145,7 @@ func (q *Queries) CreateRoom(ctx context.Context, arg CreateRoomParams) (Room, e
 		&i.Config,
 		&i.CreatedAt,
 		&i.FinishedAt,
+		&i.RematchWindowExpiresAt,
 	)
 	return i, err
 }
@@ -104,12 +176,12 @@ func (q *Queries) CreateRound(ctx context.Context, arg CreateRoundParams) (Round
 }
 
 const createSubmission = `-- name: CreateSubmission :one
-INSERT INTO submissions (round_id, user_id, payload) VALUES ($1, $2, $3) RETURNING id, round_id, user_id, payload, created_at
+INSERT INTO submissions (round_id, user_id, payload) VALUES ($1, $2, $3) RETURNING id, round_id, user_id, payload, created_at, guest_player_id
 `
 
 type CreateSubmissionParams struct {
 	RoundID uuid.UUID       `json:"round_id"`
-	UserID  uuid.UUID       `json:"user_id"`
+	UserID  pgtype.UUID     `json:"user_id"`
 	Payload json.RawMessage `json:"payload"`
 }
 
@@ -122,17 +194,18 @@ func (q *Queries) CreateSubmission(ctx context.Context, arg CreateSubmissionPara
 		&i.UserID,
 		&i.Payload,
 		&i.CreatedAt,
+		&i.GuestPlayerID,
 	)
 	return i, err
 }
 
 const createVote = `-- name: CreateVote :one
-INSERT INTO votes (submission_id, voter_id, value) VALUES ($1, $2, $3) RETURNING id, submission_id, voter_id, value, created_at
+INSERT INTO votes (submission_id, voter_id, value) VALUES ($1, $2, $3) RETURNING id, submission_id, voter_id, value, created_at, guest_voter_id
 `
 
 type CreateVoteParams struct {
 	SubmissionID uuid.UUID       `json:"submission_id"`
-	VoterID      uuid.UUID       `json:"voter_id"`
+	VoterID      pgtype.UUID     `json:"voter_id"`
 	Value        json.RawMessage `json:"value"`
 }
 
@@ -145,6 +218,7 @@ func (q *Queries) CreateVote(ctx context.Context, arg CreateVoteParams) (Vote, e
 		&i.VoterID,
 		&i.Value,
 		&i.CreatedAt,
+		&i.GuestVoterID,
 	)
 	return i, err
 }
@@ -203,24 +277,90 @@ func (q *Queries) GetCurrentRound(ctx context.Context, roomID uuid.UUID) (Round,
 	return i, err
 }
 
+const getRecentRoomsForUser = `-- name: GetRecentRoomsForUser :many
+SELECT
+  r.id,
+  r.code,
+  r.state,
+  r.created_at,
+  r.finished_at,
+  gt.slug AS game_type_slug,
+  gp.name AS pack_name
+FROM room_players rp
+JOIN rooms r ON rp.room_id = r.id
+JOIN game_types gt ON r.game_type_id = gt.id
+JOIN game_packs gp ON r.pack_id = gp.id
+WHERE rp.user_id = $1
+  AND r.created_at > now() - interval '30 days'
+ORDER BY r.created_at DESC
+LIMIT $2
+`
+
+type GetRecentRoomsForUserParams struct {
+	UserID pgtype.UUID `json:"user_id"`
+	Limit  int32       `json:"limit"`
+}
+
+type GetRecentRoomsForUserRow struct {
+	ID           uuid.UUID          `json:"id"`
+	Code         string             `json:"code"`
+	State        string             `json:"state"`
+	CreatedAt    time.Time          `json:"created_at"`
+	FinishedAt   pgtype.Timestamptz `json:"finished_at"`
+	GameTypeSlug string             `json:"game_type_slug"`
+	PackName     string             `json:"pack_name"`
+}
+
+// Powers the "Recent rooms" strip on the new Home page. Scoped to the session
+// user — never take a user_id parameter from the client. Participation is
+// detected via room_players join so both hosts and non-host players qualify.
+func (q *Queries) GetRecentRoomsForUser(ctx context.Context, arg GetRecentRoomsForUserParams) ([]GetRecentRoomsForUserRow, error) {
+	rows, err := q.db.Query(ctx, getRecentRoomsForUser, arg.UserID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetRecentRoomsForUserRow
+	for rows.Next() {
+		var i GetRecentRoomsForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Code,
+			&i.State,
+			&i.CreatedAt,
+			&i.FinishedAt,
+			&i.GameTypeSlug,
+			&i.PackName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getRoomByCode = `-- name: GetRoomByCode :one
-SELECT r.id, r.code, r.game_type_id, r.pack_id, r.host_id, r.mode, r.state, r.config, r.created_at, r.finished_at, gt.slug AS game_type_slug FROM rooms r
+SELECT r.id, r.code, r.game_type_id, r.pack_id, r.host_id, r.mode, r.state, r.config, r.created_at, r.finished_at, r.rematch_window_expires_at, gt.slug AS game_type_slug FROM rooms r
 JOIN game_types gt ON r.game_type_id = gt.id
 WHERE r.code = $1
 `
 
 type GetRoomByCodeRow struct {
-	ID           uuid.UUID          `json:"id"`
-	Code         string             `json:"code"`
-	GameTypeID   uuid.UUID          `json:"game_type_id"`
-	PackID       uuid.UUID          `json:"pack_id"`
-	HostID       pgtype.UUID        `json:"host_id"`
-	Mode         string             `json:"mode"`
-	State        string             `json:"state"`
-	Config       json.RawMessage    `json:"config"`
-	CreatedAt    time.Time          `json:"created_at"`
-	FinishedAt   pgtype.Timestamptz `json:"finished_at"`
-	GameTypeSlug string             `json:"game_type_slug"`
+	ID                     uuid.UUID          `json:"id"`
+	Code                   string             `json:"code"`
+	GameTypeID             uuid.UUID          `json:"game_type_id"`
+	PackID                 uuid.UUID          `json:"pack_id"`
+	HostID                 pgtype.UUID        `json:"host_id"`
+	Mode                   string             `json:"mode"`
+	State                  string             `json:"state"`
+	Config                 json.RawMessage    `json:"config"`
+	CreatedAt              time.Time          `json:"created_at"`
+	FinishedAt             pgtype.Timestamptz `json:"finished_at"`
+	RematchWindowExpiresAt pgtype.Timestamptz `json:"rematch_window_expires_at"`
+	GameTypeSlug           string             `json:"game_type_slug"`
 }
 
 func (q *Queries) GetRoomByCode(ctx context.Context, code string) (GetRoomByCodeRow, error) {
@@ -237,13 +377,14 @@ func (q *Queries) GetRoomByCode(ctx context.Context, code string) (GetRoomByCode
 		&i.Config,
 		&i.CreatedAt,
 		&i.FinishedAt,
+		&i.RematchWindowExpiresAt,
 		&i.GameTypeSlug,
 	)
 	return i, err
 }
 
 const getRoomByID = `-- name: GetRoomByID :one
-SELECT id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at FROM rooms WHERE id = $1
+SELECT id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at FROM rooms WHERE id = $1
 `
 
 func (q *Queries) GetRoomByID(ctx context.Context, id uuid.UUID) (Room, error) {
@@ -260,26 +401,36 @@ func (q *Queries) GetRoomByID(ctx context.Context, id uuid.UUID) (Room, error) {
 		&i.Config,
 		&i.CreatedAt,
 		&i.FinishedAt,
+		&i.RematchWindowExpiresAt,
 	)
 	return i, err
 }
 
 const getRoomLeaderboard = `-- name: GetRoomLeaderboard :many
-SELECT u.id AS user_id, u.username, rp.score,
-       RANK() OVER (ORDER BY rp.score DESC) AS rank
+SELECT
+  COALESCE(rp.user_id, rp.guest_player_id)::uuid AS player_id,
+  COALESCE(u.username, gp.display_name)::text AS display_name,
+  (rp.guest_player_id IS NOT NULL)::bool AS is_guest,
+  rp.score,
+  RANK() OVER (ORDER BY rp.score DESC) AS rank
 FROM room_players rp
-JOIN users u ON rp.user_id = u.id
+LEFT JOIN users u ON rp.user_id = u.id
+LEFT JOIN guest_players gp ON rp.guest_player_id = gp.id
 WHERE rp.room_id = $1
 ORDER BY rp.score DESC
 `
 
 type GetRoomLeaderboardRow struct {
-	UserID   uuid.UUID `json:"user_id"`
-	Username string    `json:"username"`
-	Score    int32     `json:"score"`
-	Rank     int64     `json:"rank"`
+	PlayerID    uuid.UUID `json:"player_id"`
+	DisplayName string    `json:"display_name"`
+	IsGuest     bool      `json:"is_guest"`
+	Score       int32     `json:"score"`
+	Rank        int64     `json:"rank"`
 }
 
+// Unified leaderboard over users and guests. player_id is the UUID of whichever
+// kind of player the row represents; display_name coalesces across users.username
+// and guest_players.display_name; is_guest lets the client render a badge.
 func (q *Queries) GetRoomLeaderboard(ctx context.Context, roomID uuid.UUID) ([]GetRoomLeaderboardRow, error) {
 	rows, err := q.db.Query(ctx, getRoomLeaderboard, roomID)
 	if err != nil {
@@ -290,8 +441,9 @@ func (q *Queries) GetRoomLeaderboard(ctx context.Context, roomID uuid.UUID) ([]G
 	for rows.Next() {
 		var i GetRoomLeaderboardRow
 		if err := rows.Scan(
-			&i.UserID,
-			&i.Username,
+			&i.PlayerID,
+			&i.DisplayName,
+			&i.IsGuest,
 			&i.Score,
 			&i.Rank,
 		); err != nil {
@@ -306,12 +458,12 @@ func (q *Queries) GetRoomLeaderboard(ctx context.Context, roomID uuid.UUID) ([]G
 }
 
 const getRoomPlayer = `-- name: GetRoomPlayer :one
-SELECT room_id, user_id, score, joined_at FROM room_players WHERE room_id = $1 AND user_id = $2
+SELECT room_id, user_id, score, joined_at, guest_player_id FROM room_players WHERE room_id = $1 AND user_id = $2
 `
 
 type GetRoomPlayerParams struct {
-	RoomID uuid.UUID `json:"room_id"`
-	UserID uuid.UUID `json:"user_id"`
+	RoomID uuid.UUID   `json:"room_id"`
+	UserID pgtype.UUID `json:"user_id"`
 }
 
 func (q *Queries) GetRoomPlayer(ctx context.Context, arg GetRoomPlayerParams) (RoomPlayer, error) {
@@ -322,12 +474,13 @@ func (q *Queries) GetRoomPlayer(ctx context.Context, arg GetRoomPlayerParams) (R
 		&i.UserID,
 		&i.Score,
 		&i.JoinedAt,
+		&i.GuestPlayerID,
 	)
 	return i, err
 }
 
 const getSubmissionsForRound = `-- name: GetSubmissionsForRound :many
-SELECT id, round_id, user_id, payload, created_at FROM submissions WHERE round_id = $1
+SELECT id, round_id, user_id, payload, created_at, guest_player_id FROM submissions WHERE round_id = $1
 `
 
 func (q *Queries) GetSubmissionsForRound(ctx context.Context, roundID uuid.UUID) ([]Submission, error) {
@@ -345,6 +498,7 @@ func (q *Queries) GetSubmissionsForRound(ctx context.Context, roundID uuid.UUID)
 			&i.UserID,
 			&i.Payload,
 			&i.CreatedAt,
+			&i.GuestPlayerID,
 		); err != nil {
 			return nil, err
 		}
@@ -357,14 +511,14 @@ func (q *Queries) GetSubmissionsForRound(ctx context.Context, roundID uuid.UUID)
 }
 
 const getVoteByVoterInRound = `-- name: GetVoteByVoterInRound :one
-SELECT v.id, v.submission_id, v.voter_id, v.value, v.created_at FROM votes v
+SELECT v.id, v.submission_id, v.voter_id, v.value, v.created_at, v.guest_voter_id FROM votes v
 JOIN submissions s ON v.submission_id = s.id
 WHERE s.round_id = $1 AND v.voter_id = $2
 `
 
 type GetVoteByVoterInRoundParams struct {
-	RoundID uuid.UUID `json:"round_id"`
-	VoterID uuid.UUID `json:"voter_id"`
+	RoundID uuid.UUID   `json:"round_id"`
+	VoterID pgtype.UUID `json:"voter_id"`
 }
 
 func (q *Queries) GetVoteByVoterInRound(ctx context.Context, arg GetVoteByVoterInRoundParams) (Vote, error) {
@@ -376,12 +530,13 @@ func (q *Queries) GetVoteByVoterInRound(ctx context.Context, arg GetVoteByVoterI
 		&i.VoterID,
 		&i.Value,
 		&i.CreatedAt,
+		&i.GuestVoterID,
 	)
 	return i, err
 }
 
 const getVotesForRound = `-- name: GetVotesForRound :many
-SELECT v.id, v.submission_id, v.voter_id, v.value, v.created_at FROM votes v
+SELECT v.id, v.submission_id, v.voter_id, v.value, v.created_at, v.guest_voter_id FROM votes v
 JOIN submissions s ON v.submission_id = s.id
 WHERE s.round_id = $1
 `
@@ -401,6 +556,7 @@ func (q *Queries) GetVotesForRound(ctx context.Context, roundID uuid.UUID) ([]Vo
 			&i.VoterID,
 			&i.Value,
 			&i.CreatedAt,
+			&i.GuestVoterID,
 		); err != nil {
 			return nil, err
 		}
@@ -413,19 +569,33 @@ func (q *Queries) GetVotesForRound(ctx context.Context, roundID uuid.UUID) ([]Vo
 }
 
 const listRoomPlayers = `-- name: ListRoomPlayers :many
-SELECT rp.room_id, rp.user_id, rp.score, rp.joined_at, u.username FROM room_players rp
-JOIN users u ON rp.user_id = u.id
+SELECT
+  rp.room_id,
+  rp.user_id,
+  rp.guest_player_id,
+  rp.score,
+  rp.joined_at,
+  COALESCE(u.username, gp.display_name)::text AS display_name,
+  (rp.guest_player_id IS NOT NULL)::bool AS is_guest
+FROM room_players rp
+LEFT JOIN users u ON rp.user_id = u.id
+LEFT JOIN guest_players gp ON rp.guest_player_id = gp.id
 WHERE rp.room_id = $1
 `
 
 type ListRoomPlayersRow struct {
-	RoomID   uuid.UUID `json:"room_id"`
-	UserID   uuid.UUID `json:"user_id"`
-	Score    int32     `json:"score"`
-	JoinedAt time.Time `json:"joined_at"`
-	Username string    `json:"username"`
+	RoomID        uuid.UUID   `json:"room_id"`
+	UserID        pgtype.UUID `json:"user_id"`
+	GuestPlayerID pgtype.UUID `json:"guest_player_id"`
+	Score         int32       `json:"score"`
+	JoinedAt      time.Time   `json:"joined_at"`
+	DisplayName   string      `json:"display_name"`
+	IsGuest       bool        `json:"is_guest"`
 }
 
+// Players in a room — unifies registered users and guests. For users,
+// username comes from the users table; for guests, it comes from guest_players.
+// The is_guest flag lets the frontend render a badge.
 func (q *Queries) ListRoomPlayers(ctx context.Context, roomID uuid.UUID) ([]ListRoomPlayersRow, error) {
 	rows, err := q.db.Query(ctx, listRoomPlayers, roomID)
 	if err != nil {
@@ -438,9 +608,11 @@ func (q *Queries) ListRoomPlayers(ctx context.Context, roomID uuid.UUID) ([]List
 		if err := rows.Scan(
 			&i.RoomID,
 			&i.UserID,
+			&i.GuestPlayerID,
 			&i.Score,
 			&i.JoinedAt,
-			&i.Username,
+			&i.DisplayName,
+			&i.IsGuest,
 		); err != nil {
 			return nil, err
 		}
@@ -452,13 +624,27 @@ func (q *Queries) ListRoomPlayers(ctx context.Context, roomID uuid.UUID) ([]List
 	return items, nil
 }
 
+const removeGuestRoomPlayer = `-- name: RemoveGuestRoomPlayer :exec
+DELETE FROM room_players WHERE room_id = $1 AND guest_player_id = $2
+`
+
+type RemoveGuestRoomPlayerParams struct {
+	RoomID        uuid.UUID   `json:"room_id"`
+	GuestPlayerID pgtype.UUID `json:"guest_player_id"`
+}
+
+func (q *Queries) RemoveGuestRoomPlayer(ctx context.Context, arg RemoveGuestRoomPlayerParams) error {
+	_, err := q.db.Exec(ctx, removeGuestRoomPlayer, arg.RoomID, arg.GuestPlayerID)
+	return err
+}
+
 const removeRoomPlayer = `-- name: RemoveRoomPlayer :exec
 DELETE FROM room_players WHERE room_id = $1 AND user_id = $2
 `
 
 type RemoveRoomPlayerParams struct {
-	RoomID uuid.UUID `json:"room_id"`
-	UserID uuid.UUID `json:"user_id"`
+	RoomID uuid.UUID   `json:"room_id"`
+	UserID pgtype.UUID `json:"user_id"`
 }
 
 func (q *Queries) RemoveRoomPlayer(ctx context.Context, arg RemoveRoomPlayerParams) error {
@@ -466,9 +652,89 @@ func (q *Queries) RemoveRoomPlayer(ctx context.Context, arg RemoveRoomPlayerPara
 	return err
 }
 
+const resetRoomPlayerScores = `-- name: ResetRoomPlayerScores :exec
+UPDATE room_players SET score = 0 WHERE room_id = $1
+`
+
+// Zeroes out scores for every player in the room. Used by the rematch flow
+// (B2) so a resurrected room starts cleanly without wiping participation rows.
+func (q *Queries) ResetRoomPlayerScores(ctx context.Context, roomID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, resetRoomPlayerScores, roomID)
+	return err
+}
+
+const resurrectRoom = `-- name: ResurrectRoom :one
+UPDATE rooms
+   SET state = 'lobby',
+       finished_at = NULL,
+       rematch_window_expires_at = NULL
+ WHERE id = $1
+   AND host_id = $2
+   AND state = 'finished'
+   AND rematch_window_expires_at IS NOT NULL
+   AND rematch_window_expires_at > now()
+RETURNING id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at
+`
+
+type ResurrectRoomParams struct {
+	ID     uuid.UUID   `json:"id"`
+	HostID pgtype.UUID `json:"host_id"`
+}
+
+// Transitions a finished room back to lobby iff the rematch window is still open
+// and the caller is the host. Returns the updated row, or no rows if the gate fails.
+func (q *Queries) ResurrectRoom(ctx context.Context, arg ResurrectRoomParams) (Room, error) {
+	row := q.db.QueryRow(ctx, resurrectRoom, arg.ID, arg.HostID)
+	var i Room
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.GameTypeID,
+		&i.PackID,
+		&i.HostID,
+		&i.Mode,
+		&i.State,
+		&i.Config,
+		&i.CreatedAt,
+		&i.FinishedAt,
+		&i.RematchWindowExpiresAt,
+	)
+	return i, err
+}
+
+const setRematchWindow = `-- name: SetRematchWindow :one
+UPDATE rooms SET rematch_window_expires_at = $2 WHERE id = $1 RETURNING id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at
+`
+
+type SetRematchWindowParams struct {
+	ID                     uuid.UUID          `json:"id"`
+	RematchWindowExpiresAt pgtype.Timestamptz `json:"rematch_window_expires_at"`
+}
+
+// Stamps rematch_window_expires_at when a room transitions finished → (rematchable).
+// Called by finishRoom() so the client's EndStage can show a countdown banner.
+func (q *Queries) SetRematchWindow(ctx context.Context, arg SetRematchWindowParams) (Room, error) {
+	row := q.db.QueryRow(ctx, setRematchWindow, arg.ID, arg.RematchWindowExpiresAt)
+	var i Room
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.GameTypeID,
+		&i.PackID,
+		&i.HostID,
+		&i.Mode,
+		&i.State,
+		&i.Config,
+		&i.CreatedAt,
+		&i.FinishedAt,
+		&i.RematchWindowExpiresAt,
+	)
+	return i, err
+}
+
 const setRoomState = `-- name: SetRoomState :one
 UPDATE rooms SET state = $2, finished_at = CASE WHEN $2 = 'finished' THEN now() ELSE NULL END
-WHERE id = $1 RETURNING id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at
+WHERE id = $1 RETURNING id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at
 `
 
 type SetRoomStateParams struct {
@@ -490,6 +756,7 @@ func (q *Queries) SetRoomState(ctx context.Context, arg SetRoomStateParams) (Roo
 		&i.Config,
 		&i.CreatedAt,
 		&i.FinishedAt,
+		&i.RematchWindowExpiresAt,
 	)
 	return i, err
 }
@@ -512,14 +779,41 @@ func (q *Queries) StartRound(ctx context.Context, id uuid.UUID) (Round, error) {
 	return i, err
 }
 
+const updateGuestPlayerScore = `-- name: UpdateGuestPlayerScore :one
+UPDATE room_players SET score = score + $3
+ WHERE room_id = $1 AND guest_player_id = $2
+ RETURNING room_id, user_id, score, joined_at, guest_player_id
+`
+
+type UpdateGuestPlayerScoreParams struct {
+	RoomID        uuid.UUID   `json:"room_id"`
+	GuestPlayerID pgtype.UUID `json:"guest_player_id"`
+	Score         int32       `json:"score"`
+}
+
+func (q *Queries) UpdateGuestPlayerScore(ctx context.Context, arg UpdateGuestPlayerScoreParams) (RoomPlayer, error) {
+	row := q.db.QueryRow(ctx, updateGuestPlayerScore, arg.RoomID, arg.GuestPlayerID, arg.Score)
+	var i RoomPlayer
+	err := row.Scan(
+		&i.RoomID,
+		&i.UserID,
+		&i.Score,
+		&i.JoinedAt,
+		&i.GuestPlayerID,
+	)
+	return i, err
+}
+
 const updatePlayerScore = `-- name: UpdatePlayerScore :one
-UPDATE room_players SET score = score + $3 WHERE room_id = $1 AND user_id = $2 RETURNING room_id, user_id, score, joined_at
+UPDATE room_players SET score = score + $3
+ WHERE room_id = $1 AND user_id = $2
+ RETURNING room_id, user_id, score, joined_at, guest_player_id
 `
 
 type UpdatePlayerScoreParams struct {
-	RoomID uuid.UUID `json:"room_id"`
-	UserID uuid.UUID `json:"user_id"`
-	Score  int32     `json:"score"`
+	RoomID uuid.UUID   `json:"room_id"`
+	UserID pgtype.UUID `json:"user_id"`
+	Score  int32       `json:"score"`
 }
 
 func (q *Queries) UpdatePlayerScore(ctx context.Context, arg UpdatePlayerScoreParams) (RoomPlayer, error) {
@@ -530,12 +824,13 @@ func (q *Queries) UpdatePlayerScore(ctx context.Context, arg UpdatePlayerScorePa
 		&i.UserID,
 		&i.Score,
 		&i.JoinedAt,
+		&i.GuestPlayerID,
 	)
 	return i, err
 }
 
 const updateRoomConfig = `-- name: UpdateRoomConfig :one
-UPDATE rooms SET config = $2 WHERE id = $1 AND state = 'lobby' RETURNING id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at
+UPDATE rooms SET config = $2 WHERE id = $1 AND state = 'lobby' RETURNING id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at
 `
 
 type UpdateRoomConfigParams struct {
@@ -557,6 +852,7 @@ func (q *Queries) UpdateRoomConfig(ctx context.Context, arg UpdateRoomConfigPara
 		&i.Config,
 		&i.CreatedAt,
 		&i.FinishedAt,
+		&i.RematchWindowExpiresAt,
 	)
 	return i, err
 }

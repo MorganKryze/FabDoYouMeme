@@ -72,6 +72,15 @@ type GameType struct {
 	CreatedAt    time.Time       `json:"created_at"`
 }
 
+type GuestPlayer struct {
+	ID          uuid.UUID `json:"id"`
+	RoomID      uuid.UUID `json:"room_id"`
+	DisplayName string    `json:"display_name"`
+	TokenHash   string    `json:"token_hash"`
+	CreatedAt   time.Time `json:"created_at"`
+	LastSeenAt  time.Time `json:"last_seen_at"`
+}
+
 type Invite struct {
 	ID              uuid.UUID          `json:"id"`
 	Token           string             `json:"token"`
@@ -95,23 +104,25 @@ type MagicLinkToken struct {
 }
 
 type Room struct {
-	ID         uuid.UUID          `json:"id"`
-	Code       string             `json:"code"`
-	GameTypeID uuid.UUID          `json:"game_type_id"`
-	PackID     uuid.UUID          `json:"pack_id"`
-	HostID     pgtype.UUID        `json:"host_id"`
-	Mode       string             `json:"mode"`
-	State      string             `json:"state"`
-	Config     json.RawMessage    `json:"config"`
-	CreatedAt  time.Time          `json:"created_at"`
-	FinishedAt pgtype.Timestamptz `json:"finished_at"`
+	ID                     uuid.UUID          `json:"id"`
+	Code                   string             `json:"code"`
+	GameTypeID             uuid.UUID          `json:"game_type_id"`
+	PackID                 uuid.UUID          `json:"pack_id"`
+	HostID                 pgtype.UUID        `json:"host_id"`
+	Mode                   string             `json:"mode"`
+	State                  string             `json:"state"`
+	Config                 json.RawMessage    `json:"config"`
+	CreatedAt              time.Time          `json:"created_at"`
+	FinishedAt             pgtype.Timestamptz `json:"finished_at"`
+	RematchWindowExpiresAt pgtype.Timestamptz `json:"rematch_window_expires_at"`
 }
 
 type RoomPlayer struct {
-	RoomID   uuid.UUID `json:"room_id"`
-	UserID   uuid.UUID `json:"user_id"`
-	Score    int32     `json:"score"`
-	JoinedAt time.Time `json:"joined_at"`
+	RoomID        uuid.UUID   `json:"room_id"`
+	UserID        pgtype.UUID `json:"user_id"`
+	Score         int32       `json:"score"`
+	JoinedAt      time.Time   `json:"joined_at"`
+	GuestPlayerID pgtype.UUID `json:"guest_player_id"`
 }
 
 type Round struct {
@@ -132,11 +143,12 @@ type Session struct {
 }
 
 type Submission struct {
-	ID        uuid.UUID       `json:"id"`
-	RoundID   uuid.UUID       `json:"round_id"`
-	UserID    uuid.UUID       `json:"user_id"`
-	Payload   json.RawMessage `json:"payload"`
-	CreatedAt time.Time       `json:"created_at"`
+	ID            uuid.UUID       `json:"id"`
+	RoundID       uuid.UUID       `json:"round_id"`
+	UserID        pgtype.UUID     `json:"user_id"`
+	Payload       json.RawMessage `json:"payload"`
+	CreatedAt     time.Time       `json:"created_at"`
+	GuestPlayerID pgtype.UUID     `json:"guest_player_id"`
 }
 
 type User struct {
@@ -154,7 +166,8 @@ type User struct {
 type Vote struct {
 	ID           uuid.UUID       `json:"id"`
 	SubmissionID uuid.UUID       `json:"submission_id"`
-	VoterID      uuid.UUID       `json:"voter_id"`
+	VoterID      pgtype.UUID     `json:"voter_id"`
 	Value        json.RawMessage `json:"value"`
 	CreatedAt    time.Time       `json:"created_at"`
+	GuestVoterID pgtype.UUID     `json:"guest_voter_id"`
 }

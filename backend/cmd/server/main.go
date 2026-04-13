@@ -129,7 +129,7 @@ func main() {
 	assetHandler     := api.NewAssetHandler(pool, cfg, store)
 	gameTypeHandler  := api.NewGameTypeHandler(pool, registry)
 	adminHTTPHandler := api.NewAdminHandler(pool)
-	wsHandler        := api.NewWSHandler(manager, cfg.AllowedOrigins)
+	wsHandler        := api.NewWSHandler(manager, queries, cfg.AllowedOrigins)
 	healthHandler    := api.NewHealthHandler(pool, store)
 
 	// ── Router ───────────────────────────────────────────────────────────────
@@ -226,8 +226,18 @@ func main() {
 		r.Get("/{code}/leaderboard", roomHandler.Leaderboard)
 	})
 
-	// WebSocket
-	r.With(mw.RequireAuth).Get("/api/ws/rooms/{code}", wsHandler.ServeHTTP)
+	// Pre-auth guest join — deliberately OUTSIDE the RequireAuth block so
+	// visitors without an account can join a room via a shared code. Rate
+	// limited with the existing room bucket to prevent enumeration. The WS
+	// handshake verifies the returned guest token against the room, so a
+	// successful call here does not yet grant access — it must be paired
+	// with a matching WS upgrade.
+	r.With(roomLimiter.Middleware).Post("/api/rooms/{code}/guest-join", roomHandler.GuestJoin)
+
+	// WebSocket — intentionally not gated by RequireAuth. The handler resolves
+	// identity itself (session cookie OR guest_token query param) and rejects
+	// unauthenticated upgrades with a 401. See api.WSHandler.resolveIdentity.
+	r.Get("/api/ws/rooms/{code}", wsHandler.ServeHTTP)
 
 	// ── Server lifecycle ──────────────────────────────────────────────────────
 	srv := &http.Server{

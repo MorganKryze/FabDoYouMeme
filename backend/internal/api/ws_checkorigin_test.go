@@ -15,7 +15,7 @@ import (
 // This is a pure unit test against the exported constructor + the private
 // checkOrigin method (same package) — no upgrader or server required.
 func TestWS_CheckOriginNormalizesTrailingSlash(t *testing.T) {
-	h := NewWSHandler(nil, []string{
+	h := NewWSHandler(nil, nil, []string{
 		"https://meme.example.com",           // primary
 		"https://admin.meme.example.com/",    // secondary, with a stray slash
 		"  https://mobile.meme.example.com ", // whitespace around it
@@ -57,7 +57,7 @@ func TestWS_CheckOriginNormalizesTrailingSlash(t *testing.T) {
 // clients, test dialers). Dropping this contract would break every existing
 // hub integration test.
 func TestWS_CheckOriginAllowsEmptyWhenConfigured(t *testing.T) {
-	h := NewWSHandler(nil, []string{""})
+	h := NewWSHandler(nil, nil, []string{""})
 	req, _ := http.NewRequest(http.MethodGet, "/api/ws/rooms/ABC", nil)
 	// No Origin header set — the normalized value must match the "" entry.
 	if !h.checkOrigin(req) {

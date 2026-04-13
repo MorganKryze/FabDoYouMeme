@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
@@ -91,7 +92,7 @@ func (h *RoomHandler) Leave(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.db.RemoveRoomPlayer(r.Context(), db.RemoveRoomPlayerParams{
 		RoomID: room.ID,
-		UserID: userID,
+		UserID: pgtype.UUID{Bytes: userID, Valid: true},
 	}); err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to leave room")
 		return
@@ -130,7 +131,7 @@ func (h *RoomHandler) Kick(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.db.RemoveRoomPlayer(r.Context(), db.RemoveRoomPlayerParams{
 		RoomID: room.ID,
-		UserID: targetID,
+		UserID: pgtype.UUID{Bytes: targetID, Valid: true},
 	}); err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to kick player")
 		return

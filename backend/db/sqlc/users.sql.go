@@ -197,9 +197,9 @@ LIMIT $3 OFFSET $2
 `
 
 type GetUserGameHistoryParams struct {
-	UserID uuid.UUID `json:"user_id"`
-	Off    int32     `json:"off"`
-	Lim    int32     `json:"lim"`
+	UserID pgtype.UUID `json:"user_id"`
+	Off    int32       `json:"off"`
+	Lim    int32       `json:"lim"`
 }
 
 type GetUserGameHistoryRow struct {
@@ -270,7 +270,7 @@ type GetUserSubmissionsRow struct {
 	CreatedAt    time.Time       `json:"created_at"`
 }
 
-func (q *Queries) GetUserSubmissions(ctx context.Context, userID uuid.UUID) ([]GetUserSubmissionsRow, error) {
+func (q *Queries) GetUserSubmissions(ctx context.Context, userID pgtype.UUID) ([]GetUserSubmissionsRow, error) {
 	rows, err := q.db.Query(ctx, getUserSubmissions, userID)
 	if err != nil {
 		return nil, err
@@ -406,7 +406,7 @@ const updateSubmissionsSentinel = `-- name: UpdateSubmissionsSentinel :exec
 UPDATE submissions SET user_id = '00000000-0000-0000-0000-000000000001' WHERE user_id = $1
 `
 
-func (q *Queries) UpdateSubmissionsSentinel(ctx context.Context, userID uuid.UUID) error {
+func (q *Queries) UpdateSubmissionsSentinel(ctx context.Context, userID pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, updateSubmissionsSentinel, userID)
 	return err
 }
@@ -493,7 +493,7 @@ const updateVotesSentinel = `-- name: UpdateVotesSentinel :exec
 UPDATE votes SET voter_id = '00000000-0000-0000-0000-000000000001' WHERE voter_id = $1
 `
 
-func (q *Queries) UpdateVotesSentinel(ctx context.Context, voterID uuid.UUID) error {
+func (q *Queries) UpdateVotesSentinel(ctx context.Context, voterID pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, updateVotesSentinel, voterID)
 	return err
 }

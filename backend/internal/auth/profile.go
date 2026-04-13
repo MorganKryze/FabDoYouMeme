@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
@@ -132,7 +133,7 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := h.db.GetUserGameHistory(r.Context(), db.GetUserGameHistoryParams{
-		UserID: userID,
+		UserID: pgtype.UUID{Bytes: userID, Valid: true},
 		Lim:    limit,
 		Off:    offset,
 	})
@@ -219,8 +220,9 @@ func (h *Handler) GetExport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userPG := pgtype.UUID{Bytes: userID, Valid: true}
 	historyRows, _ := h.db.GetUserGameHistory(r.Context(), db.GetUserGameHistoryParams{
-		UserID: userID,
+		UserID: userPG,
 		Lim:    1000,
 		Off:    0,
 	})
@@ -243,7 +245,7 @@ func (h *Handler) GetExport(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	submissionRows, _ := h.db.GetUserSubmissions(r.Context(), userID)
+	submissionRows, _ := h.db.GetUserSubmissions(r.Context(), userPG)
 	submissions := make([]exportSubmission, 0, len(submissionRows))
 	for _, s := range submissionRows {
 		submissions = append(submissions, exportSubmission{

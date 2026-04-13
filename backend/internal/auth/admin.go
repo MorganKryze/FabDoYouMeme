@@ -80,13 +80,18 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 3: Replace submissions with sentinel (preserve game history integrity)
-	if err := q.UpdateSubmissionsSentinel(r.Context(), targetUUID); err != nil && h.log != nil {
+	// Step 3: Replace submissions with sentinel (preserve game history integrity).
+	// After migration 004 made submissions.user_id nullable (to support
+	// guest participants), the sqlc param is pgtype.UUID — we wrap the
+	// target user UUID with Valid: true because this path only ever runs
+	// against a registered user.
+	targetPG := pgtype.UUID{Bytes: targetUUID, Valid: true}
+	if err := q.UpdateSubmissionsSentinel(r.Context(), targetPG); err != nil && h.log != nil {
 		h.log.Error("delete user: submissions sentinel", "error", err)
 	}
 
 	// Step 4: Replace votes with sentinel (preserve vote history integrity)
-	if err := q.UpdateVotesSentinel(r.Context(), targetUUID); err != nil && h.log != nil {
+	if err := q.UpdateVotesSentinel(r.Context(), targetPG); err != nil && h.log != nil {
 		h.log.Error("delete user: votes sentinel", "error", err)
 	}
 

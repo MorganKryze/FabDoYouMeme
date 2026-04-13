@@ -136,6 +136,7 @@ export interface Player {
   username: string;
   connected?: boolean;
   is_host?: boolean;
+  is_guest?: boolean;
 }
 
 export interface LeaderboardEntry {

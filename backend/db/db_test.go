@@ -176,9 +176,10 @@ func TestHardDeleteUser_ReplacesSubmissionsWithSentinel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create round: %v", err)
 	}
+	userPG := pgtype.UUID{Bytes: user.ID, Valid: true}
 	sub, err := q.CreateSubmission(ctx, db.CreateSubmissionParams{
 		RoundID: round.ID,
-		UserID:  user.ID,
+		UserID:  userPG,
 		Payload: json.RawMessage(`{"caption":"funny"}`),
 	})
 	if err != nil {
@@ -196,10 +197,10 @@ func TestHardDeleteUser_ReplacesSubmissionsWithSentinel(t *testing.T) {
 	})
 
 	// Replace user refs in submissions/votes with the sentinel UUID.
-	if err := q.UpdateSubmissionsSentinel(ctx, user.ID); err != nil {
+	if err := q.UpdateSubmissionsSentinel(ctx, userPG); err != nil {
 		t.Fatalf("UpdateSubmissionsSentinel: %v", err)
 	}
-	if err := q.UpdateVotesSentinel(ctx, user.ID); err != nil {
+	if err := q.UpdateVotesSentinel(ctx, userPG); err != nil {
 		t.Fatalf("UpdateVotesSentinel: %v", err)
 	}
 
@@ -208,8 +209,9 @@ func TestHardDeleteUser_ReplacesSubmissionsWithSentinel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetSubmissionsForRound: %v", err)
 	}
-	sentinel := uuid.MustParse("00000000-0000-0000-0000-000000000001")
-	if len(subs) != 1 || subs[0].UserID != sentinel {
+	sentinelUUID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	sentinelPG := pgtype.UUID{Bytes: sentinelUUID, Valid: true}
+	if len(subs) != 1 || subs[0].UserID != sentinelPG {
 		t.Errorf("expected submission user_id == sentinel, got %v", subs[0].UserID)
 	}
 
