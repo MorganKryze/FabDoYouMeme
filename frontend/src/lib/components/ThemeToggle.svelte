@@ -30,8 +30,8 @@
 <style>
   .theme-toggle {
     display: inline-flex;
-    background: #fefefe;
-    border: 2.5px solid rgba(26, 26, 26, 0.7);
+    background: var(--brand-white);
+    border: 2.5px solid var(--brand-border-heavy);
     border-radius: 999px;
     padding: 4px;
     gap: 2px;
@@ -49,17 +49,17 @@
     font-family: inherit;
     font-weight: 700;
     font-size: 0.8rem;
-    color: rgba(26, 26, 26, 0.6);
+    color: var(--brand-text-muted);
     cursor: pointer;
     transition: background 0.2s ease, color 0.2s ease;
   }
 
   .segment:hover:not(.active) {
-    color: rgba(26, 26, 26, 0.9);
+    color: var(--brand-text-mid);
   }
 
   .segment.active {
-    background: #1a1a1a;
-    color: #fefefe;
+    background: var(--brand-text);
+    color: var(--brand-white);
   }
 </style>

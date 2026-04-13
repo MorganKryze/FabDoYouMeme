@@ -25,10 +25,19 @@
         <Icon size={18} strokeWidth={2.5} />
       </span>
       <span class="leading-snug">{item.message}</span>
+      {#if item.action}
+        <button
+          type="button"
+          onclick={() => { item.action!.fn(); toast.dismiss(item.id); }}
+          class="shrink-0 underline text-sm font-bold hover:opacity-70 transition-opacity cursor-pointer"
+        >
+          {item.action.label}
+        </button>
+      {/if}
       <button
         type="button"
         onclick={() => toast.dismiss(item.id)}
-        class="shrink-0 ml-1 opacity-40 hover:opacity-100 transition-opacity inline-flex items-center"
+        class="shrink-0 ml-1 opacity-40 hover:opacity-100 transition-opacity inline-flex items-center cursor-pointer"
         aria-label="Dismiss"
       >
         <XCircle size={16} strokeWidth={2.5} />

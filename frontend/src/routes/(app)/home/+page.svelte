@@ -1,10 +1,15 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { fade } from 'svelte/transition';
   import { enhance } from '$app/forms';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { reveal } from '$lib/actions/reveal';
   import { physCard } from '$lib/actions/physCard';
   import RoomCodeInput from '$lib/components/RoomCodeInput.svelte';
+  import { tone } from '$lib/state/tone.svelte';
+  import { pickForSlot } from '$lib/content/toneSelect';
+  import type { TonePair } from '$lib/content/tonePools';
   import {
     Play,
     Sparkles,
@@ -21,6 +26,34 @@
 
   let code = $state('');
   let joinForm = $state<HTMLFormElement | null>(null);
+
+  // Greeting rotates per visit — we deliberately capture `tone.level` once
+  // on mount rather than binding reactively. Changes on /profile take effect
+  // on the next /home navigation.
+  let greetingPair = $state<TonePair | null>(null);
+
+  onMount(() => {
+    const lastRaw = sessionStorage.getItem('fdym:home_greeting_last');
+    let last: TonePair | null = null;
+    if (lastRaw) {
+      try {
+        last = JSON.parse(lastRaw) as TonePair;
+      } catch {
+        last = null;
+      }
+    }
+    const picked = pickForSlot('home_greeting', tone.level, last);
+    greetingPair = picked;
+    try {
+      sessionStorage.setItem('fdym:home_greeting_last', JSON.stringify(picked));
+    } catch {
+      // quota / private mode — anti-repeat is best-effort
+    }
+  });
+
+  const usernameStr = $derived(data.user?.username ?? 'there');
+  const greetingH1 = $derived(greetingPair?.h1.replaceAll('{username}', usernameStr) ?? null);
+  const greetingSub = $derived(greetingPair?.subline.replaceAll('{username}', usernameStr) ?? null);
 
   function submitJoin(next: string) {
     code = next;
@@ -84,15 +117,23 @@
 <div class="flex-1 flex justify-center p-6 pt-4 pb-10">
   <div class="w-full max-w-5xl flex flex-col gap-10">
 
-    <!-- ─── Greeting ─────────────────────────────────────────── -->
-    <section use:reveal class="flex flex-col gap-1">
+    <!-- ─── Greeting (tone-pooled) ───────────────────────────── -->
+    <section use:reveal class="flex flex-col gap-1" aria-live="polite">
       <p class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
         Welcome back
       </p>
-      <h1 class="text-4xl font-bold">Hey {data.user?.username ?? 'there'}.</h1>
-      <p class="text-sm font-semibold text-brand-text-muted mt-1">
-        Jump back into a room, or spin up a new one.
-      </p>
+      {#if greetingH1 && greetingSub}
+        <h1 class="text-4xl font-bold" in:fade={{ duration: 150 }}>{greetingH1}</h1>
+        <p class="text-sm font-semibold text-brand-text-muted mt-1" in:fade={{ duration: 150 }}>
+          {greetingSub}
+        </p>
+      {:else}
+        <!-- SSR / pre-mount skeleton: blurred placeholder that reserves layout -->
+        <h1 class="text-4xl font-bold blur-sm opacity-40 select-none">Hey there.</h1>
+        <p class="text-sm font-semibold text-brand-text-muted mt-1 blur-sm opacity-40 select-none">
+          Jump back into a room, or spin up a new one.
+        </p>
+      {/if}
     </section>
 
     <!-- ─── Quick actions: code + host shortcut ─────────────── -->

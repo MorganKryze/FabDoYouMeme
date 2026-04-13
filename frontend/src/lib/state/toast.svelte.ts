@@ -1,11 +1,17 @@
 export type ToastType = 'success' | 'warning' | 'error';
 
+export interface ToastAction {
+  label: string;
+  fn: () => void;
+}
+
 interface ToastItem {
   id: number;
   message: string;
   type: ToastType;
   /** Duration in ms. 0 = persistent (manual dismiss required). */
   duration: number;
+  action?: ToastAction;
 }
 
 export class ToastState {
@@ -16,9 +22,9 @@ export class ToastState {
     return this.#items;
   }
 
-  show(message: string, type: ToastType = 'success'): void {
+  show(message: string, type: ToastType = 'success', action?: ToastAction): void {
     const duration = type === 'error' ? 0 : type === 'warning' ? 5000 : 3000;
-    const item: ToastItem = { id: this.#nextId++, message, type, duration };
+    const item: ToastItem = { id: this.#nextId++, message, type, duration, action };
 
     // Max 3 visible — drop oldest
     if (this.#items.length >= 3) {

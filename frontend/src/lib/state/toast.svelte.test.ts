@@ -42,3 +42,33 @@ describe('ToastState', () => {
     expect(t.items[0].duration).toBe(0);
   });
 });
+
+describe('ToastState action', () => {
+  it('stores no action when none is provided', () => {
+    const t = new ToastState();
+    t.show('hello', 'success');
+    expect(t.items[0].action).toBeUndefined();
+  });
+
+  it('stores action label and fn when provided', () => {
+    const t = new ToastState();
+    const fn = vi.fn();
+    t.show('Connection failed.', 'error', { label: 'Retry', fn });
+    expect(t.items[0].action?.label).toBe('Retry');
+    expect(t.items[0].action?.fn).toBe(fn);
+  });
+
+  it('error toasts with action are persistent (duration 0)', () => {
+    const t = new ToastState();
+    t.show('Connection failed.', 'error', { label: 'Retry', fn: vi.fn() });
+    expect(t.items[0].duration).toBe(0);
+  });
+
+  it('dismiss removes the toast', () => {
+    const t = new ToastState();
+    t.show('msg', 'success');
+    const id = t.items[0].id;
+    t.dismiss(id);
+    expect(t.items).toHaveLength(0);
+  });
+});

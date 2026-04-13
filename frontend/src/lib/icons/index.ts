@@ -39,6 +39,7 @@ export {
   Edit,
   Edit2,
   Search,
+  Shuffle,
   LogOut,
   LogIn,
   Settings,

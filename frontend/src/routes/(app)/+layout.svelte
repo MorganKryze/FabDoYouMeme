@@ -1,8 +1,8 @@
 <script lang="ts">
   import '../../app.css';
   import Toast from '$lib/components/Toast.svelte';
-  import AvatarMenu from '$lib/components/AvatarMenu.svelte';
   import { ws } from '$lib/state/ws.svelte';
+  import { toast } from '$lib/state/toast.svelte';
   import { user } from '$lib/state/user.svelte';
   import { page } from '$app/stores';
   import { hoverEffect } from '$lib/actions/hoverEffect';
@@ -16,14 +16,31 @@
     if (data.user) user.setFrom(data.user);
   });
 
-  const statusDot: Record<string, string> = {
-    connected: 'bg-green-500 opacity-0 group-hover:opacity-100',
-    reconnecting: 'bg-brand-accent animate-pulse',
-    error: 'bg-red-500',
-    closed: 'bg-gray-400',
-  };
-
   const isLab = $derived($page.url.pathname.startsWith('/studio'));
+
+  // WS status toasts — silent when healthy, informative on failure/recovery.
+  // prevWsStatus starts null so the first effect run (initial mount) is
+  // skipped without showing any toast.
+  let prevWsStatus = $state<string | null>(null);
+
+  $effect(() => {
+    const status = ws.status;
+    if (prevWsStatus === null) {
+      prevWsStatus = status;
+      return;
+    }
+    if (status === prevWsStatus) return;
+    const prev = prevWsStatus;
+    prevWsStatus = status;
+
+    if (status === 'reconnecting') {
+      toast.show('Connection lost — reconnecting…', 'warning');
+    } else if (status === 'error') {
+      toast.show('Connection failed.', 'error', { label: 'Retry', fn: () => ws.reconnect() });
+    } else if (status === 'connected' && prev === 'reconnecting') {
+      toast.show('Reconnected.', 'success');
+    }
+  });
 </script>
 
 <div class="relative z-[2] min-h-screen flex flex-col text-brand-text">
@@ -36,7 +53,7 @@
     </main>
     <Toast />
   {:else}
-  <!-- Top bar: wordmark + Lab + status + avatar -->
+  <!-- Top bar: wordmark + Lab + avatar link -->
   <header class="flex items-center justify-between gap-4 px-6 pt-5 pb-4">
     <a
       href="/home"
@@ -59,27 +76,20 @@
         Lab
       </a>
 
-      <!-- Connection status dot -->
-      <div
-        class="group relative inline-flex items-center gap-2 px-3 h-[42px] rounded-full bg-brand-white border-[2.5px] border-brand-border-heavy cursor-default"
-        style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
-        title={ws.status}
+      <a
+        href="/profile"
+        use:hoverEffect={'swap'}
+        class="inline-flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-bold bg-brand-white border-[2.5px] border-brand-border-heavy no-underline"
+        style="box-shadow: 0 3px 0 rgba(0,0,0,0.08);"
+        aria-label="Profile"
       >
-        <span class="h-2.5 w-2.5 rounded-full transition-all {statusDot[ws.status]}"></span>
-        {#if ws.status === 'reconnecting'}
-          <span class="text-xs hidden sm:inline font-bold" style="color: var(--brand-accent);">Reconnecting…</span>
-        {:else if ws.status === 'error'}
-          <button
-            type="button"
-            onclick={() => ws.reconnect()}
-            class="text-xs underline text-red-600 hover:text-red-800 font-bold"
-          >
-            Retry
-          </button>
-        {/if}
-      </div>
-
-      <AvatarMenu username={data.user.username} role={data.user.role} />
+        <span
+          class="h-5 w-5 rounded-full border-[2.5px] border-brand-border-heavy shrink-0"
+          style="background: var(--brand-accent);"
+          aria-hidden="true"
+        ></span>
+        <span>{data.user.username}</span>
+      </a>
     </div>
   </header>
 

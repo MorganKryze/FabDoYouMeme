@@ -5,8 +5,12 @@
   import { reveal } from '$lib/actions/reveal';
   import { physCard } from '$lib/actions/physCard';
   import { hoverEffect } from '$lib/actions/hoverEffect';
-  import { Download, Save as SaveIcon, XCircle, Mail, Edit as EditIcon } from '$lib/icons';
+  import { goto, invalidateAll } from '$app/navigation';
+  import { authApi } from '$lib/api/auth';
+  import { Download, Save as SaveIcon, XCircle, Mail, Edit as EditIcon, Shield, LogOut } from '$lib/icons';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
+  import ToneSlider from '$lib/components/ToneSlider.svelte';
+  import ToneSamplePreview from '$lib/components/ToneSamplePreview.svelte';
   import type { ActionData, PageData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -35,6 +39,16 @@
       toast.show('Check your new email address for a verification link.', 'success');
     }
   });
+
+  async function logout() {
+    try {
+      await authApi.logout();
+    } catch {
+      /* non-fatal — session cleared server-side on next request */
+    }
+    await invalidateAll();
+    await goto('/');
+  }
 
   async function downloadExport() {
     try {
@@ -179,6 +193,34 @@
     </p>
   </section>
 
+  <!-- Vibes — greeting tone preference -->
+  <section class="flex flex-col gap-3">
+    <h2 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Vibes</h2>
+    <p class="text-sm font-semibold">Greeting tone</p>
+    <p class="text-xs font-semibold text-brand-text-muted -mt-1">
+      How spicy should your dashboard hello be? Drag to taste.
+    </p>
+    <ToneSlider />
+    <ToneSamplePreview username={data.user?.username ?? 'there'} />
+  </section>
+
+  {#if data.user.role === 'admin'}
+    <!-- Admin panel link — only visible to admins -->
+    <section class="flex flex-col gap-3">
+      <h2 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Admin</h2>
+      <a
+        href="/admin"
+        use:pressPhysics={'ghost'}
+        use:hoverEffect={'swap'}
+        class="self-start inline-flex items-center gap-2 h-11 px-6 rounded-full border-[2.5px] border-brand-border-heavy bg-transparent text-sm font-bold no-underline"
+        style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
+      >
+        <Shield size={16} strokeWidth={2.5} />
+        Admin panel →
+      </a>
+    </section>
+  {/if}
+
   <!-- Data & Privacy section -->
   <section class="flex flex-col gap-4">
     <h2 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Data & Privacy</h2>
@@ -210,6 +252,21 @@
         See the <a href="/privacy" class="underline hover:text-brand-text">Privacy Policy</a> for details.
       </p>
     </div>
+  </section>
+
+  <!-- Logout -->
+  <section class="flex flex-col gap-3">
+    <button
+      use:pressPhysics={'dark'}
+      use:hoverEffect={'swap'}
+      type="button"
+      onclick={logout}
+      class="self-start h-11 px-6 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold cursor-pointer inline-flex items-center gap-2"
+      style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
+    >
+      <LogOut size={16} strokeWidth={2.5} />
+      Log out
+    </button>
   </section>
 </div>
 
