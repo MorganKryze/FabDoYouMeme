@@ -58,6 +58,20 @@ body {
   transition: color 2s ease;
 }
 
+/* SvelteKit injects this aria-live region to announce route changes to screen
+   readers; recent versions ship it with no inline styles, so we hide it. */
+#svelte-announcer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
+  width: 1px;
+  height: 1px;
+}
+
 /* === Bridge to Tailwind via @theme inline === */
 @theme inline {
   --font-sans: 'Quicksand', ui-sans-serif, system-ui, sans-serif;
@@ -105,23 +119,32 @@ body {
    Page transitions (L1 motion kernel)
    ========================================================================== */
 @media (prefers-reduced-motion: no-preference) {
-  ::view-transition-old(root) {
-    animation: pageOut 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-  }
+  /* Scope the transition to the page content only — the surrounding chrome
+     (header, admin sidebar, etc.) stays pinned across navigation. */
+  main { view-transition-name: page-main; }
+
+  ::view-transition-old(root),
   ::view-transition-new(root) {
-    animation: pageIn 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: none;
+  }
+
+  ::view-transition-old(page-main) {
+    animation: pageOut 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  ::view-transition-new(page-main) {
+    animation: pageIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
 
   @keyframes pageOut {
-    from { opacity: 1; transform: scale(1) translateY(0); }
-    to   { opacity: 0; transform: scale(1.05) translateY(-8px); }
+    from { opacity: 1; transform: scale(1); }
+    to   { opacity: 0; transform: scale(1.005); }
   }
   @keyframes pageIn {
-    from { opacity: 0; transform: scale(0.93) translateY(16px); }
-    to   { opacity: 1; transform: scale(1) translateY(0); }
+    from { opacity: 0; transform: scale(0.99); }
+    to   { opacity: 1; transform: scale(1); }
   }
 
-  html.page-exiting main { animation: pageOut 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+  html.page-exiting main { animation: pageOut 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
 }
 
 /* ==========================================================================

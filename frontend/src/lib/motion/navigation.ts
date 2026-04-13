@@ -36,7 +36,7 @@ export function installPageTransitions(): void {
 async function manualFallback(navigation: { complete: Promise<void> }): Promise<void> {
   const root = document.documentElement;
   root.classList.add('page-exiting');
-  await new Promise((r) => setTimeout(r, 450));
+  await new Promise((r) => setTimeout(r, 200));
   root.classList.remove('page-exiting');
   await navigation.complete;
 }

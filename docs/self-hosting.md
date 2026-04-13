@@ -43,6 +43,40 @@ In production, `docker-compose.override.yml` should not be present. Use `docker 
 
 ---
 
+## Keeping env files in sync after an upgrade
+
+When you `git pull` a new version of FabDoYouMeme, upstream may have added new environment variables — for example, the `PUBLIC_OPERATOR_*` variables that drive the `/privacy` page. Your existing `.env.dev` / `.env.preprod` / `.env.prod` won't have them, and Docker Compose will either warn about unset variables or silently use empty strings where defaults were expected.
+
+A helper script, [`scripts/env-migrate.sh`](../scripts/env-migrate.sh), detects this drift and helps you migrate forward without touching any values you've customized. It auto-detects which deployments exist (dev / preprod / prod) by probing for `.env.*.example` files, so running it on a dev-only clone only processes `dev`.
+
+```bash
+make env-check      # quick summary: which deployments are out of sync? (exits 1 on drift — safe in CI)
+make env-diff       # per-variable diff with reasons: "added upstream", "may be deprecated", etc.
+make env-migrate    # interactive: shows preview, asks y/N, appends missing defaults with their comments
+```
+
+**What `env-migrate` does and does not do**:
+
+- ✓ Appends variables that exist in `.env.*.example` but are missing from the live `.env.*` file, copying each variable's original comment block from the example so context travels with it.
+- ✓ Variables are appended in the order they appear in the example, grouped under a dated header: `# --- Added by scripts/env-migrate.sh on YYYY-MM-DD ---`.
+- ✓ Bootstraps a missing live file from the example if you confirm (useful for a fresh preprod / prod setup).
+- ✗ **Never** overwrites a value you've already set — if `SMTP_HOST=smtp.ovh.net` is already in `.env.prod`, it stays that way even if the example has a different default.
+- ✗ **Never** removes "extra" variables (present in live but not in example). They may be deprecated upstream or a custom override — the script flags them via `env-diff` and leaves the decision to you.
+
+Typical upgrade flow:
+
+```bash
+git pull                      # pull new code, including new .env.*.example entries
+make env-check                # "✗ prod — 3 missing" tells you there's work
+make env-diff ENV=prod        # see exactly which variables and their defaults
+make env-migrate ENV=prod     # append them; review the new block; edit values if needed
+make prod                     # restart the stack with the updated env file
+```
+
+Scope to a single deployment with `ENV=dev|preprod|prod` on any target, or invoke the script directly for the same effect: `./scripts/env-migrate.sh check prod`.
+
+---
+
 ## Applying database migrations
 
 Migrations run automatically at backend startup via `golang-migrate`. To run them manually:
@@ -137,6 +171,21 @@ All rate limits are enforced in-memory per backend process. This is correct for 
 | Variable    | Required | Default | Description                                    |
 | ----------- | -------- | ------- | ---------------------------------------------- |
 | `LOG_LEVEL` | no       | `info`  | Verbosity: `debug` / `info` / `warn` / `error` |
+
+### Legal / privacy policy
+
+The Privacy Policy served at `/privacy` is rendered from a Svelte template at [`frontend/src/routes/(public)/privacy/+page.svelte`](../frontend/src/routes/(public)/privacy/+page.svelte), with the operator-specific fields injected at runtime via these `PUBLIC_*` environment variables. They are read through SvelteKit's `$env/dynamic/public`, so updating any of them only requires `docker compose up -d` — no rebuild.
+
+| Variable                       | Required | Default          | Description                                                                                                                                                                                                  |
+| ------------------------------ | -------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `PUBLIC_OPERATOR_NAME`         | yes      | —                | How you want to be identified as the data controller under GDPR Art. 13(1)(a). Free-form — write what matches your legal status. Examples: `Jane Doe (natural person, non-commercial)`, `Acme Corp S.A.S.`. |
+| `PUBLIC_OPERATOR_CONTACT_EMAIL`| yes      | —                | Inbox you monitor for all privacy requests (access, erasure, rectification, objection, complaints). Rendered as a `mailto:` link on the page.                                                                |
+| `PUBLIC_OPERATOR_URL`          | no       | `${FRONTEND_URL}`| Public URL of this instance, shown under "Hosted at". Defaults to `FRONTEND_URL` which is almost always what you want; override only if your privacy policy needs to advertise a different canonical URL.    |
+| `PUBLIC_OPERATOR_SMTP_PROVIDER`| yes      | —                | Free-form description of the SMTP provider handling magic-link delivery, for the Art. 28 processor disclosure. Include company + country. Example: `OVHcloud (OVH SAS, France) — EU-only transactional relay`. |
+
+> **GDPR compliance gate.** If any of the three required variables above is unset, the `/privacy` page renders a visible red banner at the top warning that operator configuration is incomplete. Do not launch your instance until these values are set — the consent checkbox at registration links to this page, so incomplete content is a registration-time compliance failure.
+
+See [`docs/reference/privacy-policy.md`](reference/privacy-policy.md) for the full reference copy of the rendered policy content (templates, tables, and exact legal wording) — that file is the source of truth for the wording and structure of the Svelte page.
 
 ---
 

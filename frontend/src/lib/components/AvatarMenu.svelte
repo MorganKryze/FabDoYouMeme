@@ -39,7 +39,7 @@
       /* non-fatal — server-side session still cleared on next request */
     }
     await invalidateAll();
-    await goto('/auth/magic-link');
+    await goto('/');
   }
 </script>
 

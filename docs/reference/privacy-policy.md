@@ -1,16 +1,27 @@
-# Privacy Policy Template
+# Privacy Policy — Reference Copy
 
-This is a stub template for the Privacy Policy served at `/privacy`. It must be completed by the operator before inviting the first users. All `[PLACEHOLDER]` fields must be replaced with real content.
+> **This markdown file is the reference copy of the privacy policy wording.** The live page served at `/privacy` is rendered by a Svelte template at [`frontend/src/routes/(public)/privacy/+page.svelte`](../../frontend/src/routes/(public)/privacy/+page.svelte) which mirrors the structure below. This file exists so legal wording can be reviewed, diffed, and versioned without reading JSX.
 
-GDPR Art. 13(1) requires this information to be provided at the time personal data is collected (i.e., at registration). The consent checkbox on the registration page links here — incomplete content is a compliance failure.
+**Operator-specific fields are not hardcoded.** The fields below that reference a specific operator (name, contact email, deployment URL, SMTP provider) are injected at runtime into the Svelte template from these environment variables:
+
+| Field in the page              | Environment variable            | Who sets it                                    |
+| ------------------------------ | ------------------------------- | ---------------------------------------------- |
+| §1 "Data controller"           | `PUBLIC_OPERATOR_NAME`          | Operator of the instance                      |
+| §1, §5, §7 contact email       | `PUBLIC_OPERATOR_CONTACT_EMAIL` | Operator of the instance                      |
+| §1 "Hosted at"                 | `PUBLIC_OPERATOR_URL`           | Operator (defaults to `FRONTEND_URL`)         |
+| §9 SMTP processor name         | `PUBLIC_OPERATOR_SMTP_PROVIDER` | Operator of the instance                      |
+
+So when a new operator self-hosts FabDoYouMeme (the project is GPLv3), **they do not need to edit this file or the Svelte page** — they set four env vars in their `.env` and their instance's `/privacy` page shows their own details automatically. See [`docs/self-hosting.md → Legal / privacy policy`](../self-hosting.md#legal--privacy-policy) for the full variable reference.
+
+The wording that follows is intentionally **simple, readable, and accurate**: plain language over legalese, only the data actually collected, only the processors actually used. Nothing is padded for the sake of looking complete. It also serves as the reference configuration of the public instance operated by the maintainer — the concrete values below (Morgan Kryze, `contact@libresoftware.cloud`, OVHcloud, etc.) are what that instance sets its env vars to, and show what a filled-in policy looks like. GDPR Art. 13(1) requires this information to be provided at the time personal data is collected (registration). The consent checkbox on the registration page links to the rendered page — incomplete or inaccurate content is a compliance failure.
 
 ---
 
 ## 1. Controller identity (Art. 13(1)(a))
 
-**Data controller:** [OPERATOR NAME]  
-**Contact email:** [OPERATOR EMAIL — used for erasure and access requests]  
-**Hosted at:** [DEPLOYMENT URL, e.g. https://meme.example.com]
+**Data controller:** Morgan Kryze — natural person, acting as an individual non-commercial operator. No company, no legal entity, no revenue; the instance is hosted and maintained personally as a hobby project.  
+**Contact email:** <contact@libresoftware.cloud> — used for all privacy requests (access, erasure, rectification, objection, complaints). This is the same address used for the project repository.  
+**Hosted at:** [DEPLOYMENT URL — the public URL of this specific instance, e.g. `https://meme.libresoftware.cloud`]
 
 ---
 
@@ -57,9 +68,9 @@ GDPR Art. 13(1) requires this information to be provided at the time personal da
 | **Access** (Art. 15)             | Download your data at Profile → "Download My Data"   |
 | **Portability** (Art. 20)        | Same as above — downloads as JSON                    |
 | **Rectification** (Art. 16)      | Update username or email at Profile → edit fields    |
-| **Erasure** (Art. 17)            | Email [OPERATOR EMAIL] — processed within 30 days    |
-| **Objection** (Art. 21)          | Email [OPERATOR EMAIL]                               |
-| **Withdraw consent** (Art. 7(3)) | Withdrawal = erasure request; email [OPERATOR EMAIL] |
+| **Erasure** (Art. 17)            | Email contact@libresoftware.cloud — processed within 30 days    |
+| **Objection** (Art. 21)          | Email contact@libresoftware.cloud                               |
+| **Withdraw consent** (Art. 7(3)) | Withdrawal = erasure request; email contact@libresoftware.cloud |
 
 ---
 
@@ -76,7 +87,7 @@ If you believe your data is being processed unlawfully, you have the right to lo
 
 ## 7. Minimum age (Art. 8)
 
-This platform is intended for users aged **16 and above**. By registering, you confirm that you meet this requirement. If you are under 16, parental consent must be obtained — contact [OPERATOR EMAIL].
+This platform is intended for users aged **16 and above**. By registering, you confirm that you meet this requirement. If you are under 16, parental consent must be obtained — contact contact@libresoftware.cloud.
 
 ---
 
@@ -96,11 +107,13 @@ No tracking, analytics, or advertising cookies are used. No third-party cookies 
 
 Your email address is transmitted to our email provider to send authentication links:
 
-| Processor                          | Data sent                               | DPA in place        |
-| ---------------------------------- | --------------------------------------- | ------------------- |
-| [SMTP PROVIDER NAME, e.g. Mailgun] | Your email address, authentication link | [YES / LINK TO DPA] |
+| Processor                    | Role                           | Data sent                                | DPA in place                                           |
+| ---------------------------- | ------------------------------ | ---------------------------------------- | ------------------------------------------------------ |
+| OVHcloud (OVH SAS, France)   | Transactional SMTP relay       | Your email address, authentication link  | Yes — OVHcloud publishes a standard GDPR DPA (Art. 28) |
 
-All other data is stored on-premises and not shared with third parties.
+OVHcloud is a European (French) hosting provider, so your email address stays within the EU when authentication links are sent. No data is transferred outside the EU/EEA.
+
+All other data (username, submissions, votes, scores, session, logs, backups) is stored on the operator's own infrastructure and is not shared with any third party.
 
 ---
 
@@ -110,5 +123,5 @@ Database backups are retained for 7 days for disaster recovery. If you request e
 
 ---
 
-_Last updated: [DATE]_  
+_Last updated: 2026-04-13_  
 _Version: 1.0_

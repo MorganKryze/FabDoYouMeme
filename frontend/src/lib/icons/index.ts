@@ -45,6 +45,11 @@ export {
   UserPlus,
   UserX,
 
+  // --- Marketing & security ---
+  Lock,
+  Server,
+  Gamepad2,
+
   // --- Status & info ---
   Info,
   ListChecks,
@@ -75,4 +80,5 @@ export {
   ArrowRight,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
 } from 'lucide-svelte';

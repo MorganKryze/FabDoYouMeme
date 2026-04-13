@@ -29,7 +29,8 @@
 <div class="relative z-[2] min-h-screen flex flex-col text-brand-text">
   {#if data.isGuest || !data.user}
     <!-- Guest room visit: minimal chrome — the room page's own header
-         already shows the room code and connection status. -->
+         already shows the room code and connection status. Anonymous users
+         no longer reach other (app) routes since /` lives in (marketing). -->
     <main class="flex-1 flex flex-col">
       {@render children()}
     </main>
@@ -38,7 +39,7 @@
   <!-- Top bar: wordmark + Lab + status + avatar -->
   <header class="flex items-center justify-between gap-4 px-6 pt-5 pb-4">
     <a
-      href="/"
+      href="/home"
       use:pressPhysics={'ghost'}
       class="text-lg font-bold tracking-tight no-underline"
       aria-label="FabDoYouMeme home"

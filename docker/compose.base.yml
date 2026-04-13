@@ -87,6 +87,13 @@ services:
       # WebSocket upgrades to API_URL, so the backend port never needs
       # to be published to the host.
       API_URL: http://backend:8080
+      # Legal / privacy policy (served at /privacy). Injected at runtime via
+      # `$env/dynamic/public` so operators can update disclosure content
+      # without rebuilding the image. See docs/self-hosting.md for details.
+      PUBLIC_OPERATOR_NAME: ${PUBLIC_OPERATOR_NAME}
+      PUBLIC_OPERATOR_CONTACT_EMAIL: ${PUBLIC_OPERATOR_CONTACT_EMAIL}
+      PUBLIC_OPERATOR_URL: ${PUBLIC_OPERATOR_URL:-${FRONTEND_URL}}
+      PUBLIC_OPERATOR_SMTP_PROVIDER: ${PUBLIC_OPERATOR_SMTP_PROVIDER}
     expose:
       - 3000
     networks:

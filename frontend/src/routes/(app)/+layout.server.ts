@@ -4,7 +4,7 @@ import type { LayoutServerLoad } from './$types';
 export const load: LayoutServerLoad = async ({ locals, url }) => {
   // Guest bypass: anonymous visitors reaching a room via the /join flow
   // carry `?as=guest` and only target /rooms/{code}. Any other (app) path
-  // still requires a session — the auth gate is unchanged elsewhere.
+  // still requires a session.
   const isGuestRoomVisit =
     url.pathname.startsWith('/rooms/') && url.searchParams.get('as') === 'guest';
 

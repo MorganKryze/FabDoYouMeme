@@ -113,6 +113,13 @@ FabDoYouMeme/
 make dev           # or: docker compose -f docker/compose.base.yml -f docker/compose.dev.yml --env-file .env.dev up --build -d
 make dev-down      # tear it down
 
+# Env var drift detection & migration — run after pulling upstream updates.
+# Compares .env.{dev,preprod,prod} against their .env.*.example templates.
+# Never overwrites existing values; only appends missing defaults.
+make env-check     # brief "am I out of sync?" summary; exits 1 on drift
+make env-diff      # detailed per-variable diff with reasons
+make env-migrate   # interactively append missing defaults + bootstrap missing live files
+
 # Watch backend logs
 docker compose -f docker/compose.base.yml -f docker/compose.dev.yml logs -f backend
 
@@ -153,6 +160,7 @@ open http://localhost:8025
 - **`/api/metrics` must be IP-restricted**: never expose Prometheus endpoint to the internet
 - **Startup cleanup**: on every start, the backend marks `playing` rooms as `finished` (crash recovery) and closes stale `lobby` rooms older than 24h — both are idempotent
 - **GDPR**: registration requires `consent: true` + `age_affirmation: true`; `users.consent_at` is set once and never changed; hard-delete replaces both `submissions.user_id` AND `votes.voter_id` with the sentinel UUID before deleting the user row; game data purged after 2 years; audit log PII anonymized after 3 years — see `docs/reference/gdpr.md`
+- **Privacy policy is env-driven**: the `/privacy` page at `frontend/src/routes/(public)/privacy/+page.svelte` is a generic template — operator-specific fields (controller name, contact email, deployment URL, SMTP provider) are injected at runtime from `PUBLIC_OPERATOR_*` env vars via `$env/dynamic/public`. Never hardcode a real operator name or email into the template; to change the displayed values, update the env var, not the file. An unset required var triggers a visible red warning banner on the page. Full variable reference: `docs/self-hosting.md → Legal / privacy policy`.
 
 ---
 
