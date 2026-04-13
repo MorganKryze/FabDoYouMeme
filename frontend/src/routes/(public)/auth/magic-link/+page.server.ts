@@ -1,6 +1,12 @@
 // frontend/src/routes/(public)/auth/magic-link/+page.server.ts
-import type { Actions } from './$types';
+import { redirect } from '@sveltejs/kit';
+import type { Actions, PageServerLoad } from './$types';
 import { API_BASE } from '$lib/server/backend';
+
+export const load: PageServerLoad = async ({ locals }) => {
+  if (locals.user) throw redirect(303, '/home');
+  return {};
+};
 
 export const actions: Actions = {
   default: async ({ request, fetch }) => {

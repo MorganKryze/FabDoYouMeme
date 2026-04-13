@@ -5,6 +5,7 @@
   import { reveal } from '$lib/actions/reveal';
   import { physCard } from '$lib/actions/physCard';
   import RoomCodeInput from '$lib/components/RoomCodeInput.svelte';
+  import type { PageData } from './$types';
   import {
     Lock,
     Server,
@@ -18,6 +19,7 @@
     Hash,
   } from '$lib/icons';
 
+  let { data }: { data: PageData } = $props();
   let joinCode = $state('');
 
   function join(next: string) {
@@ -268,23 +270,36 @@
             Spinning one up?
           </div>
           <p class="text-sm font-semibold text-brand-text max-w-[16rem]">
-            Host your own room. One account, unlimited games.
+            {data.user ? `Welcome back, ${data.user.username}. Jump straight into your dashboard.` : 'Host your own room. One account, unlimited games.'}
           </p>
-          <a
-            href="/auth/magic-link"
-            use:pressPhysics={'dark'}
-            use:hoverEffect={'gradient'}
-            class="mt-4 inline-flex items-center justify-center gap-2 px-6 h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold no-underline"
-            style="box-shadow: 0 4px 0 rgba(0,0,0,0.08);"
-          >
-            <Play size={16} strokeWidth={2.5} />
-            Sign in to host
-          </a>
+          {#if data.user}
+            <a
+              href="/home"
+              use:pressPhysics={'dark'}
+              use:hoverEffect={'gradient'}
+              class="mt-4 inline-flex items-center justify-center gap-2 px-6 h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold no-underline"
+              style="box-shadow: 0 4px 0 rgba(0,0,0,0.08);"
+            >
+              <Home size={16} strokeWidth={2.5} />
+              Go to dashboard
+            </a>
+          {:else}
+            <a
+              href="/auth/magic-link"
+              use:pressPhysics={'dark'}
+              use:hoverEffect={'gradient'}
+              class="mt-4 inline-flex items-center justify-center gap-2 px-6 h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold no-underline"
+              style="box-shadow: 0 4px 0 rgba(0,0,0,0.08);"
+            >
+              <Play size={16} strokeWidth={2.5} />
+              Sign in to host
+            </a>
+          {/if}
         </div>
       </div>
 
       <p class="text-xs text-brand-text-muted">
-        Hosting requires an account. Joining with a code does not.
+        {data.user ? 'You are signed in — host or join, your call.' : 'Hosting requires an account. Joining with a code does not.'}
       </p>
     </div>
   </section>

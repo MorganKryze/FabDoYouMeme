@@ -152,12 +152,20 @@ func main() {
 	// everything through).
 	r.With(mw.RequirePrivateIP(cfg.TrustedProxies)).Handle("/api/metrics", promhttp.Handler())
 
-	// Auth routes (rate-limited)
-	r.With(authLimiter.Middleware).Route("/api/auth", func(r chi.Router) {
-		r.With(inviteLimiter.Middleware).Post("/register", authHandler.Register)
-		r.Post("/magic-link", authHandler.MagicLink)
-		r.Post("/verify", authHandler.Verify)
-		r.With(mw.RequireAuth).Post("/logout", authHandler.Logout)
+	// Auth routes.
+	// /api/auth/me is deliberately *outside* the strict auth limiter —
+	// every authenticated SvelteKit page hit rehydrates the session via
+	// this endpoint, so capping it at RATE_LIMIT_AUTH_RPM (default 10/min)
+	// would soft-log-out users on a few quick refreshes. It still inherits
+	// the global limiter set at the root.
+	r.Route("/api/auth", func(r chi.Router) {
+		r.Group(func(r chi.Router) {
+			r.Use(authLimiter.Middleware)
+			r.With(inviteLimiter.Middleware).Post("/register", authHandler.Register)
+			r.Post("/magic-link", authHandler.MagicLink)
+			r.Post("/verify", authHandler.Verify)
+			r.With(mw.RequireAuth).Post("/logout", authHandler.Logout)
+		})
 		r.With(mw.RequireAuth).Get("/me", authHandler.Me)
 	})
 

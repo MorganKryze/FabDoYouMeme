@@ -59,7 +59,16 @@ export const handle: Handle = async ({ event, resolve }) => {
   const nonce = randomBytes(16).toString('base64');
   event.locals.nonce = nonce;
 
-  // Load session from backend (session cookie is HttpOnly — forwarded automatically)
+  // Load session from backend (session cookie is HttpOnly — forwarded automatically).
+  //
+  // We distinguish failure modes carefully:
+  //   - 200          → user is signed in, hydrate locals.user
+  //   - 401          → user is definitively logged out (no / expired session)
+  //   - 429 / 5xx    → introspection failed for transient reasons; we cannot
+  //                    confirm the session, so we log loudly and treat as
+  //                    logged out (we have no prior state to fall back on),
+  //                    but operators need to see this so it can be fixed.
+  //   - network fail → same as transient — log, treat as logged out.
   try {
     const res = await fetch(`${API_BASE}/api/auth/me`, {
       headers: { cookie: event.request.headers.get('cookie') ?? '' }
@@ -67,9 +76,15 @@ export const handle: Handle = async ({ event, resolve }) => {
     if (res.ok) {
       event.locals.user = await res.json();
     } else {
+      if (res.status !== 401) {
+        console.warn(
+          `[auth] /api/auth/me returned ${res.status} for ${event.url.pathname} — session treated as anonymous`
+        );
+      }
       event.locals.user = null;
     }
-  } catch {
+  } catch (err) {
+    console.warn(`[auth] /api/auth/me unreachable for ${event.url.pathname}:`, err);
     event.locals.user = null;
   }
 

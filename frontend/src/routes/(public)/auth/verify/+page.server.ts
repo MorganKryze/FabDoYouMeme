@@ -1,13 +1,16 @@
 // frontend/src/routes/(public)/auth/verify/+page.server.ts
 import { redirect, fail } from '@sveltejs/kit';
+import { dev } from '$app/environment';
 import type { Actions, PageServerLoad } from './$types';
 import { API_BASE } from '$lib/server/backend';
 import { parse as parseCookies } from 'cookie';
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
+  // Already signed in — skip the "click to log in" ceremony entirely.
+  if (locals.user) throw redirect(303, '/home');
   return {
     token: url.searchParams.get('token') ?? '',
-    next: url.searchParams.get('next') ?? '/'
+    next: url.searchParams.get('next') ?? '/home'
   };
 };
 
@@ -15,7 +18,7 @@ export const actions: Actions = {
   default: async ({ request, fetch, cookies }) => {
     const data = await request.formData();
     const token = (data.get('token') as string | null) ?? '';
-    const next = (data.get('next') as string | null) ?? '/';
+    const next = (data.get('next') as string | null) ?? '/home';
 
     const res = await fetch(`${API_BASE}/api/auth/verify`, {
       method: 'POST',
@@ -46,12 +49,15 @@ export const actions: Actions = {
       cookies.set('session', sessionValue, {
         path: '/',
         httpOnly: true,
-        secure: true,
+        // Browsers silently drop `Secure` cookies on insecure origins, so in dev
+        // (plain HTTP) we must not set the flag — otherwise the user appears to
+        // "log in" successfully but the cookie never reaches the browser.
+        secure: !dev,
         sameSite: 'strict',
         maxAge: maxAgeMatch ? parseInt(maxAgeMatch[1]) : 720 * 3600
       });
     }
 
-    throw redirect(303, next.startsWith('/') ? next : '/');
+    throw redirect(303, next.startsWith('/') ? next : '/home');
   }
 };

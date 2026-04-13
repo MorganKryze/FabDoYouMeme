@@ -1,5 +1,5 @@
 // frontend/src/routes/(public)/auth/register/+page.server.ts
-import { fail } from '@sveltejs/kit';
+import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { API_BASE } from '$lib/server/backend';
 
@@ -10,7 +10,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   username_taken: 'That username is already taken. Please choose another.'
 };
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
+  if (locals.user) throw redirect(303, '/home');
   return {
     inviteToken: url.searchParams.get('invite') ?? ''
   };
