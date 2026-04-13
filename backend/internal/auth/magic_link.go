@@ -4,7 +4,12 @@ package auth
 import (
 	"encoding/json"
 	"net/http"
+	"time"
+
+	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 )
+
+const magicLinkCooldown = 60 * time.Second
 
 type magicLinkRequest struct {
 	Email string `json:"email"`
@@ -21,6 +26,16 @@ func (h *Handler) MagicLink(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.db.GetUserByEmail(r.Context(), req.Email)
 	if err != nil || !user.IsActive {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Per-email cooldown: if a login token was created within the last 60 s,
+	// skip sending. Still returns 200 — no enumeration.
+	if createdAt, err := h.db.GetLatestMagicLinkToken(r.Context(), db.GetLatestMagicLinkTokenParams{
+		UserID:  user.ID,
+		Purpose: "login",
+	}); err == nil && h.clock.Now().Sub(createdAt) < magicLinkCooldown {
 		w.WriteHeader(http.StatusOK)
 		return
 	}

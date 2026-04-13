@@ -23,6 +23,12 @@ DELETE FROM magic_link_tokens WHERE expires_at < now() AND used_at IS NULL;
 DELETE FROM magic_link_tokens
 WHERE used_at IS NOT NULL AND used_at < now() - interval '7 days';
 
+-- name: GetLatestMagicLinkToken :one
+SELECT created_at FROM magic_link_tokens
+WHERE user_id = $1 AND purpose = $2
+ORDER BY created_at DESC
+LIMIT 1;
+
 -- name: GetMagicLinkTokenByHash :one
 -- Used to inspect token state before consuming — allows returning distinct error codes.
 SELECT * FROM magic_link_tokens WHERE token_hash = $1;

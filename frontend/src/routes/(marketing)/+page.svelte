@@ -270,12 +270,11 @@
           <p class="text-sm font-semibold text-brand-text max-w-[16rem]">
             Host your own room. One account, unlimited games.
           </p>
-          <div class="w-full max-w-[14rem] h-[52px]" aria-hidden="true"></div>
           <a
             href="/auth/magic-link"
             use:pressPhysics={'dark'}
             use:hoverEffect={'gradient'}
-            class="inline-flex items-center justify-center gap-2 px-6 h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold no-underline"
+            class="mt-4 inline-flex items-center justify-center gap-2 px-6 h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold no-underline"
             style="box-shadow: 0 4px 0 rgba(0,0,0,0.08);"
           >
             <Play size={16} strokeWidth={2.5} />

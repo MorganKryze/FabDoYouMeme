@@ -9,8 +9,8 @@
 </script>
 
 <div class="relative z-[2] min-h-screen flex flex-col text-brand-text">
-  <!-- Marketing nav: wordmark left, join + auth right -->
-  <header class="flex items-center justify-between gap-4 px-6 pt-5 pb-4">
+  <!-- Marketing nav: wordmark left, join + auth right — fixed so it stays on scroll -->
+  <header class="fixed top-0 inset-x-0 z-50 flex items-center justify-between gap-4 px-6 py-3">
     <a
       href="/"
       use:pressPhysics={'ghost'}
@@ -48,7 +48,7 @@
     </div>
   </header>
 
-  <main class="flex-1 flex flex-col">
+  <main class="flex-1 flex flex-col pt-[3.5rem]">
     {@render children()}
   </main>
 

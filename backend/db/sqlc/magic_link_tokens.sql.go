@@ -116,6 +116,25 @@ func (q *Queries) DeleteOldUsedTokens(ctx context.Context) error {
 	return err
 }
 
+const getLatestMagicLinkToken = `-- name: GetLatestMagicLinkToken :one
+SELECT created_at FROM magic_link_tokens
+WHERE user_id = $1 AND purpose = $2
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+type GetLatestMagicLinkTokenParams struct {
+	UserID  uuid.UUID `json:"user_id"`
+	Purpose string    `json:"purpose"`
+}
+
+func (q *Queries) GetLatestMagicLinkToken(ctx context.Context, arg GetLatestMagicLinkTokenParams) (time.Time, error) {
+	row := q.db.QueryRow(ctx, getLatestMagicLinkToken, arg.UserID, arg.Purpose)
+	var created_at time.Time
+	err := row.Scan(&created_at)
+	return created_at, err
+}
+
 const getMagicLinkToken = `-- name: GetMagicLinkToken :one
 SELECT id, user_id, token_hash, purpose, expires_at, used_at, created_at FROM magic_link_tokens
 WHERE token_hash = $1 AND expires_at > now() AND used_at IS NULL
