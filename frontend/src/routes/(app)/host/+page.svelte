@@ -182,3 +182,8 @@
     {/if}
   </div>
 </div>
+
+<footer class="border-t border-brand-border px-6 py-6 flex items-center justify-between text-xs font-semibold text-brand-text-muted">
+  <p>© {new Date().getFullYear()} FabDoYouMeme</p>
+  <a href="/privacy" class="hover:text-brand-text transition-colors">Privacy Policy</a>
+</footer>

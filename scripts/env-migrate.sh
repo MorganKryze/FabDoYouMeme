@@ -261,9 +261,17 @@ cmd_migrate() {
 
   {
     printf "\n# --- Added by scripts/env-migrate.sh on %s ---\n" "$(date '+%Y-%m-%d')"
-    for key in "${DIFF_MISSING[@]}"; do
-      get_definition_with_comments "$key" "$example"
-      printf "\n"
+    local block
+    for i in "${!DIFF_MISSING[@]}"; do
+      block=$(get_definition_with_comments "${DIFF_MISSING[$i]}" "$example")
+      # Insert a blank-line separator only when this block starts with its own
+      # comments (= new section). Bare KEY= blocks continue the previous section
+      # flush, so a shared preamble like "# Legal / privacy policy" stays
+      # grouped with all the variables that share it.
+      if (( i > 0 )) && [[ "$block" == "#"* ]]; then
+        printf "\n"
+      fi
+      printf "%s\n" "$block"
     done
   } >> "$live"
 

@@ -81,7 +81,7 @@
   <title>Dashboard — FabDoYouMeme</title>
 </svelte:head>
 
-<div class="flex-1 flex justify-center p-6 pt-4 pb-20">
+<div class="flex-1 flex justify-center p-6 pt-4 pb-10">
   <div class="w-full max-w-5xl flex flex-col gap-10">
 
     <!-- ─── Greeting ─────────────────────────────────────────── -->
@@ -350,3 +350,8 @@
     </section>
   </div>
 </div>
+
+<footer class="border-t border-brand-border px-6 py-6 flex items-center justify-between text-xs font-semibold text-brand-text-muted">
+  <p>© {new Date().getFullYear()} FabDoYouMeme</p>
+  <a href="/privacy" class="hover:text-brand-text transition-colors">Privacy Policy</a>
+</footer>

@@ -64,7 +64,7 @@
   <title>Profile — FabDoYouMeme</title>
 </svelte:head>
 
-<div class="max-w-lg mx-auto p-6 flex flex-col gap-8" use:reveal>
+<div class="w-full max-w-lg mx-auto p-6 flex flex-col gap-8" use:reveal>
   <h1 style="font-size: clamp(2rem, 4.5vw, 3.2rem); font-weight: 700; line-height: 1; letter-spacing: -0.02em;">
     Maker Card
   </h1>
@@ -212,3 +212,8 @@
     </div>
   </section>
 </div>
+
+<footer class="border-t border-brand-border px-6 py-6 flex items-center justify-between text-xs font-semibold text-brand-text-muted max-w-lg mx-auto w-full">
+  <p>© {new Date().getFullYear()} FabDoYouMeme</p>
+  <a href="/privacy" class="hover:text-brand-text transition-colors">Privacy Policy</a>
+</footer>
