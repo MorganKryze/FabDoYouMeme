@@ -148,8 +148,7 @@
         class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white p-5 flex flex-col justify-between gap-2 min-w-[200px] no-underline"
         style="box-shadow: 0 5px 0 rgba(0,0,0,0.2);"
       >
-        <div class="flex items-center gap-2 text-[0.65rem] font-bold uppercase tracking-[0.2em] opacity-70">
-          <Sparkles size={14} strokeWidth={2.5} />
+        <div class="text-[0.65rem] font-bold uppercase tracking-[0.2em] opacity-70">
           Host
         </div>
         <div class="text-xl font-bold leading-tight">Start a<br />new game</div>
