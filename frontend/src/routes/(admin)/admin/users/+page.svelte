@@ -16,6 +16,12 @@
   let searchTimeout: ReturnType<typeof setTimeout>;
   let confirmDeleteId = $state<string | null>(null);
 
+  // `use:enhance` updates the `form` prop several times per submission
+  // (pending → result → post-invalidate refetch), each update firing the
+  // effect. Without this guard we got 3× toasts. A plain `let` (not
+  // `$state`) skips reactivity, so writing from inside the effect is safe.
+  let lastForm: ActionData | undefined;
+
   function onSearchInput() {
     clearTimeout(searchTimeout);
     searchTimeout = setTimeout(() => {
@@ -45,6 +51,8 @@
   }
 
   $effect(() => {
+    if (form === lastForm) return;
+    lastForm = form;
     if (form?.error) toast.show(form.error, 'error');
     if (form?.success) toast.show('User updated.', 'success');
     if (form?.deleted) toast.show('User deleted.', 'success');

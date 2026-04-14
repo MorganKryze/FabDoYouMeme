@@ -23,8 +23,9 @@ export const actions: Actions = {
     const invite_token = (data.get('invite_token') as string | null) ?? '';
     const username = (data.get('username') as string | null) ?? '';
     const email = (data.get('email') as string | null) ?? '';
-    const consent = data.get('consent') === 'true';
-    const age_affirmation = data.get('age_affirmation') === 'true';
+    // HTML checkboxes omit the field entirely when unchecked. Presence = ticked.
+    const consent = data.has('consent');
+    const age_affirmation = data.has('age_affirmation');
 
     const res = await fetch(`${API_BASE}/api/auth/register`, {
       method: 'POST',
@@ -51,8 +52,8 @@ export const actions: Actions = {
         username,
         email,
         error: ERROR_MESSAGES[code] ?? 'Registration failed. Please try again.',
-        consent: data.get('consent') === 'on',
-        age_affirmation: data.get('age_affirmation') === 'on',
+        consent,
+        age_affirmation,
       });
     }
 

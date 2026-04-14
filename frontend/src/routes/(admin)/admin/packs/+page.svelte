@@ -12,6 +12,12 @@
   let { data, form }: { data: PageData; form: ActionData } = $props();
   let packs = $state<Pack[]>(untrack(() => data.packs));
   let showNewRow = $state(false);
+
+  // `use:enhance` updates the `form` prop several times per submission
+  // (pending → result → post-invalidate refetch), each update firing the
+  // effect. Without this guard we got 3× toasts. A plain `let` (not
+  // `$state`) skips reactivity, so writing from inside the effect is safe.
+  let lastForm: ActionData | undefined;
   // Imperative focus replaces `autofocus` (a11y_autofocus): when the inline
   // form opens, move focus once into the Name input so keyboard/screen-reader
   // users follow the context change. Finding 1.2 in the 2026-04-10 review.
@@ -21,6 +27,8 @@
   });
 
   $effect(() => {
+    if (form === lastForm) return;
+    lastForm = form;
     if (form?.created) { packs = [...packs, form.created]; showNewRow = false; toast.show('Pack created.', 'success'); }
     if (form?.deleted) { packs = packs.filter((p) => p.id !== form.deleted); toast.show('Pack deleted.', 'success'); }
     if (form?.createError || form?.deleteError) toast.show(form.createError ?? form.deleteError, 'error');

@@ -28,7 +28,14 @@
     if (editingEmail && emailInput) emailInput.focus();
   });
 
+  // `use:enhance` updates the `form` prop several times per submission
+  // (pending → result → post-invalidate refetch), each update firing the
+  // effect. Without this guard we got 3× toasts. A plain `let` (not
+  // `$state`) skips reactivity, so writing from inside the effect is safe.
+  let lastForm: ActionData | undefined;
   $effect(() => {
+    if (form === lastForm) return;
+    lastForm = form;
     if (form?.usernameSuccess) {
       editingUsername = false;
       toast.show('Username updated.', 'success');
