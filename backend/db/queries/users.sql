@@ -33,16 +33,35 @@ UPDATE users SET is_active = $2 WHERE id = $1 RETURNING *;
 UPDATE users SET email = $2 WHERE id = $1 RETURNING *;
 
 -- name: ListUsers :many
+-- Excludes the GDPR sentinel row (see SentinelUserID). The sentinel is a
+-- data-integrity placeholder, never a real account, so it must not appear
+-- in admin tooling or counts.
 SELECT * FROM users
-WHERE lower(username) LIKE lower('%' || sqlc.arg(search) || '%')
-   OR lower(email)    LIKE lower('%' || sqlc.arg(search) || '%')
+WHERE id != '00000000-0000-0000-0000-000000000001'
+  AND (lower(username) LIKE lower('%' || sqlc.arg(search) || '%')
+       OR lower(email) LIKE lower('%' || sqlc.arg(search) || '%'))
 ORDER BY created_at DESC
 LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 
 -- name: CountUsers :one
+-- Matches ListUsers' sentinel exclusion so the admin dashboard count and
+-- table row count always agree.
 SELECT COUNT(*) FROM users
-WHERE lower(username) LIKE lower('%' || sqlc.arg(search) || '%')
-   OR lower(email)    LIKE lower('%' || sqlc.arg(search) || '%');
+WHERE id != '00000000-0000-0000-0000-000000000001'
+  AND (lower(username) LIKE lower('%' || sqlc.arg(search) || '%')
+       OR lower(email) LIKE lower('%' || sqlc.arg(search) || '%'));
+
+-- name: GetUsernamesByIDs :many
+-- Batch lookup for the audit-log enrichment path. Returns only id + username
+-- so the admin dashboard can resolve "user:<uuid>" audit resources without
+-- paying for full user rows.
+SELECT id, username FROM users WHERE id = ANY(sqlc.arg(ids)::uuid[]);
+
+-- name: SetUserProtected :exec
+-- Toggles the is_protected flag. Called exclusively by auth.SeedAdmin to
+-- stamp the bootstrap admin. There is deliberately no handler that flips
+-- this from the admin API — protection is a runtime-immutable property.
+UPDATE users SET is_protected = $2 WHERE id = $1;
 
 -- Sentinel UUID: 00000000-0000-0000-0000-000000000001 (see auth.SentinelUserID in Go).
 -- Used to anonymize submissions/votes on hard-delete without breaking referential integrity.

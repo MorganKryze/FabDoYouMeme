@@ -4,8 +4,11 @@ import type { Pack } from '$lib/api/types';
 import { apiFetch } from '$lib/server/backend';
 
 export const load: PageServerLoad = async ({ fetch }) => {
-  const packs = await apiFetch<Pack[]>(fetch, '/api/packs?include_all=true');
-  return { packs };
+  const body = await apiFetch<{ data: Pack[]; next_cursor: string | null }>(
+    fetch,
+    '/api/packs'
+  );
+  return { packs: body.data ?? [] };
 };
 
 export const actions: Actions = {

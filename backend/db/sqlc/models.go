@@ -37,6 +37,7 @@ type GameItem struct {
 	PayloadVersion   int32       `json:"payload_version"`
 	CurrentVersionID pgtype.UUID `json:"current_version_id"`
 	CreatedAt        time.Time   `json:"created_at"`
+	Name             string      `json:"name"`
 }
 
 type GameItemVersion struct {
@@ -161,6 +162,7 @@ type User struct {
 	InvitedBy    pgtype.UUID `json:"invited_by"`
 	ConsentAt    time.Time   `json:"consent_at"`
 	CreatedAt    time.Time   `json:"created_at"`
+	IsProtected  bool        `json:"is_protected"`
 }
 
 type Vote struct {

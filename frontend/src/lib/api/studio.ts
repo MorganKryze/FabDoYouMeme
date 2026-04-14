@@ -1,6 +1,12 @@
 // frontend/src/lib/api/studio.ts
 import { api } from './client';
-import type { Pack, GameItem, ItemVersion } from './types';
+import type {
+  Pack,
+  GameItem,
+  ItemVersion,
+  UploadOutcome,
+  BulkUploadOutcome
+} from './types';
 
 // ── Packs ─────────────────────────────────────────────────────────────────
 
@@ -34,14 +40,20 @@ export async function deletePack(id: string): Promise<void> {
 // ── Items ─────────────────────────────────────────────────────────────────
 
 export async function listItems(packId: string): Promise<GameItem[]> {
-  return api.get<GameItem[]>(`/api/packs/${packId}/items`);
+  const body = await api.get<{ data: GameItem[] }>(
+    `/api/packs/${packId}/items`
+  );
+  return body.data ?? [];
 }
 
 export async function createItem(
   packId: string,
-  body: { name: string; type: 'image' | 'text' }
+  body: { name: string; payload_version?: number }
 ): Promise<GameItem> {
-  return api.post<GameItem>(`/api/packs/${packId}/items`, body);
+  return api.post<GameItem>(`/api/packs/${packId}/items`, {
+    name: body.name,
+    payload_version: body.payload_version ?? 1
+  });
 }
 
 export async function updateItem(
@@ -68,73 +80,148 @@ export async function reorderItems(
 
 // ── Upload flow ────────────────────────────────────────────────────────────
 
-interface UploadUrlRequest {
-  mime_type: string;
-  filename: string;
-  size_bytes: number;
-  preview_bytes?: string; // base64-encoded first ~512 bytes for server-side MIME validation
-}
-
-interface UploadUrlResponse {
-  upload_url: string;
-  media_key: string;
-}
-
-export async function getUploadUrl(
-  body: UploadUrlRequest
-): Promise<UploadUrlResponse> {
-  return api.post<UploadUrlResponse>('/api/assets/upload-url', body);
-}
-
-export async function putToRustFS(
-  uploadUrl: string,
+// uploadFileToBackend POSTs a file to /api/assets/upload as multipart/form-data.
+// The backend validates MIME + size + ownership, then streams the bytes to
+// RustFS. This replaces the old pre-signed direct-PUT path, which can't work
+// from the browser unless the bucket has CORS configured.
+//
+// Don't go through `api.post` — it forces Content-Type: application/json, which
+// would break the multipart boundary. The browser fills in the correct header
+// on its own when `body` is a FormData instance.
+export async function uploadFileToBackend(
+  packId: string,
+  itemId: string,
+  versionNumber: number,
   file: Blob,
-  mimeType: string
-): Promise<void> {
-  const res = await fetch(uploadUrl, {
-    method: 'PUT',
-    headers: { 'Content-Type': mimeType },
-    body: file
+  filename: string
+): Promise<{ media_key: string }> {
+  const form = new FormData();
+  form.append('pack_id', packId);
+  form.append('item_id', itemId);
+  form.append('version_number', String(versionNumber));
+  form.append('file', file, filename);
+
+  const res = await fetch('/api/assets/upload', {
+    method: 'POST',
+    credentials: 'include',
+    body: form
   });
-  if (!res.ok) throw new Error(`RustFS upload failed: ${res.status}`);
+
+  if (!res.ok) {
+    let message = res.statusText;
+    try {
+      const body = await res.json();
+      message = body.error ?? message;
+    } catch {}
+    throw new Error(`Upload failed: ${message}`);
+  }
+  return res.json();
 }
 
-export async function confirmUpload(
+// Creates a new version row with media_key attached. This replaces the old
+// confirmUpload that tried to PATCH the item directly — the backend's item
+// PATCH only accepts current_version_id, not media_key.
+export async function createItemVersion(
   packId: string,
   itemId: string,
   mediaKey: string
-): Promise<GameItem> {
-  return api.patch<GameItem>(`/api/packs/${packId}/items/${itemId}`, { media_key: mediaKey });
+): Promise<ItemVersion> {
+  return api.post<ItemVersion>(
+    `/api/packs/${packId}/items/${itemId}/versions`,
+    { media_key: mediaKey }
+  );
 }
 
-// Orchestrates all 4 steps: create item → get URL → PUT → confirm
+// Promotes the given version to current on the item. Returns the updated item.
+export async function promoteVersion(
+  packId: string,
+  itemId: string,
+  versionId: string
+): Promise<GameItem> {
+  return api.patch<GameItem>(`/api/packs/${packId}/items/${itemId}`, {
+    current_version_id: versionId
+  });
+}
+
+// ── Client-side file validation (shared by bulk + single flows) ──────────
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp'];
+
+export function validateImageFile(file: File): string | null {
+  if (!ALLOWED_MIME.includes(file.type)) return 'unsupported file type';
+  if (file.size > MAX_FILE_SIZE) return 'exceeds 10 MB limit';
+  return null;
+}
+
+// Orchestrates the full upload chain. Returns a discriminated result instead
+// of throwing, and best-effort cleans up orphan DB rows if a later step fails.
+//
+// Steps: create item → POST file to /api/assets/upload (proxied to RustFS) →
+// create version with media_key → PATCH item to point current_version_id at
+// the new version.
 export async function uploadImageItem(
   packId: string,
   name: string,
   file: File
-): Promise<GameItem> {
-  // Step 1: create item record
-  const item = await createItem(packId, { name, type: 'image' });
+): Promise<UploadOutcome> {
+  const invalid = validateImageFile(file);
+  if (invalid) return { ok: false, error: invalid, filename: file.name };
 
-  // Step 2: read first 512 bytes for magic byte validation
-  const previewSlice = file.slice(0, 512);
-  const previewBuffer = await previewSlice.arrayBuffer();
-  const previewBytes = btoa(
-    String.fromCharCode(...new Uint8Array(previewBuffer))
-  );
+  let itemId: string | null = null;
+  try {
+    const item = await createItem(packId, { name });
+    itemId = item.id;
 
-  const { upload_url, media_key } = await getUploadUrl({
-    mime_type: file.type,
-    filename: file.name,
-    size_bytes: file.size,
-    preview_bytes: previewBytes
-  });
+    const { media_key } = await uploadFileToBackend(
+      packId,
+      item.id,
+      1,
+      file,
+      file.name
+    );
 
-  // Step 3: PUT to RustFS
-  await putToRustFS(upload_url, file, file.type);
+    const version = await createItemVersion(packId, item.id, media_key);
+    const promoted = await promoteVersion(packId, item.id, version.id);
+    // The backend /items list endpoint injects `thumbnail_url` server-side,
+    // but the single-item endpoints (createItem / promoteVersion) don't.
+    // Construct it client-side so freshly uploaded items render previews
+    // without needing a list refetch.
+    const thumbnail_url = `/api/assets/media?key=${encodeURIComponent(media_key)}`;
+    return { ok: true, item: { ...promoted, media_key, thumbnail_url } };
+  } catch (err) {
+    if (itemId) {
+      try {
+        await deleteItem(packId, itemId);
+      } catch {
+        /* non-fatal: admin can hand-clean from /admin/packs/[id] */
+      }
+    }
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      filename: file.name
+    };
+  }
+}
 
-  // Step 4: confirm upload
-  return confirmUpload(packId, item.id, media_key);
+export async function bulkUploadImageItems(
+  packId: string,
+  files: File[],
+  onProgress?: (done: number, total: number, currentName: string) => void
+): Promise<BulkUploadOutcome> {
+  const outcome: BulkUploadOutcome = { succeeded: [], failed: [] };
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    onProgress?.(i, files.length, file.name);
+    const result = await uploadImageItem(
+      packId,
+      file.name.replace(/\.[^.]+$/, ''),
+      file
+    );
+    if (result.ok) outcome.succeeded.push(result.item);
+    else outcome.failed.push({ filename: result.filename, reason: result.error });
+  }
+  return outcome;
 }
 
 // ── Versions ──────────────────────────────────────────────────────────────
@@ -143,9 +230,10 @@ export async function listVersions(
   packId: string,
   itemId: string
 ): Promise<ItemVersion[]> {
-  return api.get<ItemVersion[]>(
+  const body = await api.get<{ data: ItemVersion[] }>(
     `/api/packs/${packId}/items/${itemId}/versions`
   );
+  return body.data ?? [];
 }
 
 export async function restoreVersion(

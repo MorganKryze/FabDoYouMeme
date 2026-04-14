@@ -102,7 +102,7 @@ func TestCreateRoom_PackInsufficientItems(t *testing.T) {
 		Name:       testutil.SeedName(t) + "_insuf",
 		Visibility: "private",
 	})
-	q.CreateItem(ctx, db.CreateItemParams{PackID: pack.ID, PayloadVersion: 1})
+	q.CreateItem(ctx, db.CreateItemParams{PackID: pack.ID, Name: "test item", PayloadVersion: 1})
 
 	body, _ := json.Marshal(map[string]any{
 		"game_type_id": gt.ID.String(),

@@ -46,6 +46,19 @@ func (q *Queries) CanUserDownloadMedia(ctx context.Context, arg CanUserDownloadM
 	return allowed, err
 }
 
+const countAllPacks = `-- name: CountAllPacks :one
+SELECT COUNT(*) FROM game_packs WHERE deleted_at IS NULL
+`
+
+// Total non-deleted packs, regardless of visibility or status. Used by the
+// admin dashboard stats card.
+func (q *Queries) CountAllPacks(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countAllPacks)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countCompatibleItems = `-- name: CountCompatibleItems :one
 SELECT COUNT(*) FROM game_items gi
 JOIN game_packs gp ON gi.pack_id = gp.id
@@ -124,6 +137,39 @@ func (q *Queries) GetPackByID(ctx context.Context, id uuid.UUID) (GamePack, erro
 		&i.DeletedAt,
 	)
 	return i, err
+}
+
+const getPackNamesByIDs = `-- name: GetPackNamesByIDs :many
+SELECT id, name FROM game_packs WHERE id = ANY($1::uuid[])
+`
+
+type GetPackNamesByIDsRow struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
+// Batch lookup for the audit-log enrichment path. Returns only id + name so
+// the admin dashboard can resolve "pack:<uuid>" audit resources into a
+// human-readable label. Soft-deleted packs are included on purpose — we
+// still want audit history to show what was banned/deleted.
+func (q *Queries) GetPackNamesByIDs(ctx context.Context, ids []uuid.UUID) ([]GetPackNamesByIDsRow, error) {
+	rows, err := q.db.Query(ctx, getPackNamesByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetPackNamesByIDsRow
+	for rows.Next() {
+		var i GetPackNamesByIDsRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listAllPacksAdmin = `-- name: ListAllPacksAdmin :many

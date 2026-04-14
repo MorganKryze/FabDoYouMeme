@@ -48,6 +48,21 @@ func (q *Queries) CountInvites(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countPendingInvites = `-- name: CountPendingInvites :one
+SELECT COUNT(*) FROM invites
+WHERE (max_uses = 0 OR uses_count < max_uses)
+  AND (expires_at IS NULL OR expires_at > now())
+`
+
+// An invite is "pending" iff it still has remaining uses and is not expired.
+// max_uses = 0 means unlimited. Used by the admin dashboard stats card.
+func (q *Queries) CountPendingInvites(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countPendingInvites)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createInvite = `-- name: CreateInvite :one
 
 INSERT INTO invites (token, created_by, label, restricted_email, max_uses, expires_at)

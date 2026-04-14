@@ -13,6 +13,14 @@ import (
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
 )
 
+// enrichedVersion is the wire shape for GET /api/packs/{id}/items/{item_id}/versions.
+// Embeds the sqlc row so existing fields keep their json tags and adds
+// media_url — a short-lived pre-signed GET URL derived from media_key.
+type enrichedVersion struct {
+	db.GameItemVersion
+	MediaURL *string `json:"media_url,omitempty"`
+}
+
 // ListVersions handles GET /api/packs/{id}/items/{item_id}/versions.
 func (h *PackHandler) ListVersions(w http.ResponseWriter, r *http.Request) {
 	_, ok := middleware.GetSessionUser(r)
@@ -30,7 +38,17 @@ func (h *PackHandler) ListVersions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to list versions")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"data": versions})
+
+	enriched := make([]enrichedVersion, 0, len(versions))
+	for _, v := range versions {
+		ev := enrichedVersion{GameItemVersion: v}
+		if v.MediaKey != nil && *v.MediaKey != "" {
+			u := MediaURL(*v.MediaKey)
+			ev.MediaURL = &u
+		}
+		enriched = append(enriched, ev)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"data": enriched})
 }
 
 // CreateVersion handles POST /api/packs/{id}/items/{item_id}/versions.

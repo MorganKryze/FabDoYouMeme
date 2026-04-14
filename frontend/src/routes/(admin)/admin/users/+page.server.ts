@@ -3,21 +3,29 @@ import type { Actions, PageServerLoad } from './$types';
 import type { User } from '$lib/api/types';
 import { apiFetch } from '$lib/server/backend';
 
-type AdminUser = User & { is_active: boolean; created_at: string };
+type AdminUser = User & {
+  is_active: boolean;
+  created_at: string;
+  is_protected: boolean;
+};
 
 export const load: PageServerLoad = async ({ fetch, url }) => {
   const q = url.searchParams.get('q') ?? '';
   const cursor = url.searchParams.get('cursor') ?? '';
   const qs = new URLSearchParams({ limit: '50' });
   if (q) qs.set('q', q);
-  if (cursor) qs.set('cursor', cursor);
+  // Backend's parsePagination() reads `after`, not `cursor`. The URL-bar
+  // param stays `cursor` (the Svelte page hardcodes it), but we translate
+  // on the way out so pagination actually advances.
+  if (cursor) qs.set('after', cursor);
 
   const data = await apiFetch<{
-    users: AdminUser[];
+    data: AdminUser[];
     next_cursor: string | null;
+    total: number;
   }>(fetch, `/api/admin/users?${qs}`);
 
-  return { users: data.users ?? [], nextCursor: data.next_cursor ?? null, q };
+  return { users: data.data ?? [], nextCursor: data.next_cursor ?? null, q };
 };
 
 export const actions: Actions = {

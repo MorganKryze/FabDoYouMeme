@@ -3,6 +3,7 @@ package storage
 
 import (
 	"context"
+	"io"
 	"strconv"
 	"time"
 )
@@ -16,6 +17,16 @@ type Storage interface {
 
 	// PresignDownload returns a pre-signed GET URL with response-content-disposition=attachment.
 	PresignDownload(ctx context.Context, key string, ttl time.Duration) (string, error)
+
+	// Upload streams body to the backend at key with the given content type and
+	// exact size. Used when the browser cannot PUT directly due to CORS.
+	Upload(ctx context.Context, key string, body io.Reader, contentType string, size int64) error
+
+	// Download returns a stream for reading the object at key along with its
+	// content-type and content-length (content-length may be 0 if unknown).
+	// The caller MUST Close the returned reader. Used to proxy GETs through
+	// the backend rather than redirecting the browser to an external URL.
+	Download(ctx context.Context, key string) (body io.ReadCloser, contentType string, size int64, err error)
 
 	// Delete removes the object at key. Non-fatal if key does not exist.
 	Delete(ctx context.Context, key string) error

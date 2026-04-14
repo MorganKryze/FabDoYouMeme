@@ -126,6 +126,7 @@ func MakePack(t *testing.T, owner db.User, withItems int) db.GamePack {
 	for i := 0; i < withItems; i++ {
 		item, err := q.CreateItem(context.Background(), db.CreateItemParams{
 			PackID:         pack.ID,
+			Name:           fmt.Sprintf("item %d", i),
 			PayloadVersion: 1,
 		})
 		if err != nil {

@@ -4,11 +4,14 @@ import type { Pack, GameItem } from '$lib/api/types';
 import { apiFetch } from '$lib/server/backend';
 
 export const load: PageServerLoad = async ({ params, fetch }) => {
-  const [pack, items] = await Promise.all([
+  const [pack, itemsBody] = await Promise.all([
     apiFetch<Pack>(fetch, `/api/packs/${params.id}`),
-    apiFetch<GameItem[]>(fetch, `/api/packs/${params.id}/items`)
+    apiFetch<{ data: GameItem[]; next_cursor: string | null }>(
+      fetch,
+      `/api/packs/${params.id}/items`
+    )
   ]);
-  return { pack, items };
+  return { pack, items: itemsBody.data ?? [] };
 };
 
 export const actions: Actions = {
@@ -21,5 +24,19 @@ export const actions: Actions = {
     if (!res.ok)
       return fail(res.status, { deleteError: 'Failed to delete item.' });
     return { deleted: itemId };
+  },
+  setStatus: async ({ request, fetch, params }) => {
+    const data = await request.formData();
+    const status = data.get('status') as string;
+    if (status !== 'active' && status !== 'flagged' && status !== 'banned') {
+      return fail(400, { statusError: 'Invalid status.' });
+    }
+    const res = await fetch(`/api/packs/${params.id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    if (!res.ok) return fail(res.status, { statusError: 'Failed to update status.' });
+    return { statusUpdated: status };
   }
 };

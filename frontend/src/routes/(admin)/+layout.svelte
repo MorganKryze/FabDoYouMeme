@@ -1,5 +1,6 @@
 <script lang="ts">
   import '../../app.css';
+  import { page } from '$app/stores';
   import Toast from '$lib/components/Toast.svelte';
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { Home, Users, Mail, Package, Sliders, Bell, User } from '$lib/icons';
@@ -14,6 +15,14 @@
     { href: '/admin/packs', label: 'Packs', Icon: Package },
     { href: '/admin/game-types', label: 'Game Types', Icon: Sliders },
   ] as const;
+
+  // Dashboard uses exact match because every other admin path also starts
+  // with `/admin`; all other items use "exact OR prefix+boundary" so nested
+  // routes like /admin/packs/[id] still highlight "Packs".
+  function isActive(href: string, pathname: string): boolean {
+    if (href === '/admin') return pathname === '/admin';
+    return pathname === href || pathname.startsWith(href + '/');
+  }
 </script>
 
 <div class="relative z-[2] min-h-screen flex text-brand-text">
@@ -26,11 +35,16 @@
 
     <ul class="flex flex-col gap-0.5 px-2">
       {#each navItems as item}
+        {@const active = isActive(item.href, $page.url.pathname)}
         <li>
           <a
             href={item.href}
             use:hoverEffect={'swap'}
-            class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-brand-text-mid hover:text-brand-text transition-colors"
+            aria-current={active ? 'page' : undefined}
+            class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+              {active
+                ? 'bg-brand-text text-brand-white'
+                : 'text-brand-text-mid hover:text-brand-text hover:bg-muted'}"
           >
             <item.Icon size={16} strokeWidth={2.5} />
             {item.label}
@@ -41,7 +55,11 @@
         <a
           href="/admin/notifications"
           use:hoverEffect={'swap'}
-          class="relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-brand-text-mid hover:text-brand-text transition-colors"
+          aria-current={isActive('/admin/notifications', $page.url.pathname) ? 'page' : undefined}
+          class="relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+            {isActive('/admin/notifications', $page.url.pathname)
+              ? 'bg-brand-text text-brand-white'
+              : 'text-brand-text-mid hover:text-brand-text hover:bg-muted'}"
         >
           <Bell size={16} strokeWidth={2.5} />
           Notifications

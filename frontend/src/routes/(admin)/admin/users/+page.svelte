@@ -5,7 +5,7 @@
   import { toast } from '$lib/state/toast.svelte';
   import { reveal } from '$lib/actions/reveal';
   import { hoverEffect } from '$lib/actions/hoverEffect';
-  import { Search, UserX } from '$lib/icons';
+  import { Search, Shield, UserX } from '$lib/icons';
   import type { ActionData, PageData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -65,7 +65,7 @@
         {#each data.users as u}
           <tr class="border-b border-brand-border/50 hover:bg-muted/20 transition-colors">
             <td class="px-4 py-3">
-              <form method="POST" action="?/updateUser" use:enhance class="flex gap-1">
+              <form method="POST" action="?/updateUser" use:enhance class="flex items-center gap-1">
                 <input type="hidden" name="user_id" value={u.id} />
                 <input
                   name="username"
@@ -77,6 +77,15 @@
                   }}
                   class="h-7 w-28 rounded border border-transparent hover:border-brand-border px-1 text-sm bg-transparent focus:outline-none focus:border-ring"
                 />
+                {#if u.is_protected}
+                  <span
+                    class="inline-flex items-center text-brand-text-muted"
+                    title="Protected bootstrap admin — cannot be deleted or have its role changed"
+                    aria-label="Protected account"
+                  >
+                    <Shield size={14} strokeWidth={2.5} />
+                  </span>
+                {/if}
               </form>
             </td>
             <td class="px-4 py-3">
@@ -100,8 +109,10 @@
                 <select
                   name="role"
                   value={u.role}
+                  disabled={u.is_protected}
                   onchange={(e) => (e.target as HTMLSelectElement).closest('form')?.requestSubmit()}
-                  class="h-7 rounded border border-transparent hover:border-brand-border px-1 text-sm bg-transparent focus:outline-none focus:border-ring cursor-pointer"
+                  title={u.is_protected ? 'Protected bootstrap admin — role is locked' : undefined}
+                  class="h-7 rounded border border-transparent hover:border-brand-border px-1 text-sm bg-transparent focus:outline-none focus:border-ring cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <option value="player">player</option>
                   <option value="admin">admin</option>
@@ -109,26 +120,16 @@
               </form>
             </td>
             <td class="px-4 py-3">
-              <form method="POST" action="?/updateUser" use:enhance>
+              <form method="POST" action="?/updateUser" use:enhance class="inline-flex items-center">
                 <input type="hidden" name="user_id" value={u.id} />
+                <input type="hidden" name="is_active" value={(!u.is_active).toString()} />
                 <input
                   type="checkbox"
-                  name="is_active"
                   checked={u.is_active}
-                  value="true"
-                  onchange={(e) => {
-                    const input = e.target as HTMLInputElement;
-                    if (!input.checked) {
-                      const hidden = document.createElement('input');
-                      hidden.type = 'hidden';
-                      hidden.name = 'is_active';
-                      hidden.value = 'false';
-                      input.closest('form')?.appendChild(hidden);
-                      input.remove();
-                    }
-                    input.closest('form')?.requestSubmit();
-                  }}
-                  class="h-4 w-4 cursor-pointer"
+                  disabled={u.is_protected}
+                  onchange={(e) => (e.target as HTMLInputElement).closest('form')?.requestSubmit()}
+                  title={u.is_protected ? 'Protected bootstrap admin — cannot be deactivated' : undefined}
+                  class="h-4 w-4 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                 />
               </form>
             </td>
@@ -136,7 +137,10 @@
               {new Date(u.created_at).toLocaleDateString()}
             </td>
             <td class="px-4 py-3 text-right">
-              {#if confirmDeleteId === u.id}
+              {#if u.is_protected}
+                <!-- Delete intentionally absent for protected rows; the Shield
+                     next to the username already signals the locked state. -->
+              {:else if confirmDeleteId === u.id}
                 <div class="flex gap-1 justify-end">
                   <form method="POST" action="?/deleteUser" use:enhance>
                     <input type="hidden" name="user_id" value={u.id} />

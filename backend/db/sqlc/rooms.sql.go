@@ -59,6 +59,19 @@ func (q *Queries) AddRoomPlayer(ctx context.Context, arg AddRoomPlayerParams) (R
 	return i, err
 }
 
+const countActiveRooms = `-- name: CountActiveRooms :one
+SELECT COUNT(*) FROM rooms WHERE state IN ('lobby', 'playing')
+`
+
+// Counts rooms currently in lobby or playing state. Used by the admin dashboard
+// stats card. Finished rooms are excluded — operators care about live activity.
+func (q *Queries) CountActiveRooms(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countActiveRooms)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createGuestSubmission = `-- name: CreateGuestSubmission :one
 INSERT INTO submissions (round_id, guest_player_id, payload) VALUES ($1, $2, $3) RETURNING id, round_id, user_id, payload, created_at, guest_player_id
 `

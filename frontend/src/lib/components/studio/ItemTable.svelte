@@ -2,14 +2,16 @@
 <script lang="ts">
   import { studio } from '$lib/state/studio.svelte';
   import { toast } from '$lib/state/toast.svelte';
-  import { deleteItem, uploadImageItem, listVersions } from '$lib/api/studio';
+  import {
+    deleteItem,
+    bulkUploadImageItems,
+    validateImageFile,
+    listVersions
+  } from '$lib/api/studio';
   import { reveal } from '$lib/actions/reveal';
   import { pressPhysics } from '$lib/actions/pressPhysics';
-  import { Upload, Trash2, ImageIcon, Type } from '$lib/icons';
+  import { Upload, Trash2, ImageIcon } from '$lib/icons';
   import type { GameItem } from '$lib/api/types';
-
-  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
-  const ALLOWED_MIME = ['image/jpeg', 'image/png', 'image/webp'];
 
   let dragOverZone = $state(false);
   let uploading = $state(false);
@@ -36,35 +38,40 @@
   }
 
   async function bulkUpload(files: File[]) {
-    const validFiles = files.filter((f) => {
-      if (!ALLOWED_MIME.includes(f.type)) {
-        toast.show(`${f.name}: unsupported file type.`, 'error');
-        return false;
-      }
-      if (f.size > MAX_FILE_SIZE) {
-        toast.show(`${f.name}: file exceeds 10 MB limit.`, 'error');
-        return false;
-      }
-      return true;
-    });
+    // Pre-filter so rejected files appear in the same summary as network failures.
+    const rejected: { filename: string; reason: string }[] = [];
+    const accepted: File[] = [];
+    for (const f of files) {
+      const err = validateImageFile(f);
+      if (err) rejected.push({ filename: f.name, reason: err });
+      else accepted.push(f);
+    }
 
-    if (validFiles.length === 0) return;
+    if (accepted.length === 0 && rejected.length === 0) return;
 
     uploading = true;
-    for (let i = 0; i < validFiles.length; i++) {
-      const file = validFiles[i];
-      uploadProgress = { name: file.name, done: i, total: validFiles.length };
-      try {
-        const item = await uploadImageItem(studio.selectedPackId!, file.name.replace(/\.[^.]+$/, ''), file);
-        studio.items = [...studio.items, item];
-      } catch {
-        uploadProgress = null;
-        toast.show(`Failed to upload ${file.name}.`, 'error');
+    const result = await bulkUploadImageItems(
+      studio.selectedPackId!,
+      accepted,
+      (done, total, name) => {
+        uploadProgress = { name, done, total };
       }
-    }
+    );
     uploadProgress = null;
     uploading = false;
-    toast.show(`${validFiles.length} item(s) uploaded.`, 'success');
+
+    studio.items = [...studio.items, ...result.succeeded];
+
+    const failed = [...rejected, ...result.failed];
+    const ok = result.succeeded.length;
+    const ko = failed.length;
+    if (ok > 0 && ko === 0) {
+      toast.show(`${ok} item${ok === 1 ? '' : 's'} uploaded.`, 'success');
+    } else if (ok > 0 && ko > 0) {
+      toast.show(`${ok} uploaded, ${ko} failed.`, 'warning');
+    } else {
+      toast.show(`Upload failed (${ko}/${ko}).`, 'error');
+    }
   }
 
   function onDropZone(e: DragEvent) {
@@ -87,7 +94,9 @@
   <div class="flex items-center gap-3 px-4 py-3 border-b border-brand-border shrink-0">
     <h2 class="text-sm font-semibold flex-1">
       {studio.packs.find((p) => p.id === studio.selectedPackId)?.name ?? 'Items'}
-      <span class="text-brand-text-muted font-normal">({studio.items.length})</span>
+      <span class="text-brand-text-muted font-normal">
+        {studio.items.length === 0 ? 'empty' : `(${studio.items.length})`}
+      </span>
     </h2>
 
     <label
@@ -132,7 +141,6 @@
         <thead>
           <tr class="border-b border-brand-border text-xs text-brand-text-muted font-medium">
             <th class="text-left px-4 py-2">Name</th>
-            <th class="text-left px-4 py-2">Type</th>
             <th class="text-right px-4 py-2">Ver.</th>
             <th class="px-4 py-2"></th>
           </tr>
@@ -151,20 +159,11 @@
                     <img src={item.thumbnail_url} alt="" class="h-8 w-8 rounded object-cover shrink-0" />
                   {:else}
                     <div class="h-8 w-8 rounded bg-muted shrink-0 flex items-center justify-center text-brand-text-muted">
-                      {#if item.type === 'image'}
-                        <ImageIcon size={14} strokeWidth={2.5} />
-                      {:else}
-                        <Type size={14} strokeWidth={2.5} />
-                      {/if}
+                      <ImageIcon size={14} strokeWidth={2.5} />
                     </div>
                   {/if}
                   <span class="truncate max-w-[8rem]">{item.name}</span>
                 </div>
-              </td>
-              <td class="px-4 py-2">
-                <span class="text-xs px-2 py-0.5 rounded-full bg-muted text-brand-text-muted">
-                  {item.type}
-                </span>
               </td>
               <td class="px-4 py-2 text-right text-brand-text-muted">v{item.version_number ?? 1}</td>
               <td class="px-4 py-2 text-right">

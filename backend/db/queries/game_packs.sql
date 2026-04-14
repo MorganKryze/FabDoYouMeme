@@ -28,6 +28,18 @@ UPDATE game_packs SET status = $2 WHERE id = $1 RETURNING *;
 -- name: SoftDeletePack :exec
 UPDATE game_packs SET deleted_at = now() WHERE id = $1;
 
+-- name: CountAllPacks :one
+-- Total non-deleted packs, regardless of visibility or status. Used by the
+-- admin dashboard stats card.
+SELECT COUNT(*) FROM game_packs WHERE deleted_at IS NULL;
+
+-- name: GetPackNamesByIDs :many
+-- Batch lookup for the audit-log enrichment path. Returns only id + name so
+-- the admin dashboard can resolve "pack:<uuid>" audit resources into a
+-- human-readable label. Soft-deleted packs are included on purpose — we
+-- still want audit history to show what was banned/deleted.
+SELECT id, name FROM game_packs WHERE id = ANY(sqlc.arg(ids)::uuid[]);
+
 -- name: CountCompatibleItems :one
 SELECT COUNT(*) FROM game_items gi
 JOIN game_packs gp ON gi.pack_id = gp.id

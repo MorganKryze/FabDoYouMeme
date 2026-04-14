@@ -130,7 +130,7 @@ func main() {
 	gameTypeHandler  := api.NewGameTypeHandler(pool, registry)
 	adminHTTPHandler := api.NewAdminHandler(pool)
 	wsHandler        := api.NewWSHandler(manager, queries, cfg.AllowedOrigins)
-	healthHandler    := api.NewHealthHandler(pool, store)
+	healthHandler    := api.NewHealthHandler(pool, store, emailSvc.Probe)
 
 	// ── Router ───────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
@@ -186,6 +186,8 @@ func main() {
 		r.Delete("/invites/{id}", adminHTTPHandler.DeleteInvite)
 		r.Get("/notifications", adminHTTPHandler.ListNotifications)
 		r.Patch("/notifications/{id}", adminHTTPHandler.MarkNotificationRead)
+		r.Get("/stats", adminHTTPHandler.GetStats)
+		r.Get("/audit", adminHTTPHandler.ListAudit)
 	})
 
 	// Game types
@@ -221,7 +223,9 @@ func main() {
 	// Assets
 	r.With(mw.RequireAuth).Route("/api/assets", func(r chi.Router) {
 		r.With(uploadLimiter.Middleware).Post("/upload-url", assetHandler.UploadURL)
+		r.With(uploadLimiter.Middleware).Post("/upload", assetHandler.UploadDirect)
 		r.Post("/download-url", assetHandler.DownloadURL)
+		r.Get("/media", assetHandler.GetMedia)
 	})
 
 	// Rooms

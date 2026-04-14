@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -82,6 +84,22 @@ func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	if decodeErr := decodeJSON(r, &req); decodeErr != nil {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid JSON")
+		return
+	}
+	// Fetch target up-front so we can enforce the protection guard before
+	// any write. Cheap — a single indexed lookup — and it short-circuits
+	// every mutation branch below. We reject protection-violating requests
+	// for any mutable field (role, is_active), not just role: deactivating
+	// the bootstrap admin is operationally equivalent to deleting it
+	// because the admin surface stops being reachable.
+	target, err := h.db.GetUserByID(r.Context(), targetID)
+	if err != nil {
+		writeError(w, r, http.StatusNotFound, "user_not_found", "User not found")
+		return
+	}
+	if target.IsProtected && (req.Role != nil || req.IsActive != nil) {
+		writeError(w, r, http.StatusConflict, "cannot_modify_protected_user",
+			"The bootstrap admin's role and active status cannot be changed")
 		return
 	}
 	if req.Role != nil {
@@ -220,6 +238,183 @@ func (h *AdminHandler) ListNotifications(w http.ResponseWriter, r *http.Request)
 		"data":        notifications,
 		"next_cursor": nextCursor(len(notifications), limit, offset),
 	})
+}
+
+// GetStats handles GET /api/admin/stats. Returns the four counters rendered
+// in the admin dashboard hero row. Counts are computed per-request — at this
+// scale the four COUNT(*) queries are cheap enough that caching would add
+// complexity without measurable benefit.
+func (h *AdminHandler) GetStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	activeRooms, err := h.db.CountActiveRooms(ctx)
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to count rooms")
+		return
+	}
+	totalUsers, err := h.db.CountUsers(ctx, strPtrEmpty())
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to count users")
+		return
+	}
+	totalPacks, err := h.db.CountAllPacks(ctx)
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to count packs")
+		return
+	}
+	pendingInvites, err := h.db.CountPendingInvites(ctx)
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to count invites")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int64{
+		"active_rooms":    activeRooms,
+		"total_users":     totalUsers,
+		"total_packs":     totalPacks,
+		"pending_invites": pendingInvites,
+	})
+}
+
+// strPtrEmpty returns a pointer to the empty string — CountUsers takes
+// *string as its search filter and interprets nil/empty as "no filter".
+func strPtrEmpty() *string { s := ""; return &s }
+
+// auditEntry is the wire shape for GET /api/admin/audit. We flatten the
+// sqlc row so the frontend doesn't have to understand pgtype.UUID's
+// {bytes, valid} envelope, and we split the `resource` string into a
+// machine-readable type + id pair plus a human-readable label so the UI
+// can render "set_pack_status · MyPack → flagged" instead of the raw
+// "pack:<uuid>" blob.
+type auditEntry struct {
+	ID            string          `json:"id"`
+	AdminID       *string         `json:"admin_id"`
+	AdminUsername string          `json:"admin_username"`
+	Action        string          `json:"action"`
+	ResourceType  string          `json:"resource_type"`
+	ResourceID    string          `json:"resource_id"`
+	ResourceLabel string          `json:"resource_label"`
+	Changes       json.RawMessage `json:"changes"`
+	CreatedAt     time.Time       `json:"created_at"`
+}
+
+// parseResource splits "pack:<uuid>" into ("pack", "<uuid>"). Empty strings
+// and malformed values round-trip to ("", raw) so the handler can still
+// surface them without crashing.
+func parseResource(raw string) (kind, id string) {
+	if idx := strings.Index(raw, ":"); idx > 0 {
+		return raw[:idx], raw[idx+1:]
+	}
+	return "", raw
+}
+
+// ListAudit handles GET /api/admin/audit?limit=N. Powers the "Recent Activity"
+// card on the admin dashboard. Capped at 50 entries — the dashboard shows 10
+// by default and offers no deep pagination here (admins who need more use
+// the full audit export under GDPR tooling).
+//
+// Enrichment strategy: two batch lookups (packs, users) after the initial
+// audit query. N+1 is avoided by grouping UUIDs per resource type and
+// issuing a single ANY($1) query each.
+func (h *AdminHandler) ListAudit(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	limit := int32(10)
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		if n, err := strconv.Atoi(raw); err == nil && n > 0 && n <= 50 {
+			limit = int32(n)
+		}
+	}
+	rows, err := h.db.ListRecentAuditLogs(ctx, limit)
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to list audit log")
+		return
+	}
+
+	// Pre-parse every row once so we can both collect IDs for the batch
+	// lookups and reuse the split when assembling the response.
+	type parsedRow struct {
+		kind string
+		id   string
+		uuid uuid.UUID
+		ok   bool // uuid parsed successfully
+	}
+	parsed := make([]parsedRow, len(rows))
+	var packIDs, userIDs []uuid.UUID
+	for i, row := range rows {
+		k, idStr := parseResource(row.Resource)
+		parsed[i] = parsedRow{kind: k, id: idStr}
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			continue
+		}
+		parsed[i].uuid = id
+		parsed[i].ok = true
+		switch k {
+		case "pack":
+			packIDs = append(packIDs, id)
+		case "user":
+			userIDs = append(userIDs, id)
+		}
+	}
+
+	// Batch fetch labels. Failures are non-fatal: missing labels just
+	// fall back to the short UUID below.
+	packNames := map[uuid.UUID]string{}
+	if len(packIDs) > 0 {
+		packs, err := h.db.GetPackNamesByIDs(ctx, packIDs)
+		if err == nil {
+			for _, p := range packs {
+				packNames[p.ID] = p.Name
+			}
+		}
+	}
+	userNames := map[uuid.UUID]string{}
+	if len(userIDs) > 0 {
+		users, err := h.db.GetUsernamesByIDs(ctx, userIDs)
+		if err == nil {
+			for _, u := range users {
+				userNames[u.ID] = u.Username
+			}
+		}
+	}
+
+	out := make([]auditEntry, 0, len(rows))
+	for i, row := range rows {
+		p := parsed[i]
+		label := ""
+		if p.ok {
+			switch p.kind {
+			case "pack":
+				if n, ok := packNames[p.uuid]; ok {
+					label = n
+				}
+			case "user":
+				if n, ok := userNames[p.uuid]; ok {
+					label = n
+				}
+			}
+			if label == "" && len(p.id) >= 8 {
+				// Fallback: short UUID prefix — still useful for invites
+				// and for packs/users that were hard-deleted after the
+				// audit row was written.
+				label = p.id[:8]
+			}
+		}
+		entry := auditEntry{
+			ID:            row.ID.String(),
+			AdminUsername: row.AdminUsername,
+			Action:        row.Action,
+			ResourceType:  p.kind,
+			ResourceID:    p.id,
+			ResourceLabel: label,
+			Changes:       row.Changes,
+			CreatedAt:     row.CreatedAt,
+		}
+		if row.AdminID.Valid {
+			s := uuid.UUID(row.AdminID.Bytes).String()
+			entry.AdminID = &s
+		}
+		out = append(out, entry)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"data": out})
 }
 
 // MarkNotificationRead handles PATCH /api/admin/notifications/:id.

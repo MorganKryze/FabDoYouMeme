@@ -1,5 +1,12 @@
 import { api } from './client';
-import type { User, Invite, PaginatedResponse } from './types';
+import type {
+  User,
+  Invite,
+  PaginatedResponse,
+  DeepHealthResponse,
+  AdminStats,
+  AuditEntry
+} from './types';
 
 export const adminApi = {
   listUsers: (params?: { q?: string; after?: string }) => {
@@ -34,5 +41,10 @@ export const adminApi = {
     restricted_email?: string;
     max_uses?: number;
   }) => api.post<Invite>('/api/admin/invites', body),
-  deleteInvite: (id: string) => api.delete<void>(`/api/admin/invites/${id}`)
+  deleteInvite: (id: string) => api.delete<void>(`/api/admin/invites/${id}`),
+
+  getHealth: () => api.get<DeepHealthResponse>('/api/health/deep'),
+  getStats: () => api.get<AdminStats>('/api/admin/stats'),
+  listAudit: (limit = 10) =>
+    api.get<{ data: AuditEntry[] }>(`/api/admin/audit?limit=${limit}`)
 };

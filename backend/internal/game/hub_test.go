@@ -125,6 +125,7 @@ func newHubEnvWith(t *testing.T, opts hubEnvOpts) *hubEnv {
 	for i := 0; i < opts.packItemCount; i++ {
 		item, err := q.CreateItem(ctx, db.CreateItemParams{
 			PackID:         pack.ID,
+			Name:           fmt.Sprintf("item %d", i),
 			PayloadVersion: 1,
 		})
 		if err != nil {

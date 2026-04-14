@@ -7,10 +7,12 @@
   import { page } from '$app/stores';
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { pressPhysics } from '$lib/actions/pressPhysics';
-  import { Wrench } from '$lib/icons';
+  import { Wrench, HelpCircle } from '$lib/icons';
+  import LabHelpDrawer from '$lib/components/studio/LabHelpDrawer.svelte';
   import type { LayoutData } from './$types';
 
   let { children, data }: { children: any; data: LayoutData } = $props();
+  let showLabHelp = $state(false);
 
   $effect(() => {
     if (data.user) user.setFrom(data.user);
@@ -68,13 +70,25 @@
       <a
         href="/studio"
         use:hoverEffect={'swap'}
-        class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-bold bg-brand-white border-[2.5px] border-brand-border-heavy transition-colors
-          {isLab ? '' : 'opacity-60 hover:opacity-100'}"
+        class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-bold bg-brand-white border-[2.5px] border-brand-border-heavy no-underline"
         style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
       >
         <Wrench size={16} strokeWidth={2.5} />
         Lab
       </a>
+
+      {#if isLab}
+        <button
+          type="button"
+          onclick={() => (showLabHelp = true)}
+          use:hoverEffect={'swap'}
+          aria-label="How packs work"
+          class="inline-flex items-center justify-center h-10 w-10 rounded-full bg-brand-white border-[2.5px] border-brand-border-heavy"
+          style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
+        >
+          <HelpCircle size={16} strokeWidth={2.5} />
+        </button>
+      {/if}
 
       <a
         href="/profile"
@@ -98,5 +112,6 @@
   </main>
 
   <Toast />
+  <LabHelpDrawer bind:open={showLabHelp} />
   {/if}
 </div>

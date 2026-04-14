@@ -23,3 +23,10 @@ SELECT * FROM invites ORDER BY created_at DESC LIMIT sqlc.arg(lim) OFFSET sqlc.a
 
 -- name: CountInvites :one
 SELECT COUNT(*) FROM invites;
+
+-- name: CountPendingInvites :one
+-- An invite is "pending" iff it still has remaining uses and is not expired.
+-- max_uses = 0 means unlimited. Used by the admin dashboard stats card.
+SELECT COUNT(*) FROM invites
+WHERE (max_uses = 0 OR uses_count < max_uses)
+  AND (expires_at IS NULL OR expires_at > now());

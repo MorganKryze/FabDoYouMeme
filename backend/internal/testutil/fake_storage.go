@@ -2,6 +2,8 @@ package testutil
 
 import (
 	"context"
+	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,9 +20,10 @@ import (
 type FakeStorage struct {
 	mu            sync.Mutex
 	Uploads       []string // keys that had a presigned upload URL generated
+	DirectUploads []string // keys that had a direct Upload() call
 	Downloads     []string // keys that had a presigned download URL generated
 	Deletes       []string // keys that were deleted
-	UploadErr     error    // if non-nil, PresignUpload returns this
+	UploadErr     error    // if non-nil, PresignUpload / Upload return this
 	DownloadErr   error    // if non-nil, PresignDownload returns this
 	DeleteErr     error    // if non-nil, Delete returns this
 	ProbeErr      error    // if non-nil, Probe returns this
@@ -45,6 +48,20 @@ func (f *FakeStorage) PresignUpload(_ context.Context, key string, _ time.Durati
 	return f.URLPrefix + "/upload/" + key, nil
 }
 
+func (f *FakeStorage) Upload(_ context.Context, key string, body io.Reader, _ string, _ int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.UploadErr != nil {
+		return f.UploadErr
+	}
+	// Drain the body so the caller can't accidentally rely on short reads.
+	if body != nil {
+		_, _ = io.Copy(io.Discard, body)
+	}
+	f.DirectUploads = append(f.DirectUploads, key)
+	return nil
+}
+
 func (f *FakeStorage) PresignDownload(_ context.Context, key string, _ time.Duration) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -53,6 +70,16 @@ func (f *FakeStorage) PresignDownload(_ context.Context, key string, _ time.Dura
 	}
 	f.Downloads = append(f.Downloads, key)
 	return f.URLPrefix + "/download/" + key, nil
+}
+
+func (f *FakeStorage) Download(_ context.Context, key string) (io.ReadCloser, string, int64, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.DownloadErr != nil {
+		return nil, "", 0, f.DownloadErr
+	}
+	f.Downloads = append(f.Downloads, key)
+	return io.NopCloser(strings.NewReader("")), "application/octet-stream", 0, nil
 }
 
 func (f *FakeStorage) Delete(_ context.Context, key string) error {
@@ -77,6 +104,7 @@ func (f *FakeStorage) Reset() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.Uploads = nil
+	f.DirectUploads = nil
 	f.Downloads = nil
 	f.Deletes = nil
 	f.UploadErr = nil

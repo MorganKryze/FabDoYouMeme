@@ -61,6 +61,15 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Guard: bootstrap admin cannot be hard-deleted. This runs after the
+	// fetch so we know the flag with certainty, and before the audit log
+	// so we don't record a failed attempt as a hard_delete_user entry.
+	if target.IsProtected {
+		writeError(w, r, http.StatusConflict, "cannot_delete_protected_user",
+			"The bootstrap admin cannot be deleted")
+		return
+	}
+
 	// Step 2: Write audit log (PII recorded before delete so log is meaningful)
 	adminUUID, _ := uuid.Parse(adminUser.UserID)
 	changes, _ := json.Marshal(map[string]string{

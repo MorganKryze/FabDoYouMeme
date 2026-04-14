@@ -164,6 +164,7 @@ func TestHardDeleteUser_ReplacesSubmissionsWithSentinel(t *testing.T) {
 	// Need at least one item to create a round (item_id FK).
 	item, err := q.CreateItem(ctx, db.CreateItemParams{
 		PackID:         pack.ID,
+		Name:           "test item",
 		PayloadVersion: 1,
 	})
 	if err != nil {

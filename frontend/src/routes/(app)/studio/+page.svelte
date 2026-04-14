@@ -4,6 +4,8 @@
   import PackNavigator from '$lib/components/studio/PackNavigator.svelte';
   import ItemTable from '$lib/components/studio/ItemTable.svelte';
   import ItemEditor from '$lib/components/studio/ItemEditor.svelte';
+  import SingleItemAdd from '$lib/components/studio/SingleItemAdd.svelte';
+  import LabWelcome from '$lib/components/studio/LabWelcome.svelte';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -25,7 +27,9 @@
 
   <!-- Center: Item Table (flexible) -->
   <div class="flex-1 min-w-0 border-r border-brand-border overflow-y-auto">
-    {#if studio.selectedPackId}
+    {#if studio.packs.length === 0}
+      <LabWelcome />
+    {:else if studio.selectedPackId}
       <ItemTable />
     {:else}
       <div class="flex items-center justify-center h-full text-brand-text-muted text-sm">
@@ -38,9 +42,11 @@
   <div class="w-80 shrink-0 overflow-y-auto">
     {#if studio.selectedItemId}
       <ItemEditor />
+    {:else if studio.selectedPackId}
+      <SingleItemAdd />
     {:else}
       <div class="flex items-center justify-center h-full text-brand-text-muted text-sm p-4 text-center">
-        Select an item to edit.
+        Select a pack to get started.
       </div>
     {/if}
   </div>

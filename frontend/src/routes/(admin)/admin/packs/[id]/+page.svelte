@@ -2,39 +2,69 @@
   import { enhance } from '$app/forms';
   import { untrack } from 'svelte';
   import { toast } from '$lib/state/toast.svelte';
-  import { uploadImageItem } from '$lib/api/studio';
+  import { bulkUploadImageItems, validateImageFile } from '$lib/api/studio';
   import { reveal } from '$lib/actions/reveal';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { hoverEffect } from '$lib/actions/hoverEffect';
-  import { ArrowLeft, Upload, Trash2, ImageIcon, Type } from '$lib/icons';
+  import {
+    ArrowLeft,
+    Upload,
+    Trash2,
+    ImageIcon,
+    Gavel,
+    Flag,
+    Ban,
+    CheckCircle,
+    ChevronDown
+  } from '$lib/icons';
   import type { ActionData, PageData } from './$types';
   import type { GameItem } from '$lib/api/types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
   let items = $state<GameItem[]>(untrack(() => data.items));
   let uploading = $state(false);
+  let modMenuOpen = $state(false);
 
+  // `use:enhance` updates the `form` prop several times per submission
+  // (pending → result → post-invalidate refetch), each update firing the
+  // effect. Without this guard we got 3× toasts and the menu snapping shut
+  // mid-reopen. A plain `let` (not `$state`) skips reactivity, so writing
+  // `lastForm = form` from inside the effect is safe.
+  let lastForm: ActionData | undefined;
   $effect(() => {
+    if (form === lastForm) return;
+    lastForm = form;
     if (form?.deleted) { items = items.filter((i) => i.id !== form.deleted); toast.show('Item deleted.', 'success'); }
     if (form?.deleteError) toast.show(form.deleteError, 'error');
+    if (form?.statusUpdated) { toast.show(`Pack marked ${form.statusUpdated}.`, 'success'); modMenuOpen = false; }
+    if (form?.statusError) toast.show(form.statusError, 'error');
   });
 
   async function handleFileInput(e: Event) {
     const input = e.target as HTMLInputElement;
     const files = Array.from(input.files ?? []);
-    if (files.length === 0) return;
-    uploading = true;
-    for (const file of files) {
-      try {
-        const item = await uploadImageItem(data.pack.id, file.name.replace(/\.[^.]+$/, ''), file);
-        items = [...items, item];
-      } catch {
-        toast.show(`Failed to upload ${file.name}.`, 'error');
-      }
-    }
-    uploading = false;
     input.value = '';
-    toast.show(`${files.length} item(s) uploaded.`, 'success');
+    if (files.length === 0) return;
+
+    const rejected: { filename: string; reason: string }[] = [];
+    const accepted: File[] = [];
+    for (const f of files) {
+      const err = validateImageFile(f);
+      if (err) rejected.push({ filename: f.name, reason: err });
+      else accepted.push(f);
+    }
+
+    uploading = true;
+    const result = await bulkUploadImageItems(data.pack.id, accepted);
+    uploading = false;
+
+    items = [...items, ...result.succeeded];
+    const failed = [...rejected, ...result.failed];
+    const ok = result.succeeded.length;
+    const ko = failed.length;
+    if (ok > 0 && ko === 0) toast.show(`${ok} item${ok === 1 ? '' : 's'} uploaded.`, 'success');
+    else if (ok > 0 && ko > 0) toast.show(`${ok} uploaded, ${ko} failed.`, 'warning');
+    else toast.show(`Upload failed (${ko}/${ko}).`, 'error');
   }
 </script>
 
@@ -56,6 +86,90 @@
     <h1 class="text-xl font-bold">{data.pack.name}</h1>
     <span class="text-sm text-brand-text-muted ml-1">({items.length} items)</span>
     <div class="flex-1"></div>
+
+    <!-- Moderation dropdown — sits next to Add Items. The current status row
+         is disabled so you can't re-submit the state that's already applied
+         (which is how we got the triple-toast screenshot). -->
+    <div class="relative">
+      <button
+        type="button"
+        onclick={() => (modMenuOpen = !modMenuOpen)}
+        use:pressPhysics={'ghost'}
+        use:hoverEffect={'swap'}
+        class="h-9 px-4 rounded-lg border border-brand-border text-sm font-medium inline-flex items-center gap-1.5"
+        aria-haspopup="menu"
+        aria-expanded={modMenuOpen}
+      >
+        <Gavel size={14} strokeWidth={2.5} />
+        Moderate
+        <ChevronDown
+          size={14}
+          strokeWidth={2.5}
+          class="transition-transform duration-150 {modMenuOpen ? 'rotate-180' : ''}"
+        />
+      </button>
+
+      {#if modMenuOpen}
+        <!-- Click-away backdrop. Kept transparent but covers the viewport so
+             any outside click dismisses the menu without needing a document
+             listener. -->
+        <button
+          type="button"
+          class="fixed inset-0 z-10 cursor-default"
+          aria-label="Close menu"
+          onclick={() => (modMenuOpen = false)}
+        ></button>
+
+        <div
+          class="absolute right-0 mt-1 z-20 w-48 bg-brand-white border border-brand-border rounded-lg shadow-lg overflow-hidden"
+          role="menu"
+        >
+          <div class="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted border-b border-brand-border">
+            Current: {data.pack.status}
+          </div>
+          <form method="POST" action="?/setStatus" use:enhance class="flex flex-col">
+            <input type="hidden" name="pack_id" value={data.pack.id} />
+
+            <button
+              type="submit"
+              name="status"
+              value="active"
+              disabled={data.pack.status === 'active'}
+              use:pressPhysics={'ghost'}
+              class="text-left px-3 py-2 text-sm inline-flex items-center gap-2 hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            >
+              <CheckCircle size={14} strokeWidth={2.5} class="text-green-600" />
+              Mark active
+            </button>
+
+            <button
+              type="submit"
+              name="status"
+              value="flagged"
+              disabled={data.pack.status === 'flagged'}
+              use:pressPhysics={'ghost'}
+              class="text-left px-3 py-2 text-sm inline-flex items-center gap-2 hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            >
+              <Flag size={14} strokeWidth={2.5} class="text-yellow-600" />
+              Flag for review
+            </button>
+
+            <button
+              type="submit"
+              name="status"
+              value="banned"
+              disabled={data.pack.status === 'banned'}
+              use:pressPhysics={'ghost'}
+              class="text-left px-3 py-2 text-sm inline-flex items-center gap-2 hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            >
+              <Ban size={14} strokeWidth={2.5} class="text-red-600" />
+              Ban pack
+            </button>
+          </form>
+        </div>
+      {/if}
+    </div>
+
     <label
       use:pressPhysics={'ghost'}
       use:hoverEffect={'swap'}
@@ -71,6 +185,21 @@
     <p class="text-sm text-brand-text-muted">{data.pack.description}</p>
   {/if}
 
+  <!-- Metadata strip: owner / visibility / status (read-only, moderation
+       actions live in the Gavel dropdown above). owner_username lookup is a
+       follow-up; raw owner_id (UUID) is shown for now. -->
+  <div class="flex items-center gap-3 text-xs text-brand-text-muted">
+    <span>Owner: <b>{data.pack.owner_id ?? '—'}</b></span>
+    <span>Visibility: <b>{data.pack.visibility}</b></span>
+    <span>Status:
+      <b class={
+        data.pack.status === 'banned' ? 'text-red-600'
+        : data.pack.status === 'flagged' ? 'text-yellow-700'
+        : 'text-green-700'
+      }>{data.pack.status}</b>
+    </span>
+  </div>
+
   <div class="rounded-xl border border-brand-border overflow-hidden">
     <table class="w-full text-sm">
       <thead>
@@ -78,7 +207,6 @@
           <th class="w-10 px-4 py-3">#</th>
           <th class="text-left px-4 py-3">Preview</th>
           <th class="text-left px-4 py-3">Name</th>
-          <th class="text-left px-4 py-3">Type</th>
           <th class="text-left px-4 py-3">Version</th>
           <th class="px-4 py-3"></th>
         </tr>
@@ -92,18 +220,11 @@
                 <img src={item.thumbnail_url} alt="" class="h-10 w-10 rounded object-cover" />
               {:else}
                 <div class="h-10 w-10 rounded bg-muted flex items-center justify-center text-brand-text-muted">
-                  {#if item.type === 'image'}
-                    <ImageIcon size={16} strokeWidth={2.5} />
-                  {:else}
-                    <Type size={16} strokeWidth={2.5} />
-                  {/if}
+                  <ImageIcon size={16} strokeWidth={2.5} />
                 </div>
               {/if}
             </td>
             <td class="px-4 py-3 font-medium">{item.name}</td>
-            <td class="px-4 py-3">
-              <span class="text-xs px-2 py-0.5 rounded-full bg-muted text-brand-text-muted">{item.type}</span>
-            </td>
             <td class="px-4 py-3 text-brand-text-muted text-xs">v{item.version_number ?? 1}</td>
             <td class="px-4 py-3 text-right">
               <form method="POST" action="?/deleteItem" use:enhance

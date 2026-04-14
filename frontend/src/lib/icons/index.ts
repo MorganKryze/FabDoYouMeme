@@ -45,6 +45,9 @@ export {
   Settings,
   UserPlus,
   UserX,
+  Gavel,
+  Flag,
+  Ban,
 
   // --- Marketing & security ---
   Lock,
@@ -53,6 +56,7 @@ export {
 
   // --- Status & info ---
   Info,
+  HelpCircle,
   ListChecks,
   Clock,
   FileText,

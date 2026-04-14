@@ -13,6 +13,15 @@ import (
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
 )
 
+// enrichedItem is the wire shape for GET /api/packs/{id}/items.
+// It embeds the sqlc row so existing fields keep their json tags, and adds
+// thumbnail_url — a short-lived pre-signed GET URL derived from the current
+// version's media_key.
+type enrichedItem struct {
+	db.ListItemsForPackRow
+	ThumbnailURL *string `json:"thumbnail_url,omitempty"`
+}
+
 // ListItems handles GET /api/packs/{id}/items.
 func (h *PackHandler) ListItems(w http.ResponseWriter, r *http.Request) {
 	_, ok := middleware.GetSessionUser(r)
@@ -35,7 +44,21 @@ func (h *PackHandler) ListItems(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to list items")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"data": items})
+
+	// Each item's thumbnail_url is a backend-relative URL served by
+	// GET /api/assets/media — the browser fetches the image through the
+	// backend (same origin as the app), bypassing any RustFS CORS / DNS
+	// reachability issues.
+	enriched := make([]enrichedItem, 0, len(items))
+	for _, it := range items {
+		ei := enrichedItem{ListItemsForPackRow: it}
+		if it.MediaKey != nil && *it.MediaKey != "" {
+			u := MediaURL(*it.MediaKey)
+			ei.ThumbnailURL = &u
+		}
+		enriched = append(enriched, ei)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"data": enriched})
 }
 
 // CreateItem handles POST /api/packs/{id}/items.
@@ -61,7 +84,8 @@ func (h *PackHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		PayloadVersion int `json:"payload_version"`
+		Name           string `json:"name"`
+		PayloadVersion int    `json:"payload_version"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		req.PayloadVersion = 1
@@ -69,8 +93,13 @@ func (h *PackHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 	if req.PayloadVersion == 0 {
 		req.PayloadVersion = 1
 	}
+	if req.Name == "" {
+		writeError(w, r, http.StatusBadRequest, "bad_request", "name is required")
+		return
+	}
 	item, err := h.db.CreateItem(r.Context(), db.CreateItemParams{
 		PackID:         packID,
+		Name:           req.Name,
 		PayloadVersion: int32(req.PayloadVersion),
 	})
 	if err != nil {

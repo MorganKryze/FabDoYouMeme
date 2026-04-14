@@ -8,7 +8,9 @@ package db
 import (
 	"context"
 	"encoding/json"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -71,6 +73,62 @@ func (q *Queries) ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([
 			&i.Resource,
 			&i.Changes,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRecentAuditLogs = `-- name: ListRecentAuditLogs :many
+SELECT
+  a.id,
+  a.admin_id,
+  a.action,
+  a.resource,
+  a.changes,
+  a.created_at,
+  COALESCE(u.username, '')::text AS admin_username
+FROM audit_logs a
+LEFT JOIN users u ON a.admin_id = u.id
+ORDER BY a.created_at DESC
+LIMIT $1
+`
+
+type ListRecentAuditLogsRow struct {
+	ID            uuid.UUID       `json:"id"`
+	AdminID       pgtype.UUID     `json:"admin_id"`
+	Action        string          `json:"action"`
+	Resource      string          `json:"resource"`
+	Changes       json.RawMessage `json:"changes"`
+	CreatedAt     time.Time       `json:"created_at"`
+	AdminUsername string          `json:"admin_username"`
+}
+
+// Admin dashboard feed: joins the audit log to users so the UI can render
+// "action · who · when" without a second roundtrip. LEFT JOIN so logs survive
+// after a GDPR hard-delete replaces admin_id with the sentinel.
+func (q *Queries) ListRecentAuditLogs(ctx context.Context, lim int32) ([]ListRecentAuditLogsRow, error) {
+	rows, err := q.db.Query(ctx, listRecentAuditLogs, lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRecentAuditLogsRow
+	for rows.Next() {
+		var i ListRecentAuditLogsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AdminID,
+			&i.Action,
+			&i.Resource,
+			&i.Changes,
+			&i.CreatedAt,
+			&i.AdminUsername,
 		); err != nil {
 			return nil, err
 		}

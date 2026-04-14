@@ -83,6 +83,11 @@ UPDATE room_players SET score = score + $3
 -- (B2) so a resurrected room starts cleanly without wiping participation rows.
 UPDATE room_players SET score = 0 WHERE room_id = $1;
 
+-- name: CountActiveRooms :one
+-- Counts rooms currently in lobby or playing state. Used by the admin dashboard
+-- stats card. Finished rooms are excluded — operators care about live activity.
+SELECT COUNT(*) FROM rooms WHERE state IN ('lobby', 'playing');
+
 -- name: FinishCrashedRooms :execresult
 UPDATE rooms SET state = 'finished', finished_at = now() WHERE state = 'playing';
 

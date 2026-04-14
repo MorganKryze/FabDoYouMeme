@@ -1,8 +1,8 @@
 -- backend/db/queries/game_items.sql
 
 -- name: CreateItem :one
-INSERT INTO game_items (pack_id, position, payload_version)
-SELECT $1, COALESCE(MAX(position), 0) + 1, $2 FROM game_items WHERE pack_id = $1
+INSERT INTO game_items (pack_id, name, position, payload_version)
+SELECT $1, $2, COALESCE(MAX(position), 0) + 1, $3 FROM game_items WHERE pack_id = $1
 RETURNING *;
 
 -- name: GetItemByID :one

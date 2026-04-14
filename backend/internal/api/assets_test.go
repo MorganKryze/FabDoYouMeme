@@ -145,6 +145,7 @@ func TestAPI_DownloadURLAuthzMatrix(t *testing.T) {
 		}
 		item, err := q.CreateItem(ctx, db.CreateItemParams{
 			PackID:         pack.ID,
+			Name:           "test item",
 			PayloadVersion: 1,
 		})
 		if err != nil {

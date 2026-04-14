@@ -15,7 +15,7 @@ import (
 )
 
 const confirmEmailChange = `-- name: ConfirmEmailChange :one
-UPDATE users SET email = pending_email, pending_email = NULL WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at
+UPDATE users SET email = pending_email, pending_email = NULL WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected
 `
 
 func (q *Queries) ConfirmEmailChange(ctx context.Context, id uuid.UUID) (User, error) {
@@ -31,16 +31,20 @@ func (q *Queries) ConfirmEmailChange(ctx context.Context, id uuid.UUID) (User, e
 		&i.InvitedBy,
 		&i.ConsentAt,
 		&i.CreatedAt,
+		&i.IsProtected,
 	)
 	return i, err
 }
 
 const countUsers = `-- name: CountUsers :one
 SELECT COUNT(*) FROM users
-WHERE lower(username) LIKE lower('%' || $1 || '%')
-   OR lower(email)    LIKE lower('%' || $1 || '%')
+WHERE id != '00000000-0000-0000-0000-000000000001'
+  AND (lower(username) LIKE lower('%' || $1 || '%')
+       OR lower(email) LIKE lower('%' || $1 || '%'))
 `
 
+// Matches ListUsers' sentinel exclusion so the admin dashboard count and
+// table row count always agree.
 func (q *Queries) CountUsers(ctx context.Context, search *string) (int64, error) {
 	row := q.db.QueryRow(ctx, countUsers, search)
 	var count int64
@@ -51,7 +55,7 @@ func (q *Queries) CountUsers(ctx context.Context, search *string) (int64, error)
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, email, role, is_active, invited_by, consent_at)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at
+RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected
 `
 
 type CreateUserParams struct {
@@ -83,13 +87,14 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.InvitedBy,
 		&i.ConsentAt,
 		&i.CreatedAt,
+		&i.IsProtected,
 	)
 	return i, err
 }
 
 const getSentinelUser = `-- name: GetSentinelUser :one
 
-SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at FROM users WHERE id = '00000000-0000-0000-0000-000000000001'
+SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected FROM users WHERE id = '00000000-0000-0000-0000-000000000001'
 `
 
 // Sentinel UUID: 00000000-0000-0000-0000-000000000001 (see auth.SentinelUserID in Go).
@@ -107,12 +112,13 @@ func (q *Queries) GetSentinelUser(ctx context.Context) (User, error) {
 		&i.InvitedBy,
 		&i.ConsentAt,
 		&i.CreatedAt,
+		&i.IsProtected,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at FROM users WHERE email = $1
+SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -128,13 +134,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.InvitedBy,
 		&i.ConsentAt,
 		&i.CreatedAt,
+		&i.IsProtected,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
 
-SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at FROM users WHERE id = $1
+SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected FROM users WHERE id = $1
 `
 
 // backend/db/queries/users.sql
@@ -151,12 +158,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.InvitedBy,
 		&i.ConsentAt,
 		&i.CreatedAt,
+		&i.IsProtected,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at FROM users WHERE username = $1
+SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected FROM users WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -172,6 +180,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.InvitedBy,
 		&i.ConsentAt,
 		&i.CreatedAt,
+		&i.IsProtected,
 	)
 	return i, err
 }
@@ -297,6 +306,38 @@ func (q *Queries) GetUserSubmissions(ctx context.Context, userID pgtype.UUID) ([
 	return items, nil
 }
 
+const getUsernamesByIDs = `-- name: GetUsernamesByIDs :many
+SELECT id, username FROM users WHERE id = ANY($1::uuid[])
+`
+
+type GetUsernamesByIDsRow struct {
+	ID       uuid.UUID `json:"id"`
+	Username string    `json:"username"`
+}
+
+// Batch lookup for the audit-log enrichment path. Returns only id + username
+// so the admin dashboard can resolve "user:<uuid>" audit resources without
+// paying for full user rows.
+func (q *Queries) GetUsernamesByIDs(ctx context.Context, ids []uuid.UUID) ([]GetUsernamesByIDsRow, error) {
+	rows, err := q.db.Query(ctx, getUsernamesByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUsernamesByIDsRow
+	for rows.Next() {
+		var i GetUsernamesByIDsRow
+		if err := rows.Scan(&i.ID, &i.Username); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const hardDeleteUser = `-- name: HardDeleteUser :exec
 DELETE FROM users WHERE id = $1
 `
@@ -307,9 +348,10 @@ func (q *Queries) HardDeleteUser(ctx context.Context, id uuid.UUID) error {
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at FROM users
-WHERE lower(username) LIKE lower('%' || $1 || '%')
-   OR lower(email)    LIKE lower('%' || $1 || '%')
+SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected FROM users
+WHERE id != '00000000-0000-0000-0000-000000000001'
+  AND (lower(username) LIKE lower('%' || $1 || '%')
+       OR lower(email) LIKE lower('%' || $1 || '%'))
 ORDER BY created_at DESC
 LIMIT $3 OFFSET $2
 `
@@ -320,6 +362,9 @@ type ListUsersParams struct {
 	Lim    int32   `json:"lim"`
 }
 
+// Excludes the GDPR sentinel row (see SentinelUserID). The sentinel is a
+// data-integrity placeholder, never a real account, so it must not appear
+// in admin tooling or counts.
 func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error) {
 	rows, err := q.db.Query(ctx, listUsers, arg.Search, arg.Off, arg.Lim)
 	if err != nil {
@@ -339,6 +384,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.InvitedBy,
 			&i.ConsentAt,
 			&i.CreatedAt,
+			&i.IsProtected,
 		); err != nil {
 			return nil, err
 		}
@@ -351,7 +397,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 }
 
 const setPendingEmail = `-- name: SetPendingEmail :one
-UPDATE users SET pending_email = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at
+UPDATE users SET pending_email = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected
 `
 
 type SetPendingEmailParams struct {
@@ -372,12 +418,13 @@ func (q *Queries) SetPendingEmail(ctx context.Context, arg SetPendingEmailParams
 		&i.InvitedBy,
 		&i.ConsentAt,
 		&i.CreatedAt,
+		&i.IsProtected,
 	)
 	return i, err
 }
 
 const setUserActive = `-- name: SetUserActive :one
-UPDATE users SET is_active = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at
+UPDATE users SET is_active = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected
 `
 
 type SetUserActiveParams struct {
@@ -398,8 +445,26 @@ func (q *Queries) SetUserActive(ctx context.Context, arg SetUserActiveParams) (U
 		&i.InvitedBy,
 		&i.ConsentAt,
 		&i.CreatedAt,
+		&i.IsProtected,
 	)
 	return i, err
+}
+
+const setUserProtected = `-- name: SetUserProtected :exec
+UPDATE users SET is_protected = $2 WHERE id = $1
+`
+
+type SetUserProtectedParams struct {
+	ID          uuid.UUID `json:"id"`
+	IsProtected bool      `json:"is_protected"`
+}
+
+// Toggles the is_protected flag. Called exclusively by auth.SeedAdmin to
+// stamp the bootstrap admin. There is deliberately no handler that flips
+// this from the admin API — protection is a runtime-immutable property.
+func (q *Queries) SetUserProtected(ctx context.Context, arg SetUserProtectedParams) error {
+	_, err := q.db.Exec(ctx, setUserProtected, arg.ID, arg.IsProtected)
+	return err
 }
 
 const updateSubmissionsSentinel = `-- name: UpdateSubmissionsSentinel :exec
@@ -412,7 +477,7 @@ func (q *Queries) UpdateSubmissionsSentinel(ctx context.Context, userID pgtype.U
 }
 
 const updateUserEmailAdmin = `-- name: UpdateUserEmailAdmin :one
-UPDATE users SET email = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at
+UPDATE users SET email = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected
 `
 
 type UpdateUserEmailAdminParams struct {
@@ -433,12 +498,13 @@ func (q *Queries) UpdateUserEmailAdmin(ctx context.Context, arg UpdateUserEmailA
 		&i.InvitedBy,
 		&i.ConsentAt,
 		&i.CreatedAt,
+		&i.IsProtected,
 	)
 	return i, err
 }
 
 const updateUserRole = `-- name: UpdateUserRole :one
-UPDATE users SET role = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at
+UPDATE users SET role = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected
 `
 
 type UpdateUserRoleParams struct {
@@ -459,12 +525,13 @@ func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) 
 		&i.InvitedBy,
 		&i.ConsentAt,
 		&i.CreatedAt,
+		&i.IsProtected,
 	)
 	return i, err
 }
 
 const updateUserUsername = `-- name: UpdateUserUsername :one
-UPDATE users SET username = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at
+UPDATE users SET username = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected
 `
 
 type UpdateUserUsernameParams struct {
@@ -485,6 +552,7 @@ func (q *Queries) UpdateUserUsername(ctx context.Context, arg UpdateUserUsername
 		&i.InvitedBy,
 		&i.ConsentAt,
 		&i.CreatedAt,
+		&i.IsProtected,
 	)
 	return i, err
 }

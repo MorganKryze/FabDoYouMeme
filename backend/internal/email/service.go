@@ -94,6 +94,36 @@ func (s *Service) send(ctx context.Context, to, subject, htmlBody, txtBody strin
 	return client.DialAndSend(m)
 }
 
+// Probe verifies SMTP reachability without sending any mail.
+// It opens a client with the same TLS/auth options used by send(), dials with
+// the given context, and closes. Returns nil on success, a wrapped error otherwise.
+func (s *Service) Probe(ctx context.Context) error {
+	tlsPolicy := gomail.TLSMandatory
+	if s.cfg.SMTPPort == 1025 {
+		tlsPolicy = gomail.NoTLS
+	}
+	opts := []gomail.Option{
+		gomail.WithPort(s.cfg.SMTPPort),
+		gomail.WithTLSPolicy(tlsPolicy),
+	}
+	if s.cfg.SMTPUsername != "" {
+		opts = append(opts,
+			gomail.WithUsername(s.cfg.SMTPUsername),
+			gomail.WithPassword(s.cfg.SMTPPassword),
+			gomail.WithSMTPAuth(gomail.SMTPAuthPlain),
+		)
+	}
+	client, err := gomail.NewClient(s.cfg.SMTPHost, opts...)
+	if err != nil {
+		return fmt.Errorf("smtp probe: new client: %w", err)
+	}
+	if err := client.DialWithContext(ctx); err != nil {
+		return fmt.Errorf("smtp probe: dial: %w", err)
+	}
+	_ = client.Close()
+	return nil
+}
+
 // SendMagicLinkLogin implements auth.EmailSender.
 func (s *Service) SendMagicLinkLogin(ctx context.Context, to string, data auth.LoginEmailData) error {
 	html, txt, err := s.render("magic_link_login.html", "magic_link_login.txt", data)

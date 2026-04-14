@@ -76,7 +76,6 @@ export interface Invite {
 export interface GameItem {
   id: string;
   name: string;
-  type: 'image' | 'text';
   position: number;
   payload_version: number;
   current_version_id: string | null;
@@ -165,4 +164,56 @@ export interface Submission {
   caption: string;
   votes_received?: number;
   points_awarded?: number;
+}
+
+// ── Upload outcomes (studio) ──────────────────────────────────────────────
+export interface UploadResult {
+  ok: true;
+  item: GameItem;
+}
+export interface UploadFailure {
+  ok: false;
+  error: string;
+  filename: string;
+}
+export type UploadOutcome = UploadResult | UploadFailure;
+
+export interface BulkUploadOutcome {
+  succeeded: GameItem[];
+  failed: { filename: string; reason: string }[];
+}
+
+// ── Admin dashboard ───────────────────────────────────────────────────────
+export interface AdminStats {
+  active_rooms: number;
+  total_users: number;
+  total_packs: number;
+  pending_invites: number;
+}
+
+export interface AuditEntry {
+  id: string;
+  admin_id: string | null;
+  admin_username: string;
+  action: string;
+  resource_type: string;
+  resource_id: string;
+  resource_label: string;
+  changes: unknown;
+  created_at: string;
+}
+
+// ── Deep health response (admin dashboard) ────────────────────────────────
+export interface DeepHealthCheck {
+  status: 'ok' | 'degraded' | 'skipped';
+  latency_ms?: number;
+  error?: string;
+}
+export interface DeepHealthResponse {
+  status: 'ok' | 'degraded';
+  checks: {
+    postgres: DeepHealthCheck;
+    rustfs: DeepHealthCheck;
+    smtp: DeepHealthCheck;
+  };
 }
