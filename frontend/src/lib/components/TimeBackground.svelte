@@ -27,6 +27,7 @@
     surface: string;
     border: string;
     borderHeavy: string;
+    accent: string;
   }
 
   const palettes: Record<string, TimePalette> = {
@@ -39,6 +40,7 @@
       surface: 'rgba(255,255,255,0.82)',
       border: 'rgba(26,26,26,0.18)',
       borderHeavy: 'rgba(26,26,26,0.7)',
+      accent: '#E76F51',
     },
     afternoon: {
       // Blend of morning + evening gradient stops
@@ -50,6 +52,7 @@
       surface: 'rgba(255,255,255,0.82)',
       border: 'rgba(26,26,26,0.18)',
       borderHeavy: 'rgba(26,26,26,0.7)',
+      accent: '#D9654A',
     },
     evening: {
       grad: ['#FDDCB5', '#F9B4AB', '#D4A5C9', '#B5E2D0'],
@@ -60,6 +63,7 @@
       surface: 'rgba(255,255,255,0.82)',
       border: 'rgba(26,26,26,0.18)',
       borderHeavy: 'rgba(26,26,26,0.7)',
+      accent: '#E8937F',
     },
     night: {
       // Slightly lifted dark purples so the gradient stays visible (was nearly black)
@@ -73,6 +77,7 @@
       surface: 'rgba(58,45,85,0.72)',
       border: 'rgba(255,255,255,0.18)',
       borderHeavy: 'rgba(255,255,255,0.55)',
+      accent: '#C9A6FF',
     },
   };
 
@@ -90,6 +95,7 @@
     root.setProperty('--brand-grad-2', p.grad[1]);
     root.setProperty('--brand-grad-3', p.grad[2]);
     root.setProperty('--brand-grad-4', p.grad[3]);
+    root.setProperty('--brand-accent', p.accent);
   }
 
   $effect(() => {

@@ -52,7 +52,15 @@
   });
 
   const usernameStr = $derived(data.user?.username ?? 'there');
-  const greetingH1 = $derived(greetingPair?.h1.replaceAll('{username}', usernameStr) ?? null);
+  const greetingH1Parts = $derived.by(() => {
+    if (!greetingPair) return null;
+    const idx = greetingPair.h1.indexOf('{username}');
+    if (idx === -1) return { before: greetingPair.h1, after: '' };
+    return {
+      before: greetingPair.h1.slice(0, idx),
+      after: greetingPair.h1.slice(idx + '{username}'.length)
+    };
+  });
   const greetingSub = $derived(greetingPair?.subline.replaceAll('{username}', usernameStr) ?? null);
 
   function submitJoin(next: string) {
@@ -122,8 +130,9 @@
       <p class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
         Welcome back
       </p>
-      {#if greetingH1 && greetingSub}
-        <h1 class="text-4xl font-bold" in:fade={{ duration: 150 }}>{greetingH1}</h1>
+      {#if greetingH1Parts && greetingSub}
+        <h1 class="text-4xl font-bold" in:fade={{ duration: 150 }}>{greetingH1Parts.before}<span
+            class="text-brand-accent font-extrabold">{usernameStr}</span>{greetingH1Parts.after}</h1>
         <p class="text-sm font-semibold text-brand-text-muted mt-1" in:fade={{ duration: 150 }}>
           {greetingSub}
         </p>
