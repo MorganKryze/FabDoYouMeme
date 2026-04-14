@@ -9,6 +9,7 @@
 
   let { form }: { form: ActionData } = $props();
   let sent = $derived(form?.sent === true);
+  let sentEmail = $derived(form?.email ?? '');
 
   // Imperative focus for the email field — replaces raw `autofocus`.
   let emailInput = $state<HTMLInputElement | null>(null);
@@ -18,8 +19,13 @@
 
   // 60-second cooldown after sending. Counts down each second; at 0 the
   // resend link becomes active. Timer is cleared on teardown (e.g. navigation).
+  // `resendTick` is bumped by the resend form's enhance callback so the
+  // effect re-runs and restarts the timer even when `sent` stays true.
   let cooldownSeconds = $state(0);
+  let resendTick = $state(0);
+  let justResent = $state(false);
   $effect(() => {
+    resendTick;
     if (!sent) return;
     cooldownSeconds = 60;
     const id = setInterval(() => {
@@ -90,7 +96,12 @@
     <hr class="border-t border-brand-border" />
 
     <div class="flex flex-col items-center gap-2">
-      <p class="text-xs text-brand-text-muted font-medium">You can safely close this tab.</p>
+      <p
+        aria-live="polite"
+        class="text-xs {justResent ? 'text-brand-text font-bold' : 'text-brand-text-muted font-medium'}"
+      >
+        {justResent ? '✓ Link sent again — check your inbox' : 'You can safely close this tab.'}
+      </p>
 
       {#if cooldownSeconds > 0}
         <span class="text-sm font-semibold text-brand-text-muted cursor-not-allowed select-none">
@@ -100,9 +111,25 @@
           >{cooldownSeconds}s</span>
         </span>
       {:else}
-        <a href="/auth/magic-link" class="text-sm font-semibold underline hover:text-brand-text">
-          Send another link
-        </a>
+        <form
+          method="POST"
+          use:enhance={() => {
+            return async ({ update }) => {
+              await update({ reset: false });
+              resendTick += 1;
+              justResent = true;
+              setTimeout(() => { justResent = false; }, 3000);
+            };
+          }}
+        >
+          <input type="hidden" name="email" value={sentEmail} />
+          <button
+            type="submit"
+            class="text-sm font-semibold underline hover:text-brand-text cursor-pointer bg-transparent border-0 p-0"
+          >
+            Send another link
+          </button>
+        </form>
       {/if}
     </div>
   {:else}

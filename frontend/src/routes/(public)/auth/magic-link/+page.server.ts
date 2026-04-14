@@ -22,6 +22,6 @@ export const actions: Actions = {
       // Silently ignore network errors — user sees "link is on its way" regardless
     });
 
-    return { sent: true };
+    return { sent: true, email };
   }
 };
