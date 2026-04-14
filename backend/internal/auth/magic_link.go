@@ -40,9 +40,9 @@ func (h *Handler) MagicLink(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.sendMagicLinkToUser(r.Context(), user, "login"); err != nil {
+	if err := h.sendMagicLinkToUserAsync(r.Context(), user, "login"); err != nil {
 		if h.log != nil {
-			h.log.Error("magic link send failed", "error", err, "user_id", user.ID)
+			h.log.Error("magic link token persist failed", "error", err, "user_id", user.ID)
 		}
 		// Still 200 — no enumeration
 	}

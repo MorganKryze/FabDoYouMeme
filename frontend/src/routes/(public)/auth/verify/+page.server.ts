@@ -53,7 +53,13 @@ export const actions: Actions = {
         // (plain HTTP) we must not set the flag — otherwise the user appears to
         // "log in" successfully but the cookie never reaches the browser.
         secure: !dev,
-        sameSite: 'strict',
+        // Lax (not Strict): F5 / address-bar reloads have a null initiator, and
+        // Chromium drops Strict cookies on those navigations — users appear
+        // logged-out after every refresh even though the cookie is still in the
+        // jar. Lax still blocks cookies on cross-site POSTs, which is the
+        // real CSRF vector. Must match the backend attribute in
+        // backend/internal/auth/tokens.go:setSessionCookie.
+        sameSite: 'lax',
         maxAge: maxAgeMatch ? parseInt(maxAgeMatch[1]) : 720 * 3600
       });
     }

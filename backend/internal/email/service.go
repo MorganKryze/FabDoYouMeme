@@ -57,17 +57,27 @@ func (s *Service) render(htmlFile, txtFile string, data any) (html, text string,
 	return hbuf.String(), tbuf.String(), nil
 }
 
-func (s *Service) send(ctx context.Context, to, subject, htmlBody, txtBody string) error {
-	tlsPolicy := gomail.TLSMandatory
-	if s.cfg.SMTPPort == 1025 {
-		// Dev mode (Mailpit): no TLS
-		tlsPolicy = gomail.NoTLS
+// buildClientOptions returns the go-mail options derived from the current
+// SMTP config. The TLS strategy is dispatched by port so both plaintext dev
+// (Mailpit) and implicit-TLS providers (OVH SMTPS on 465) work alongside the
+// STARTTLS default on 587.
+func (s *Service) buildClientOptions() []gomail.Option {
+	opts := []gomail.Option{gomail.WithPort(s.cfg.SMTPPort)}
+
+	switch s.cfg.SMTPPort {
+	case 1025:
+		// Mailpit / local dev — plaintext, no TLS.
+		opts = append(opts, gomail.WithTLSPolicy(gomail.NoTLS))
+	case 465:
+		// SMTPS / implicit TLS — the server expects a TLS ClientHello
+		// immediately after TCP connect, before any SMTP bytes. STARTTLS
+		// on this port would hang until the server closes the connection.
+		opts = append(opts, gomail.WithSSL())
+	default:
+		// Submission port (587) and anything else — upgrade via STARTTLS.
+		opts = append(opts, gomail.WithTLSPolicy(gomail.TLSMandatory))
 	}
 
-	opts := []gomail.Option{
-		gomail.WithPort(s.cfg.SMTPPort),
-		gomail.WithTLSPolicy(tlsPolicy),
-	}
 	if s.cfg.SMTPUsername != "" {
 		opts = append(opts,
 			gomail.WithUsername(s.cfg.SMTPUsername),
@@ -75,8 +85,11 @@ func (s *Service) send(ctx context.Context, to, subject, htmlBody, txtBody strin
 			gomail.WithSMTPAuth(gomail.SMTPAuthPlain),
 		)
 	}
+	return opts
+}
 
-	client, err := gomail.NewClient(s.cfg.SMTPHost, opts...)
+func (s *Service) send(ctx context.Context, to, subject, htmlBody, txtBody string) error {
+	client, err := gomail.NewClient(s.cfg.SMTPHost, s.buildClientOptions()...)
 	if err != nil {
 		return fmt.Errorf("email: new client: %w", err)
 	}
@@ -98,22 +111,7 @@ func (s *Service) send(ctx context.Context, to, subject, htmlBody, txtBody strin
 // It opens a client with the same TLS/auth options used by send(), dials with
 // the given context, and closes. Returns nil on success, a wrapped error otherwise.
 func (s *Service) Probe(ctx context.Context) error {
-	tlsPolicy := gomail.TLSMandatory
-	if s.cfg.SMTPPort == 1025 {
-		tlsPolicy = gomail.NoTLS
-	}
-	opts := []gomail.Option{
-		gomail.WithPort(s.cfg.SMTPPort),
-		gomail.WithTLSPolicy(tlsPolicy),
-	}
-	if s.cfg.SMTPUsername != "" {
-		opts = append(opts,
-			gomail.WithUsername(s.cfg.SMTPUsername),
-			gomail.WithPassword(s.cfg.SMTPPassword),
-			gomail.WithSMTPAuth(gomail.SMTPAuthPlain),
-		)
-	}
-	client, err := gomail.NewClient(s.cfg.SMTPHost, opts...)
+	client, err := gomail.NewClient(s.cfg.SMTPHost, s.buildClientOptions()...)
 	if err != nil {
 		return fmt.Errorf("smtp probe: new client: %w", err)
 	}

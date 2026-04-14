@@ -24,6 +24,13 @@ func HashToken(raw string) string {
 	return hex.EncodeToString(h[:])
 }
 
+// setSessionCookie writes the session cookie with Lax SameSite policy.
+// Lax (not Strict) is required so the cookie is sent on same-site top-level
+// navigations with a null initiator — F5, address-bar reloads, external link
+// clicks back into the app — without which the user appears logged-out on
+// every refresh even though the cookie is still in the jar. Lax still blocks
+// cookies on cross-site POSTs (the actual CSRF vector), so this is the right
+// tradeoff for a session-cookie magic-link flow.
 func setSessionCookie(w http.ResponseWriter, token string, ttl time.Duration, domain string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session",
@@ -32,7 +39,7 @@ func setSessionCookie(w http.ResponseWriter, token string, ttl time.Duration, do
 		Domain:   domain,
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(ttl.Seconds()),
 	})
 }
@@ -45,7 +52,7 @@ func clearSessionCookie(w http.ResponseWriter, domain string) {
 		Domain:   domain,
 		HttpOnly: true,
 		Secure:   true,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})
 }

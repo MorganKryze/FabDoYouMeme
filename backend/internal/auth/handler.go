@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -16,6 +17,12 @@ import (
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/clock"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/config"
 )
+
+// magicLinkAsyncSendTimeout bounds how long a detached background send can
+// block on SMTP before the goroutine gives up. The OVH relay typically
+// answers in well under 2s; 30s is a generous safety net for transient
+// latency without leaking goroutines indefinitely on a dead upstream.
+const magicLinkAsyncSendTimeout = 30 * time.Second
 
 type Handler struct {
 	db    *db.Queries
@@ -67,20 +74,22 @@ func (h *Handler) SessionLookupFn(ctx context.Context, tokenHash string) (string
 	return row.UID.String(), row.Username, row.Email, row.Role, row.IsActive, nil
 }
 
-// sendMagicLinkToUser invalidates prior tokens of the same purpose,
-// generates a new one, persists its hash, and emails the raw token.
-func (h *Handler) sendMagicLinkToUser(ctx context.Context, user db.User, purpose string) error {
-	if err := h.db.InvalidatePendingTokens(ctx, db.InvalidatePendingTokensParams{
+// prepareMagicLinkToken invalidates any prior tokens of the same purpose,
+// generates a fresh one, and persists its hash. All DB writes complete before
+// return, so the token is guaranteed to exist by the time the caller dispatches
+// the email — no race against a user who clicks the link the instant it arrives.
+func (h *Handler) prepareMagicLinkToken(ctx context.Context, user db.User, purpose string) (magicURL string, expiryMinutes int, err error) {
+	if invErr := h.db.InvalidatePendingTokens(ctx, db.InvalidatePendingTokensParams{
 		UserID:  user.ID,
 		Purpose: purpose,
-	}); err != nil && h.log != nil {
+	}); invErr != nil && h.log != nil {
 		h.log.WarnContext(ctx, "sendMagicLink: failed to invalidate prior tokens",
-			"user_id", user.ID, "purpose", purpose, "error", err)
+			"user_id", user.ID, "purpose", purpose, "error", invErr)
 	}
 
 	rawToken, err := GenerateRawToken()
 	if err != nil {
-		return fmt.Errorf("generate token: %w", err)
+		return "", 0, fmt.Errorf("generate token: %w", err)
 	}
 	tokenHash := HashToken(rawToken)
 	expiresAt := h.clock.Now().Add(h.cfg.MagicLinkTTL)
@@ -91,12 +100,18 @@ func (h *Handler) sendMagicLinkToUser(ctx context.Context, user db.User, purpose
 		Purpose:   purpose,
 		ExpiresAt: expiresAt,
 	}); err != nil {
-		return fmt.Errorf("store token: %w", err)
+		return "", 0, fmt.Errorf("store token: %w", err)
 	}
 
-	magicURL := h.cfg.MagicLinkBaseURL + "/auth/verify?token=" + rawToken
-	expiryMinutes := int(h.cfg.MagicLinkTTL.Minutes())
+	return h.cfg.MagicLinkBaseURL + "/auth/verify?token=" + rawToken,
+		int(h.cfg.MagicLinkTTL.Minutes()),
+		nil
+}
 
+// deliverMagicLink renders the correct email template for the purpose and
+// hands it to the SMTP sender. Runs inline with the provided context — the
+// wrappers decide whether that context is the request's or a detached one.
+func (h *Handler) deliverMagicLink(ctx context.Context, user db.User, purpose, magicURL string, expiryMinutes int) error {
 	if purpose == "email_change" {
 		if user.PendingEmail == nil || *user.PendingEmail == "" {
 			return fmt.Errorf("email_change requested but pending_email is not set for user %s", user.ID)
@@ -114,6 +129,39 @@ func (h *Handler) sendMagicLinkToUser(ctx context.Context, user db.User, purpose
 		FrontendURL:   h.cfg.FrontendURL,
 		ExpiryMinutes: expiryMinutes,
 	})
+}
+
+// sendMagicLinkToUser persists a fresh token and sends the email synchronously.
+// Used by the register, email-change, and bootstrap paths, all of which need
+// to observe the send outcome (surface `smtp_failure` to the user, or fail
+// server startup).
+func (h *Handler) sendMagicLinkToUser(ctx context.Context, user db.User, purpose string) error {
+	magicURL, expiryMinutes, err := h.prepareMagicLinkToken(ctx, user, purpose)
+	if err != nil {
+		return err
+	}
+	return h.deliverMagicLink(ctx, user, purpose, magicURL, expiryMinutes)
+}
+
+// sendMagicLinkToUserAsync persists the token synchronously then dispatches
+// the SMTP send in a detached goroutine. The HTTP handler returns as soon as
+// the token row is in Postgres; the ~1–2s SMTP round-trip no longer sits on
+// the critical path. Used only by the high-frequency login endpoint, which
+// already returns 200 regardless of send outcome for enumeration protection.
+func (h *Handler) sendMagicLinkToUserAsync(ctx context.Context, user db.User, purpose string) error {
+	magicURL, expiryMinutes, err := h.prepareMagicLinkToken(ctx, user, purpose)
+	if err != nil {
+		return err
+	}
+	go func() {
+		bgCtx, cancel := context.WithTimeout(context.Background(), magicLinkAsyncSendTimeout)
+		defer cancel()
+		if sendErr := h.deliverMagicLink(bgCtx, user, purpose, magicURL, expiryMinutes); sendErr != nil && h.log != nil {
+			h.log.Error("magic link async send failed",
+				"user_id", user.ID, "purpose", purpose, "error", sendErr)
+		}
+	}()
+	return nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
