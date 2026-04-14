@@ -1,6 +1,7 @@
 services:
   postgres:
     image: postgres:17-alpine
+    container_name: fabyoumeme-${STAGE:-dev}-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: fabyoumeme
@@ -23,6 +24,7 @@ services:
         max-file: '5'
 
   backend:
+    container_name: fabyoumeme-${STAGE:-dev}-backend
     restart: unless-stopped
     depends_on:
       postgres:
@@ -75,6 +77,7 @@ services:
         max-file: '5'
 
   frontend:
+    container_name: fabyoumeme-${STAGE:-dev}-frontend
     restart: unless-stopped
     depends_on:
       backend:
