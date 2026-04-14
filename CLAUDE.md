@@ -109,9 +109,13 @@ FabDoYouMeme/
 ## Commands
 
 ```bash
-# Start the dev stack (includes Mailpit via docker/compose.dev.yml)
-make dev           # or: docker compose -f docker/compose.base.yml -f docker/compose.dev.yml --env-file .env.dev up --build -d
-make dev-down      # tear it down
+# Start the dev stack (includes Mailpit via docker/compose.dev.yml).
+# Each stage runs under its own Compose project name (fabyoumeme-{dev,preprod,prod})
+# so Postgres volumes, containers, and networks are fully isolated per stage.
+make dev           # or: docker compose -p fabyoumeme-dev -f docker/compose.base.yml -f docker/compose.dev.yml --env-file .env.dev up --build -d
+make dev-down      # tear it down (keeps the database volume)
+make dev-clean     # tear it down AND wipe postgres_data — destructive
+# Analogous targets exist for preprod and prod: {preprod,prod}-{,down,clean}
 
 # Env var drift detection & migration — run after pulling upstream updates.
 # Compares .env.{dev,preprod,prod} against their .env.*.example templates.
@@ -120,8 +124,8 @@ make env-check     # brief "am I out of sync?" summary; exits 1 on drift
 make env-diff      # detailed per-variable diff with reasons
 make env-migrate   # interactively append missing defaults + bootstrap missing live files
 
-# Watch backend logs
-docker compose -f docker/compose.base.yml -f docker/compose.dev.yml logs -f backend
+# Watch backend logs (remember the -p flag when running compose directly)
+docker compose -p fabyoumeme-dev -f docker/compose.base.yml -f docker/compose.dev.yml logs -f backend
 
 # Apply all pending DB migrations
 migrate -path ./backend/db/migrations -database "$DATABASE_URL" up

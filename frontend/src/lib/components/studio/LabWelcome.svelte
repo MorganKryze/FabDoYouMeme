@@ -51,7 +51,7 @@
     onclick={createFirst}
     disabled={creating}
     use:pressPhysics={'dark'}
-    class="h-10 px-5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold inline-flex items-center gap-1.5 disabled:opacity-50 mt-2"
+    class="h-10 px-5 rounded-lg border border-brand-border bg-primary text-primary-foreground text-sm font-semibold inline-flex items-center gap-1.5 disabled:opacity-50 mt-2"
   >
     <Plus size={14} strokeWidth={2.5} />
     {creating ? 'Creating…' : 'Create your first pack'}

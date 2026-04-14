@@ -30,6 +30,7 @@
 <style>
   .theme-toggle {
     display: inline-flex;
+    align-self: flex-start;
     background: var(--brand-white);
     border: 2.5px solid var(--brand-border-heavy);
     border-radius: 999px;

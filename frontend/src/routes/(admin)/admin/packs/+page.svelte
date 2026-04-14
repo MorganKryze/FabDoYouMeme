@@ -39,7 +39,7 @@
       onclick={() => showNewRow = !showNewRow}
       use:pressPhysics={'dark'}
       use:hoverEffect={'swap'}
-      class="h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center gap-1.5">
+      class="h-9 px-4 rounded-lg border border-brand-border bg-primary text-primary-foreground text-sm font-medium inline-flex items-center gap-1.5">
       <Plus size={14} strokeWidth={2.5} />
       New Pack
     </button>

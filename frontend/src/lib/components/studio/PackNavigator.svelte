@@ -232,7 +232,7 @@
   {/if}
 
   <!-- New Pack form -->
-  <div class="mt-2 border-t border-brand-border pt-2">
+  <div class={['mt-2', studio.packs.length > 0 && 'border-t border-brand-border pt-2']}>
     {#if showNewPackForm}
       <div class="flex flex-col gap-2 px-1">
         <input
@@ -273,7 +273,7 @@
         type="button"
         onclick={() => showNewPackForm = true}
         use:pressPhysics={'ghost'}
-        class="w-full text-left px-2 py-1.5 rounded-md text-sm text-brand-text-muted hover:text-brand-text hover:bg-muted inline-flex items-center gap-1.5">
+        class="w-full text-left px-2 py-1.5 rounded-md border border-brand-border text-sm text-brand-text-muted hover:text-brand-text hover:bg-muted inline-flex items-center gap-1.5">
         <Plus size={12} strokeWidth={2.5} />
         New Pack
       </button>

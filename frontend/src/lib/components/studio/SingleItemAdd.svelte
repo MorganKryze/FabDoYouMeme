@@ -115,7 +115,7 @@
     disabled={!file || !name.trim() || submitting}
     onclick={submit}
     use:pressPhysics={'dark'}
-    class="h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+    class="h-9 px-4 rounded-lg border border-brand-border bg-primary text-primary-foreground text-sm font-medium inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
   >
     <Upload size={14} strokeWidth={2.5} />
     {submitting ? 'Adding…' : 'Add to pack'}
