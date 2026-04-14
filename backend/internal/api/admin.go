@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
+	"github.com/MorganKryze/FabDoYouMeme/backend/internal/auth"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
 )
 
@@ -169,7 +170,15 @@ func (h *AdminHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if req.Token == "" {
-		writeError(w, r, http.StatusBadRequest, "bad_request", "token is required")
+		t, genErr := auth.GenerateRawToken()
+		if genErr != nil {
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to generate invite token")
+			return
+		}
+		req.Token = t
+	}
+	if req.MaxUses < 0 {
+		writeError(w, r, http.StatusBadRequest, "bad_request", "max_uses must be >= 0")
 		return
 	}
 

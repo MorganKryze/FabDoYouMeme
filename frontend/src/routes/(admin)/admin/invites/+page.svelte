@@ -5,29 +5,16 @@
   import { reveal } from '$lib/actions/reveal';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { hoverEffect } from '$lib/actions/hoverEffect';
-  import { Plus, Copy, Trash2 } from '$lib/icons';
-  import type { ActionData, PageData } from './$types';
+  import { Plus, Copy, Trash2, XCircle } from '$lib/icons';
+  import type { Invite } from '$lib/api/types';
+  import type { PageData } from './$types';
 
-  let { data, form }: { data: PageData; form: ActionData } = $props();
+  let { data }: { data: PageData } = $props();
   let showCreateForm = $state(false);
-  // Snapshot from load data; list is locally mutated by the effect below.
-  let invites = $state(untrack(() => data.invites));
+  // Local mutable copy so create/revoke can append/filter without a full
+  // `invalidateAll` round-trip. Seeded once from `data.invites` on mount.
+  let invites = $state<Invite[]>(untrack(() => data.invites));
   let revealedTokens = $state<Set<string>>(new Set());
-
-  $effect(() => {
-    if (form?.created) {
-      invites = [...invites, form.created];
-      showCreateForm = false;
-      toast.show('Invite created.', 'success');
-    }
-    if (form?.revoked) {
-      invites = invites.filter((i: { id: string }) => i.id !== form.revoked);
-      toast.show('Invite revoked.', 'success');
-    }
-    if (form?.createError || form?.revokeError) {
-      toast.show(form.createError ?? form.revokeError, 'error');
-    }
-  });
 
   function copyLink(token: string) {
     const url = `${window.location.origin}/auth/register?invite=${token}`;
@@ -53,14 +40,36 @@
       onclick={() => showCreateForm = !showCreateForm}
       use:pressPhysics={'dark'}
       use:hoverEffect={'swap'}
-      class="h-9 px-4 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center gap-1.5">
+      class="h-9 px-4 rounded-lg border border-brand-border-heavy bg-brand-white text-brand-text text-sm font-medium inline-flex items-center gap-1.5">
       <Plus size={14} strokeWidth={2.5} />
       Create Invite
     </button>
   </div>
 
   {#if showCreateForm}
-    <form method="POST" action="?/createInvite" use:enhance
+    <form
+      method="POST"
+      action="?/createInvite"
+      use:enhance={() => {
+        return async ({ result, update }) => {
+          await update({ reset: false });
+          if (result.type === 'success') {
+            const created = (result.data as { created?: Invite } | undefined)?.created;
+            if (created) {
+              invites = [...invites, created];
+              showCreateForm = false;
+              toast.show('Invite created.', 'success');
+            } else {
+              toast.show('Invite created, but response was malformed.', 'warning');
+            }
+          } else if (result.type === 'failure') {
+            const msg = (result.data as { createError?: string } | undefined)?.createError;
+            toast.show(msg ?? 'Failed to create invite.', 'error');
+          } else if (result.type === 'error') {
+            toast.show(result.error?.message ?? 'Unexpected error creating invite.', 'error');
+          }
+        };
+      }}
       class="rounded-xl border border-brand-border bg-brand-white p-4 flex flex-col gap-3">
       <h2 class="text-sm font-semibold">New Invite</h2>
       <div class="grid grid-cols-2 gap-3">
@@ -86,10 +95,21 @@
         </div>
       </div>
       <div class="flex gap-2 justify-end">
-        <button type="button" onclick={() => showCreateForm = false}
-          class="h-9 px-4 rounded border border-brand-border text-sm hover:bg-muted">Cancel</button>
-        <button type="submit"
-          class="h-9 px-4 rounded bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90">
+        <button
+          type="button"
+          onclick={() => showCreateForm = false}
+          use:pressPhysics={'ghost'}
+          use:hoverEffect={'swap'}
+          class="h-9 px-4 rounded border border-brand-border text-sm inline-flex items-center gap-1.5">
+          <XCircle size={14} strokeWidth={2.5} />
+          Cancel
+        </button>
+        <button
+          type="submit"
+          use:pressPhysics={'dark'}
+          use:hoverEffect={'swap'}
+          class="h-9 px-4 rounded border border-brand-border-heavy bg-brand-white text-brand-text text-sm font-medium inline-flex items-center gap-1.5">
+          <Plus size={14} strokeWidth={2.5} />
           Create
         </button>
       </div>
@@ -135,7 +155,26 @@
                   <Copy size={12} strokeWidth={2.5} />
                   Copy Link
                 </button>
-                <form method="POST" action="?/revokeInvite" use:enhance
+                <form
+                  method="POST"
+                  action="?/revokeInvite"
+                  use:enhance={() => {
+                    return async ({ result, update }) => {
+                      await update({ reset: false });
+                      if (result.type === 'success') {
+                        const revokedId = (result.data as { revoked?: string } | undefined)?.revoked;
+                        if (revokedId) {
+                          invites = invites.filter((i) => i.id !== revokedId);
+                          toast.show('Invite revoked.', 'success');
+                        }
+                      } else if (result.type === 'failure') {
+                        const msg = (result.data as { revokeError?: string } | undefined)?.revokeError;
+                        toast.show(msg ?? 'Failed to revoke invite.', 'error');
+                      } else if (result.type === 'error') {
+                        toast.show(result.error?.message ?? 'Unexpected error revoking invite.', 'error');
+                      }
+                    };
+                  }}
                   onsubmit={(e) => !confirm('Revoke this invite?') && e.preventDefault()}>
                   <input type="hidden" name="invite_id" value={inv.id} />
                   <button
