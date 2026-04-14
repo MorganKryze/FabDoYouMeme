@@ -7,13 +7,22 @@
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { goto, invalidateAll } from '$app/navigation';
   import { authApi } from '$lib/api/auth';
-  import { Download, Save as SaveIcon, XCircle, Mail, Edit as EditIcon, Shield, LogOut } from '$lib/icons';
+  import { Download, Save as SaveIcon, XCircle, Mail, Edit as EditIcon, Shield, LogOut, Sparkles } from '$lib/icons';
   import ThemeToggle from '$lib/components/ThemeToggle.svelte';
   import ToneSlider from '$lib/components/ToneSlider.svelte';
   import ToneSamplePreview from '$lib/components/ToneSamplePreview.svelte';
   import type { ActionData, PageData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
+
+  // Maker Card identity derivations — the big initial badge and the
+  // playful "member ID" are both derived from the authenticated user so
+  // the card has visual identity without needing extra backend fields.
+  const initialLetter = $derived((data.user.username?.[0] ?? '?').toUpperCase());
+  const serial = $derived(
+    ((data.user.id ?? '').replace(/-/g, '').slice(0, 6).toUpperCase() || 'XXXXXX')
+      .replace(/^(.{3})(.{3})$/, '$1-$2')
+  );
 
   let editingUsername = $state(false);
   let editingEmail = $state(false);
@@ -79,9 +88,63 @@
 </svelte:head>
 
 <div class="w-full max-w-lg mx-auto p-6 flex flex-col gap-8" use:reveal>
-  <h1 style="font-size: clamp(2rem, 4.5vw, 3.2rem); font-weight: 700; line-height: 1; letter-spacing: -0.02em;">
-    Maker Card
-  </h1>
+  <!-- Maker Card — identity header. This is the page's visual anchor:
+       a physical, tilt-reactive card that carries the branding its name
+       promises, instead of a bare heading. -->
+  <section class="flex flex-col gap-3">
+    <div
+      use:physCard
+      class="relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface px-6 py-7 flex items-center gap-5"
+      style="box-shadow: 0 6px 0 rgba(0,0,0,0.1);"
+    >
+      <!-- Corner stamp — doubles as the semantic page title -->
+      <div class="absolute top-4 right-4 inline-flex items-center gap-1.5">
+        <Sparkles size={11} strokeWidth={2.75} />
+        <h1 class="text-[0.6rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted m-0">
+          Maker Card
+        </h1>
+      </div>
+
+      <!-- Initial badge — accent-coloured, slightly tilted for sticker feel -->
+      <div
+        class="shrink-0 w-20 h-20 rounded-[18px] border-[2.5px] border-brand-border-heavy bg-brand-accent text-brand-text flex items-center justify-center text-4xl font-extrabold select-none"
+        style="box-shadow: 0 4px 0 rgba(0,0,0,0.14); transform: rotate(-3deg);"
+        aria-hidden="true"
+      >
+        {initialLetter}
+      </div>
+
+      <!-- Identity text -->
+      <div class="flex flex-col min-w-0 flex-1 pt-3">
+        <p class="text-[0.6rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+          Signed in as
+        </p>
+        <p
+          class="text-3xl font-extrabold leading-none truncate mt-1 text-brand-accent"
+          style="letter-spacing: -0.02em;"
+        >
+          {data.user.username}
+        </p>
+        <div class="flex items-center gap-2 mt-3 flex-wrap">
+          <span
+            class="inline-flex items-center gap-1 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-2.5 py-1 text-[0.6rem] font-bold uppercase tracking-[0.15em]"
+            style="box-shadow: 0 2px 0 rgba(0,0,0,0.08);"
+          >
+            {#if data.user.role === 'admin'}
+              <Shield size={10} strokeWidth={3} />
+              Admin
+            {:else}
+              <Sparkles size={10} strokeWidth={3} />
+              Maker
+            {/if}
+          </span>
+          <span class="font-mono text-[0.65rem] font-bold text-brand-text-muted tracking-[0.1em]">
+            ID · {serial}
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <!-- Username section -->
   <section class="flex flex-col gap-3">
@@ -203,23 +266,6 @@
     <ToneSlider />
     <ToneSamplePreview username={data.user?.username ?? 'there'} />
   </section>
-
-  {#if data.user.role === 'admin'}
-    <!-- Admin panel link — only visible to admins -->
-    <section class="flex flex-col gap-3">
-      <h2 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Admin</h2>
-      <a
-        href="/admin"
-        use:pressPhysics={'ghost'}
-        use:hoverEffect={'swap'}
-        class="self-start inline-flex items-center gap-2 h-11 px-6 rounded-full border-[2.5px] border-brand-border-heavy bg-transparent text-sm font-bold no-underline"
-        style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
-      >
-        <Shield size={16} strokeWidth={2.5} />
-        Admin panel →
-      </a>
-    </section>
-  {/if}
 
   <!-- Data & Privacy section -->
   <section class="flex flex-col gap-4">

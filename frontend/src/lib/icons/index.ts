@@ -64,6 +64,7 @@ export {
   Heart,
   Bell,
   XCircle,
+  X,
   PartyPopper,
 
   // --- Theme ---
