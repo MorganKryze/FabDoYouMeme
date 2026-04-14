@@ -66,6 +66,7 @@ export {
   XCircle,
   X,
   PartyPopper,
+  IdCard,
 
   // --- Theme ---
   Sun,

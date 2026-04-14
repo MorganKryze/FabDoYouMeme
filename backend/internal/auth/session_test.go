@@ -104,3 +104,36 @@ func TestMe_NoSession_Returns401(t *testing.T) {
 		t.Errorf("want 401 without session, got %d", rec.Code)
 	}
 }
+
+func TestMeHandler_IncludesCreatedAt(t *testing.T) {
+	h := &auth.Handler{}
+	created := time.Date(2026, time.January, 15, 9, 30, 0, 0, time.UTC)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+	req = req.WithContext(context.WithValue(req.Context(), middleware.SessionUserContextKey, middleware.SessionUser{
+		UserID:    "00000000-0000-0000-0000-000000000001",
+		Username:  "morgan",
+		Email:     "m@example.com",
+		Role:      "player",
+		CreatedAt: created,
+	}))
+
+	rec := httptest.NewRecorder()
+	h.Me(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	got, ok := body["created_at"].(string)
+	if !ok {
+		t.Fatalf("created_at missing or not string; body=%v", body)
+	}
+	if got != "2026-01-15T09:30:00Z" {
+		t.Errorf("created_at = %q, want %q", got, "2026-01-15T09:30:00Z")
+	}
+}

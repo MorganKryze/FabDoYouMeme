@@ -75,7 +75,7 @@ func TestSession_RenewAtMostOncePerInterval(t *testing.T) {
 	// Helper: invoke SessionLookupFn and fail on any error.
 	lookup := func() {
 		t.Helper()
-		if _, _, _, _, _, err := h.SessionLookupFn(context.Background(), hash); err != nil {
+		if _, _, _, _, _, _, err := h.SessionLookupFn(context.Background(), hash); err != nil {
 			t.Fatalf("SessionLookupFn: %v", err)
 		}
 	}

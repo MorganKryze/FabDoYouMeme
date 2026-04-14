@@ -6,11 +6,12 @@ import (
 	"encoding/hex"
 	"log/slog"
 	"net/http"
+	"time"
 )
 
 // SessionLookupFn is the DB query function injected at startup.
-// Returns userID, username, email, role, isActive; returns ("","","","",false,nil) if not found.
-type SessionLookupFn func(ctx context.Context, tokenHash string) (userID, username, email, role string, isActive bool, err error)
+// Returns userID, username, email, role, isActive, createdAt; returns zero values if not found.
+type SessionLookupFn func(ctx context.Context, tokenHash string) (userID, username, email, role string, isActive bool, createdAt time.Time, err error)
 
 func Session(lookup SessionLookupFn, logger *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -21,7 +22,7 @@ func Session(lookup SessionLookupFn, logger *slog.Logger) func(http.Handler) htt
 				return
 			}
 			hash := sha256token(cookie.Value)
-			userID, username, email, role, isActive, err := lookup(r.Context(), hash)
+			userID, username, email, role, isActive, createdAt, err := lookup(r.Context(), hash)
 			if err != nil {
 				logger.Error("session lookup failed",
 					"error", err,
@@ -35,10 +36,11 @@ func Session(lookup SessionLookupFn, logger *slog.Logger) func(http.Handler) htt
 				return
 			}
 			r = SetSessionUser(r, SessionUser{
-				UserID:   userID,
-				Username: username,
-				Email:    email,
-				Role:     role,
+				UserID:    userID,
+				Username:  username,
+				Email:     email,
+				Role:      role,
+				CreatedAt: createdAt,
 			})
 			next.ServeHTTP(w, r)
 		})

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
 )
@@ -105,8 +106,8 @@ func TestSession_NoCookie_PassesThrough(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	lookup := func(ctx context.Context, hash string) (string, string, string, string, bool, error) {
-		return "", "", "", "", false, nil
+	lookup := func(ctx context.Context, hash string) (string, string, string, string, bool, time.Time, error) {
+		return "", "", "", "", false, time.Time{}, nil
 	}
 
 	h := middleware.Session(lookup, nil)
@@ -127,8 +128,8 @@ func TestSession_ValidCookie_SetsUser(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	lookup := func(_ context.Context, _ string) (string, string, string, string, bool, error) {
-		return "some-uuid", "alice", "alice@test.com", "player", true, nil
+	lookup := func(_ context.Context, _ string) (string, string, string, string, bool, time.Time, error) {
+		return "some-uuid", "alice", "alice@test.com", "player", true, time.Time{}, nil
 	}
 
 	h := middleware.Session(lookup, nil)
@@ -150,8 +151,8 @@ func TestSession_InactiveUser_DoesNotSetUser(t *testing.T) {
 	})
 
 	// isActive = false
-	lookup := func(_ context.Context, _ string) (string, string, string, string, bool, error) {
-		return "some-uuid", "banned", "banned@test.com", "player", false, nil
+	lookup := func(_ context.Context, _ string) (string, string, string, string, bool, time.Time, error) {
+		return "some-uuid", "banned", "banned@test.com", "player", false, time.Time{}, nil
 	}
 
 	h := middleware.Session(lookup, nil)

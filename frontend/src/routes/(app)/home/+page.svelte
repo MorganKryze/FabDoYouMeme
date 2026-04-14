@@ -1,12 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { fade } from 'svelte/transition';
+  import { fade, fly } from 'svelte/transition';
+  import { cubicIn, cubicOut } from 'svelte/easing';
   import { enhance } from '$app/forms';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { reveal } from '$lib/actions/reveal';
   import { physCard } from '$lib/actions/physCard';
   import RoomCodeInput from '$lib/components/RoomCodeInput.svelte';
+  import MakerCard from '$lib/components/MakerCard.svelte';
+  import { computeMedals } from '$lib/medals';
   import { tone } from '$lib/state/tone.svelte';
   import { pickForSlot } from '$lib/content/toneSelect';
   import type { TonePair } from '$lib/content/tonePools';
@@ -18,6 +21,7 @@
     Clock,
     Users,
     PartyPopper,
+    IdCard,
   } from '$lib/icons';
   import type { ActionData, PageData } from './$types';
   import type { HistoryRoom } from './+page.server';
@@ -26,6 +30,7 @@
 
   let code = $state('');
   let joinForm = $state<HTMLFormElement | null>(null);
+  let showMakerCard = $state(false);
 
   // Greeting rotates per visit — we deliberately capture `tone.level` once
   // on mount rather than binding reactively. Changes on /profile take effect
@@ -62,6 +67,10 @@
     };
   });
   const greetingSub = $derived(greetingPair?.subline.replaceAll('{username}', usernameStr) ?? null);
+
+  const medals = $derived(
+    data.user ? computeMedals(data.user, data.history) : []
+  );
 
   function submitJoin(next: string) {
     code = next;
@@ -125,8 +134,8 @@
 <div class="flex-1 flex justify-center p-6 pt-4 pb-10">
   <div class="w-full max-w-5xl flex flex-col gap-10">
 
-    <!-- ─── Greeting (tone-pooled) ───────────────────────────── -->
-    <section use:reveal class="flex flex-col gap-1" aria-live="polite">
+    <!-- ─── Hero row: greeting (full-width) ──────────────────── -->
+    <section use:reveal class="flex flex-col justify-center gap-1" aria-live="polite">
       <p class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
         Welcome back
       </p>
@@ -404,3 +413,52 @@
   <p>© {new Date().getFullYear()} FabDoYouMeme</p>
   <a href="/privacy" class="hover:text-brand-text transition-colors">Privacy Policy</a>
 </footer>
+
+<!-- ─── Floating Maker Card (home only) ─────────────────────────────
+     Bottom-left floating button that expands into the full Maker Card
+     on click. Both elements are independently `fixed` so each scale
+     transition anchors to the same bottom-left corner without layout
+     reflow between states.
+     ───────────────────────────────────────────────────────────── -->
+{#if data.user}
+  {#if showMakerCard}
+    <!-- Card slides in from off-screen-left (x: -380), slightly
+         delayed so the outgoing button has time to exit first.
+         On dismiss, it slides left back off-screen using cubicIn
+         (accelerates as it leaves). Card and button share the same
+         `top-32 left-6` anchor so they literally switch places. -->
+    <div
+      class="fixed bottom-1/10 left-6 z-40 w-75 cursor-pointer"
+      in:fly={{ x: -380, duration: 420, delay: 100, easing: cubicOut }}
+      out:fly={{ x: -380, duration: 260, easing: cubicIn }}
+      role="button"
+      tabindex={0}
+      aria-label="Hide maker card"
+      onclick={() => (showMakerCard = false)}
+      onkeydown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          showMakerCard = false;
+        }
+      }}
+    >
+      <MakerCard user={data.user} {medals} />
+    </div>
+  {:else}
+    <!-- Button slides in from the same off-screen-left direction
+         after the outgoing card has had time to leave. On click it
+         exits leftward, freeing the slot for the card. -->
+    <button
+      type="button"
+      onclick={() => (showMakerCard = true)}
+      use:hoverEffect={'swap'}
+      aria-label="Show maker card"
+      class="fixed bottom-1/10 left-6 z-40 inline-flex items-center justify-center h-14 w-14 rounded-full bg-brand-white border-[2.5px] border-brand-border-heavy cursor-pointer"
+      style="box-shadow: 0 4px 0 rgba(0,0,0,0.12);"
+      in:fly={{ x: -300, duration: 360, delay: 140, easing: cubicOut }}
+      out:fly={{ x: -300, duration: 260, easing: cubicIn }}
+    >
+      <IdCard size={22} strokeWidth={2.5} />
+    </button>
+  {/if}
+{/if}

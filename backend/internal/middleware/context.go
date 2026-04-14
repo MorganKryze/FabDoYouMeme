@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 )
 
 type contextKey string
@@ -14,10 +15,11 @@ const sessionUserKey contextKey = "session_user"
 var SessionUserContextKey = sessionUserKey
 
 type SessionUser struct {
-	UserID   string
-	Username string
-	Email    string
-	Role     string
+	UserID    string
+	Username  string
+	Email     string
+	Role      string
+	CreatedAt time.Time
 }
 
 func SetSessionUser(r *http.Request, u SessionUser) *http.Request {

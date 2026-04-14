@@ -57,10 +57,10 @@ func New(pool *pgxpool.Pool, cfg *config.Config, email EmailSender, log *slog.Lo
 // into at most one per interval, without needing a dedicated last_renewed_at
 // column — the extension delta itself tells us how long it has been since the
 // previous renewal.
-func (h *Handler) SessionLookupFn(ctx context.Context, tokenHash string) (string, string, string, string, bool, error) {
+func (h *Handler) SessionLookupFn(ctx context.Context, tokenHash string) (string, string, string, string, bool, time.Time, error) {
 	row, err := h.db.GetSessionByTokenHash(ctx, tokenHash)
 	if err != nil {
-		return "", "", "", "", false, err
+		return "", "", "", "", false, time.Time{}, err
 	}
 	newExpiry := h.clock.Now().Add(h.cfg.SessionTTL)
 	if h.cfg.SessionRenewInterval <= 0 || newExpiry.Sub(row.ExpiresAt) >= h.cfg.SessionRenewInterval {
@@ -71,7 +71,7 @@ func (h *Handler) SessionLookupFn(ctx context.Context, tokenHash string) (string
 			h.log.WarnContext(ctx, "session renewal failed", "err", err)
 		}
 	}
-	return row.UID.String(), row.Username, row.Email, row.Role, row.IsActive, nil
+	return row.UID.String(), row.Username, row.Email, row.Role, row.IsActive, row.UCreatedAt, nil
 }
 
 // prepareMagicLinkToken invalidates any prior tokens of the same purpose,

@@ -3,6 +3,7 @@ export interface User {
   username: string;
   email: string;
   role: 'player' | 'admin';
+  created_at: string; // ISO 8601 UTC timestamp
 }
 
 export interface GameType {

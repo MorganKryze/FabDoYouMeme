@@ -3,6 +3,7 @@ package auth
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
 )
@@ -32,10 +33,11 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{
-		"id":       u.UserID,
-		"username": u.Username,
-		"email":    u.Email,
-		"role":     u.Role,
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":         u.UserID,
+		"username":   u.Username,
+		"email":      u.Email,
+		"role":       u.Role,
+		"created_at": u.CreatedAt.UTC().Format(time.RFC3339),
 	})
 }
