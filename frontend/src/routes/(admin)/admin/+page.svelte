@@ -35,9 +35,10 @@
   // last 30 seconds".
   let statsBaseline = $state<AdminStats | null>(null);
 
-  // Per-check ring buffer of recent samples (last 20). Powers the sparkline.
+  // Per-check ring buffer of recent samples — powers the uptime rail.
+  // 30 slots × 30s poll = ~15 min of visible history.
   type Sample = { status: DeepHealthCheck['status']; latency: number };
-  const HISTORY_CAP = 20;
+  const HISTORY_CAP = 30;
   let history = $state<Record<string, Sample[]>>({
     postgres: [],
     rustfs: [],
@@ -91,25 +92,13 @@
     history = next;
   }
 
-  // Linear normalization per-check over the buffer's own min/max — keeps
-  // narrow-band variation (Postgres at 0.2–0.5 ms, RustFS at 150–180 ms)
-  // visible instead of collapsing them to near-flat bars. When the buffer
-  // is all equal (or single sample) we render a uniform mid-height bar.
-  function barHeight(
-    latency: number,
-    minL: number,
-    maxL: number
-  ): number {
-    if (latency < 0 || !Number.isFinite(latency)) return 2;
-    if (maxL <= minL) return 12; // flat buffer → stable mid-height
-    const scaled = (latency - minL) / (maxL - minL);
-    return Math.max(2, Math.round(scaled * 22));
-  }
-
+  // Classic uptime rail: color-only status, uniform bar height. Latency is
+  // shown as text above the rail and inside each bar's <title> tooltip, so
+  // the rail itself only needs to answer "was it up?" at a glance.
   function barColor(status: Sample['status']): string {
-    if (status === 'ok') return '#15803d'; // green-700
-    if (status === 'degraded') return '#b91c1c'; // red-700
-    return '#9ca3af'; // grey-400 for skipped
+    if (status === 'ok') return '#22c55e'; // green-500 — readable on light & dark
+    if (status === 'degraded') return '#ef4444'; // red-500
+    return '#94a3b8'; // slate-400 for skipped
   }
 
   // Sub-ms latencies get one decimal ("0.3 ms"); anything >= 1 is rounded
@@ -339,11 +328,7 @@
         {#each checks as c}
           {@const info = health.checks[c.key]}
           {@const samples = history[c.key] ?? []}
-          {@const okLatencies = samples
-            .filter((s) => s.status !== 'skipped' && s.latency >= 0)
-            .map((s) => s.latency)}
-          {@const bufMin = okLatencies.length ? Math.min(...okLatencies) : 0}
-          {@const bufMax = okLatencies.length ? Math.max(...okLatencies) : 0}
+          {@const slotOffset = HISTORY_CAP - samples.length}
           <div
             class="rounded-xl border border-brand-border bg-brand-white p-4 flex flex-col gap-2"
           >
@@ -368,30 +353,42 @@
               </p>
             {/if}
 
-            <!-- Sparkline: 20-sample ring buffer. Bar height is linearly
-                 normalized against this check's own min/max latency so
-                 narrow bands (e.g. Postgres 0.2–0.5 ms) still show
-                 variation. Bar color reflects the status at that sample. -->
-            {#if samples.length > 0}
+            <!-- Classic uptime rail: HISTORY_CAP fixed slots, uniform
+                 height, color-only status. Unfilled slots render as
+                 low-opacity ghost bars so the rail is the same width from
+                 first paint. Native <title> gives free hover tooltips.
+                 Oldest is left, newest right. -->
+            <div class="mt-1 flex flex-col gap-1">
               <svg
-                viewBox="0 0 120 24"
-                class="w-full h-6"
+                viewBox={`0 0 ${HISTORY_CAP * 7 - 2} 28`}
+                preserveAspectRatio="none"
+                class="w-full h-7 text-brand-text"
                 role="img"
                 aria-label={`${c.label} recent health samples`}
               >
-                {#each samples as s, idx}
-                  {@const h = barHeight(s.latency, bufMin, bufMax)}
+                {#each Array(HISTORY_CAP) as _, idx}
+                  {@const s = idx >= slotOffset ? samples[idx - slotOffset] : null}
                   <rect
-                    x={idx * 6}
-                    y={24 - h}
-                    width="4"
-                    height={h}
-                    fill={barColor(s.status)}
-                    opacity={0.85}
-                  />
+                    x={idx * 7}
+                    y={0}
+                    width={5}
+                    height={28}
+                    rx={1.5}
+                    ry={1.5}
+                    fill={s ? barColor(s.status) : 'currentColor'}
+                    fill-opacity={s ? 0.92 : 0.1}
+                  >
+                    {#if s}
+                      <title>{s.status} · {formatLatency(s.latency)}</title>
+                    {/if}
+                  </rect>
                 {/each}
               </svg>
-            {/if}
+              <div class="flex justify-between text-[10px] uppercase tracking-wider text-brand-text-muted">
+                <span>~15 min ago</span>
+                <span>now</span>
+              </div>
+            </div>
 
             {#if info.error}
               <div class="relative mt-1">
