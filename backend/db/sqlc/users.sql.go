@@ -348,11 +348,29 @@ func (q *Queries) HardDeleteUser(ctx context.Context, id uuid.UUID) error {
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected FROM users
-WHERE id != '00000000-0000-0000-0000-000000000001'
-  AND (lower(username) LIKE lower('%' || $1 || '%')
-       OR lower(email) LIKE lower('%' || $1 || '%'))
-ORDER BY created_at DESC
+SELECT
+  u.id,
+  u.username,
+  u.email,
+  u.pending_email,
+  u.role,
+  u.is_active,
+  u.invited_by,
+  u.consent_at,
+  u.created_at,
+  u.is_protected,
+  COALESCE((
+    SELECT COUNT(*)
+    FROM room_players rp
+    JOIN rooms r ON r.id = rp.room_id
+    WHERE rp.user_id = u.id AND r.state = 'finished'
+  ), 0)::bigint AS games_played,
+  (SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id = u.id) AS last_login_at
+FROM users u
+WHERE u.id != '00000000-0000-0000-0000-000000000001'
+  AND (lower(u.username) LIKE lower('%' || $1 || '%')
+       OR lower(u.email) LIKE lower('%' || $1 || '%'))
+ORDER BY u.created_at DESC
 LIMIT $3 OFFSET $2
 `
 
@@ -362,18 +380,41 @@ type ListUsersParams struct {
 	Lim    int32   `json:"lim"`
 }
 
+type ListUsersRow struct {
+	ID           uuid.UUID          `json:"id"`
+	Username     string             `json:"username"`
+	Email        string             `json:"email"`
+	PendingEmail *string            `json:"pending_email"`
+	Role         string             `json:"role"`
+	IsActive     bool               `json:"is_active"`
+	InvitedBy    pgtype.UUID        `json:"invited_by"`
+	ConsentAt    time.Time          `json:"consent_at"`
+	CreatedAt    time.Time          `json:"created_at"`
+	IsProtected  bool               `json:"is_protected"`
+	GamesPlayed  int64              `json:"games_played"`
+	LastLoginAt  pgtype.Timestamptz `json:"last_login_at"`
+}
+
 // Excludes the GDPR sentinel row (see SentinelUserID). The sentinel is a
 // data-integrity placeholder, never a real account, so it must not appear
 // in admin tooling or counts.
-func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error) {
+//
+// games_played: count of finished rooms this user was a player in. Scoped
+// to state='finished' so lobby/in-progress rooms don't inflate the figure.
+//
+// last_login_at: MAX(sessions.created_at). Sessions are deleted on logout,
+// so this is "most recent live-login timestamp" — NULL for users who are
+// fully logged out. Good enough as a health signal without schema churn;
+// graduate to a dedicated users.last_login_at column if accuracy matters.
+func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUsersRow, error) {
 	rows, err := q.db.Query(ctx, listUsers, arg.Search, arg.Off, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []User
+	var items []ListUsersRow
 	for rows.Next() {
-		var i User
+		var i ListUsersRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Username,
@@ -385,6 +426,8 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.ConsentAt,
 			&i.CreatedAt,
 			&i.IsProtected,
+			&i.GamesPlayed,
+			&i.LastLoginAt,
 		); err != nil {
 			return nil, err
 		}

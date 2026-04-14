@@ -7,6 +7,10 @@ type AdminUser = User & {
   is_active: boolean;
   created_at: string;
   is_protected: boolean;
+  games_played: number;
+  // null when the user has no live session (i.e. fully logged out). Backend
+  // derives it from MAX(sessions.created_at); see ListUsers in users.sql.
+  last_login_at: string | null;
 };
 
 export const load: PageServerLoad = async ({ fetch, url }) => {

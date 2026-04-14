@@ -5,7 +5,7 @@
   import { toast } from '$lib/state/toast.svelte';
   import { reveal } from '$lib/actions/reveal';
   import { hoverEffect } from '$lib/actions/hoverEffect';
-  import { Search, Shield, UserX } from '$lib/icons';
+  import { Search, Shield, UserX, Gamepad2, Clock } from '$lib/icons';
   import type { ActionData, PageData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -21,6 +21,27 @@
     searchTimeout = setTimeout(() => {
       goto(`?q=${encodeURIComponent(searchTerm)}`, { replaceState: true });
     }, 300);
+  }
+
+  // Compact relative-time for the "Last login" column. "—" for null
+  // (logged out / never active), otherwise the largest unit that still
+  // reads as a small number: "5m", "2h", "3d", "6mo", "2y".
+  function formatRelative(iso: string | null): string {
+    if (!iso) return '—';
+    const then = new Date(iso).getTime();
+    if (Number.isNaN(then)) return '—';
+    const diff = Math.max(0, Date.now() - then);
+    const sec = Math.floor(diff / 1000);
+    if (sec < 60) return 'just now';
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min}m`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return `${hr}h`;
+    const day = Math.floor(hr / 24);
+    if (day < 30) return `${day}d`;
+    const mo = Math.floor(day / 30);
+    if (mo < 12) return `${mo}mo`;
+    return `${Math.floor(mo / 12)}y`;
   }
 
   $effect(() => {
@@ -57,7 +78,19 @@
           <th class="text-left px-4 py-3">Email</th>
           <th class="text-left px-4 py-3">Role</th>
           <th class="text-left px-4 py-3">Active</th>
+          <th class="text-left px-4 py-3">
+            <span class="inline-flex items-center gap-1">
+              <Gamepad2 size={12} strokeWidth={2.5} />
+              Games
+            </span>
+          </th>
           <th class="text-left px-4 py-3">Joined</th>
+          <th class="text-left px-4 py-3">
+            <span class="inline-flex items-center gap-1">
+              <Clock size={12} strokeWidth={2.5} />
+              Last login
+            </span>
+          </th>
           <th class="px-4 py-3"></th>
         </tr>
       </thead>
@@ -133,8 +166,19 @@
                 />
               </form>
             </td>
+            <td class="px-4 py-3 text-xs tabular-nums">
+              {u.games_played}
+            </td>
             <td class="px-4 py-3 text-brand-text-muted text-xs">
               {new Date(u.created_at).toLocaleDateString()}
+            </td>
+            <td
+              class="px-4 py-3 text-brand-text-muted text-xs tabular-nums"
+              title={u.last_login_at
+                ? new Date(u.last_login_at).toLocaleString()
+                : 'No live session — user is logged out'}
+            >
+              {formatRelative(u.last_login_at)}
             </td>
             <td class="px-4 py-3 text-right">
               {#if u.is_protected}

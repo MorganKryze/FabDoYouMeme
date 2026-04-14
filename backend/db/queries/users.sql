@@ -36,11 +36,37 @@ UPDATE users SET email = $2 WHERE id = $1 RETURNING *;
 -- Excludes the GDPR sentinel row (see SentinelUserID). The sentinel is a
 -- data-integrity placeholder, never a real account, so it must not appear
 -- in admin tooling or counts.
-SELECT * FROM users
-WHERE id != '00000000-0000-0000-0000-000000000001'
-  AND (lower(username) LIKE lower('%' || sqlc.arg(search) || '%')
-       OR lower(email) LIKE lower('%' || sqlc.arg(search) || '%'))
-ORDER BY created_at DESC
+--
+-- games_played: count of finished rooms this user was a player in. Scoped
+-- to state='finished' so lobby/in-progress rooms don't inflate the figure.
+--
+-- last_login_at: MAX(sessions.created_at). Sessions are deleted on logout,
+-- so this is "most recent live-login timestamp" — NULL for users who are
+-- fully logged out. Good enough as a health signal without schema churn;
+-- graduate to a dedicated users.last_login_at column if accuracy matters.
+SELECT
+  u.id,
+  u.username,
+  u.email,
+  u.pending_email,
+  u.role,
+  u.is_active,
+  u.invited_by,
+  u.consent_at,
+  u.created_at,
+  u.is_protected,
+  COALESCE((
+    SELECT COUNT(*)
+    FROM room_players rp
+    JOIN rooms r ON r.id = rp.room_id
+    WHERE rp.user_id = u.id AND r.state = 'finished'
+  ), 0)::bigint AS games_played,
+  (SELECT MAX(s.created_at) FROM sessions s WHERE s.user_id = u.id) AS last_login_at
+FROM users u
+WHERE u.id != '00000000-0000-0000-0000-000000000001'
+  AND (lower(u.username) LIKE lower('%' || sqlc.arg(search) || '%')
+       OR lower(u.email) LIKE lower('%' || sqlc.arg(search) || '%'))
+ORDER BY u.created_at DESC
 LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 
 -- name: CountUsers :one
