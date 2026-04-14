@@ -3,7 +3,7 @@
   import { page } from '$app/stores';
   import Toast from '$lib/components/Toast.svelte';
   import { hoverEffect } from '$lib/actions/hoverEffect';
-  import { Home, Users, Mail, Package, Sliders, Bell, User } from '$lib/icons';
+  import { Home, Users, Mail, Package, Sliders, User } from '$lib/icons';
   import type { LayoutData } from './$types';
 
   let { children, data }: { children: any; data: LayoutData } = $props();
@@ -51,25 +51,6 @@
           </a>
         </li>
       {/each}
-      <li>
-        <a
-          href="/admin/notifications"
-          use:hoverEffect={'swap'}
-          aria-current={isActive('/admin/notifications', $page.url.pathname) ? 'page' : undefined}
-          class="relative flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors
-            {isActive('/admin/notifications', $page.url.pathname)
-              ? 'bg-brand-text text-brand-white'
-              : 'text-brand-text-mid hover:text-brand-text hover:bg-muted'}"
-        >
-          <Bell size={16} strokeWidth={2.5} />
-          Notifications
-          {#if data.unreadNotifications > 0}
-            <span class="absolute top-1 right-2 h-4 w-4 rounded-full bg-red-500 text-xs text-white flex items-center justify-center leading-none">
-              {data.unreadNotifications > 9 ? '9+' : data.unreadNotifications}
-            </span>
-          {/if}
-        </a>
-      </li>
     </ul>
 
     <div class="mt-auto px-4 pt-4 border-t border-brand-border">
