@@ -104,7 +104,7 @@ The **game engine** is a per-room goroutine owned by a WebSocket hub. Each room 
 
 Everything you need to run an instance — prerequisites, environment variables, first-boot procedure, production deployment — is consolidated in **[`docs/self-hosting.md`](docs/self-hosting.md)**. That document is the single source of truth for installation; this README intentionally does not duplicate it.
 
-Short version for the impatient: you need Docker, a reverse proxy that routes `/api/*` to the backend and `/*` to the frontend, an SMTP server for magic-link delivery, and a reachable RustFS instance. Copy `.env.example`, fill in the values, `make dev` (or `make prod`), click the magic link that lands in your inbox on first boot. You are the admin.
+Short version for the impatient: you need Docker, a reverse proxy that routes `/api/*` to the backend and `/*` to the frontend, an SMTP server for magic-link delivery, and a reachable RustFS instance. Copy the stage template for your environment (e.g. `cp .env.dev.example .env.dev`), fill in the values, `make dev` (or `make preprod` / `make prod`), click the magic link that lands in your inbox on first boot. You are the admin.
 
 ---
 

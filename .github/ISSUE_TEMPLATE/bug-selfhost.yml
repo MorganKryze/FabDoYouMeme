@@ -62,7 +62,7 @@ body:
       label: How to reproduce
       description: Step-by-step from a fresh state. If possible, start with `git clone` or `docker compose down -v`.
       placeholder: |
-        1. `cp .env.example .env`
+        1. `cp .env.dev.example .env.dev`
         2. Set `POSTGRES_PASSWORD=...`
         3. `make dev`
         4. Backend container exits with ...

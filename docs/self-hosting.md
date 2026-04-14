@@ -14,11 +14,11 @@
 
 ## First boot
 
-1. **Copy `.env.example` to `.env`** and fill in all required values (see [Environment variables](#environment-variables) below).
+1. **Copy the stage template for your deployment** — e.g. `cp .env.dev.example .env.dev` for local dev, `cp .env.preprod.example .env.preprod` for staging, or `cp .env.prod.example .env.prod` for production — and fill in all required values (see [Environment variables](#environment-variables) below). Each stage gets its own isolated Postgres volume and Docker project; the Makefile wires them up.
 
 2. **Set `SEED_ADMIN_EMAIL`** to a real inbox you control. On first startup, the backend detects that no admin exists and automatically creates the admin user + sends a magic link to that address. Subsequent restarts with the same env var are no-ops.
 
-   > **Do not leave this at the `.env.example` placeholder value.** The admin row is created once, keyed by email — if the magic link is sent to an address you do not own, you will not receive it and requesting another link from the login page will just route it to the same dead inbox. Recovery is a chore (edit `.env`, set a different `SEED_ADMIN_EMAIL`, restart the backend — this creates a _second_ admin keyed by the new address; the first stays orphaned but harmless).
+   > **Do not leave this at the template placeholder value.** The admin row is created once, keyed by email — if the magic link is sent to an address you do not own, you will not receive it and requesting another link from the login page will just route it to the same dead inbox. Recovery is a chore (edit the stage env file, set a different `SEED_ADMIN_EMAIL`, restart the backend — this creates a _second_ admin keyed by the new address; the first stays orphaned but harmless).
 
 3. **Start the stack:**
 

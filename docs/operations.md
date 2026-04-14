@@ -129,7 +129,7 @@ Two GitHub Actions workflows run on every push and pull request targeting paths 
 
 Before inviting the first users:
 
-- `.env` filled in from `.env.example` — all required vars present
+- `.env.prod` filled in from `.env.prod.example` — all required vars present (run `make env-check` to verify)
 - `SEED_ADMIN_EMAIL` set on first boot; verify admin magic link arrives
 - Reverse proxy routing: `/api/*` → backend (8080), `/*` → frontend (3000)
 - TLS certificate in place — magic links will not work over plain HTTP
