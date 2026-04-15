@@ -9,7 +9,7 @@ RETURNING *;
 SELECT * FROM game_items WHERE id = $1;
 
 -- name: ListItemsForPack :many
-SELECT gi.*, giv.media_key, giv.payload
+SELECT gi.*, giv.media_key, giv.payload, giv.version_number
 FROM game_items gi
 LEFT JOIN game_item_versions giv ON gi.current_version_id = giv.id
 WHERE gi.pack_id = $1

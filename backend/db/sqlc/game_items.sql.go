@@ -190,7 +190,7 @@ func (q *Queries) HardDeleteVersion(ctx context.Context, id uuid.UUID) error {
 }
 
 const listItemsForPack = `-- name: ListItemsForPack :many
-SELECT gi.id, gi.pack_id, gi.position, gi.payload_version, gi.current_version_id, gi.created_at, gi.name, giv.media_key, giv.payload
+SELECT gi.id, gi.pack_id, gi.position, gi.payload_version, gi.current_version_id, gi.created_at, gi.name, giv.media_key, giv.payload, giv.version_number
 FROM game_items gi
 LEFT JOIN game_item_versions giv ON gi.current_version_id = giv.id
 WHERE gi.pack_id = $1
@@ -214,6 +214,7 @@ type ListItemsForPackRow struct {
 	Name             string      `json:"name"`
 	MediaKey         *string     `json:"media_key"`
 	Payload          []byte      `json:"payload"`
+	VersionNumber    *int32      `json:"version_number"`
 }
 
 func (q *Queries) ListItemsForPack(ctx context.Context, arg ListItemsForPackParams) ([]ListItemsForPackRow, error) {
@@ -235,6 +236,7 @@ func (q *Queries) ListItemsForPack(ctx context.Context, arg ListItemsForPackPara
 			&i.Name,
 			&i.MediaKey,
 			&i.Payload,
+			&i.VersionNumber,
 		); err != nil {
 			return nil, err
 		}

@@ -381,18 +381,18 @@ type ListUsersParams struct {
 }
 
 type ListUsersRow struct {
-	ID           uuid.UUID          `json:"id"`
-	Username     string             `json:"username"`
-	Email        string             `json:"email"`
-	PendingEmail *string            `json:"pending_email"`
-	Role         string             `json:"role"`
-	IsActive     bool               `json:"is_active"`
-	InvitedBy    pgtype.UUID        `json:"invited_by"`
-	ConsentAt    time.Time          `json:"consent_at"`
-	CreatedAt    time.Time          `json:"created_at"`
-	IsProtected  bool               `json:"is_protected"`
-	GamesPlayed  int64              `json:"games_played"`
-	LastLoginAt  pgtype.Timestamptz `json:"last_login_at"`
+	ID           uuid.UUID   `json:"id"`
+	Username     string      `json:"username"`
+	Email        string      `json:"email"`
+	PendingEmail *string     `json:"pending_email"`
+	Role         string      `json:"role"`
+	IsActive     bool        `json:"is_active"`
+	InvitedBy    pgtype.UUID `json:"invited_by"`
+	ConsentAt    time.Time   `json:"consent_at"`
+	CreatedAt    time.Time   `json:"created_at"`
+	IsProtected  bool        `json:"is_protected"`
+	GamesPlayed  int64       `json:"games_played"`
+	LastLoginAt  interface{} `json:"last_login_at"`
 }
 
 // Excludes the GDPR sentinel row (see SentinelUserID). The sentinel is a

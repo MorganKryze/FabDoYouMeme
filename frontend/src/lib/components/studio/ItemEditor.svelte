@@ -20,7 +20,7 @@
   async function handleImageSave(blob: Blob) {
     if (!studio.selectedPackId || !studio.selectedItemId || !item) return;
 
-    const filename = `${item.name}.png`;
+    const filename = `${item.name}.jpg`;
 
     try {
       const nextVersionNumber = studio.versions.length + 1;
@@ -41,17 +41,25 @@
         studio.selectedItemId,
         version.id
       );
-      // promoteVersion returns the raw DB row (no enrichment). Rebuild the
-      // thumbnail_url client-side from the media_key we just got back so the
-      // item table preview updates immediately.
+      // promoteVersion returns the raw DB row — no thumbnail_url and no
+      // version_number (both are server-enriched only on the list endpoint).
+      // Graft them back on from data we already have so the table row updates
+      // without a refetch.
       const thumbnail_url = `/api/assets/media?key=${encodeURIComponent(media_key)}`;
-      const enriched = { ...updated, media_key, thumbnail_url };
+      const enriched = {
+        ...updated,
+        media_key,
+        thumbnail_url,
+        version_number: version.version_number
+      };
       studio.items = studio.items.map((i) => i.id === enriched.id ? enriched : i);
       const versions = await listVersions(studio.selectedPackId, studio.selectedItemId);
       studio.versions = versions;
       toast.show('New version saved.', 'success');
-    } catch {
-      toast.show('Failed to save version.', 'error');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'unknown error';
+      console.error('[studio] save version failed:', err);
+      toast.show(`Failed to save version: ${message}`, 'error');
     }
   }
 </script>
