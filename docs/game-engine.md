@@ -55,6 +55,10 @@ The room moves to `finished` when:
 
 Finished rooms are permanent — they cannot be resumed. The leaderboard is accessible via `GET /api/rooms/:code/leaderboard` after the game ends.
 
+### Out-of-band termination
+
+`Hub.EndRoom(ctx, reason)` is the out-of-band termination path, invoked by the `POST /api/rooms/:code/end` handler after the DB row has already been flipped to `finished`. Unlike `finishRoom` — which leaves the hub alive for a rematch window — `EndRoom` broadcasts `room_closed` to every player, closes every send channel (so `writePump` drains remaining messages, writes a close frame, and exits), and leaves no rematch opportunity. Reasons are `ended_by_host` (host clicked End Room) or `ended_by_admin` (a platform admin ended a room they do not host).
+
 ---
 
 ## WebSocket hub

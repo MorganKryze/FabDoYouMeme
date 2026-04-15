@@ -33,6 +33,8 @@ Canonical reference for every `snake_case` error code emitted by the system.
 | `pack_no_supported_items`  | 422  | `POST /api/rooms`                                | Pack has zero items with a `payload_version` supported by the chosen game type                                             |
 | `solo_mode_not_supported`  | 422  | `POST /api/rooms`                                | `mode='solo'` requested but `game_types.supports_solo = false`                                                             |
 | `room_not_lobby`           | 409  | `PATCH /api/rooms/:code/config`                  | Room state is not `lobby`; config is locked once the game starts                                                           |
+| `room_already_finished`    | 409  | `POST /api/rooms/:code/end`                      | Room is already in `finished` state — terminal, cannot be ended again                                                      |
+| `display_name_taken`       | 409  | `POST /api/rooms/:code/guest-join`               | Another guest in this room already uses that display name — pick a different one                                           |
 | `positions_invalid`        | 422  | `PATCH /api/packs/:id/items/reorder`             | Positions array does not cover all items, contains duplicates, does not start at 1, or contains item IDs from another pack |
 | `system_pack_readonly`     | 403  | Every mutating pack/item handler                 | Attempt to modify a pack managed by `systempack` (bundled demo pack). The filesystem is the only way to update it.         |
 | `rate_limited`             | 429  | Rate-limit middleware                            | Too many requests — see [self-hosting.md](../self-hosting.md) for per-route limits                                         |
@@ -68,3 +70,10 @@ Sent to the originating connection as `{ "type": "error", "data": { "code": "...
 | `voting_closed`        | Hub                          | Vote message received outside the voting window                                            |
 | `duplicate_vote`       | Hub                          | Player already cast a vote this round                                                      |
 | `unknown_game_type`    | Registry `Dispatch`          | Prefixed message slug does not match the room's game type                                  |
+
+### WebSocket `room_closed` reasons
+
+`room_closed` is not a `type: "error"` frame — it is its own top-level server → client message (see `docs/api.md`). The `data.reason` string is one of:
+
+- `ended_by_host` — the room's host terminated the room via `POST /api/rooms/:code/end`
+- `ended_by_admin` — a platform admin (not the host) terminated the room

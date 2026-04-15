@@ -19,6 +19,8 @@ export const roomsApi = {
   kick: (code: string, userId: string) =>
     api.post<void>(`/api/rooms/${code}/kick`, { user_id: userId }),
 
+  end: (code: string) => api.post<void>(`/api/rooms/${code}/end`),
+
   leaderboard: (code: string) =>
     api.get<{ leaderboard: unknown[] }>(`/api/rooms/${code}/leaderboard`)
 };

@@ -2,6 +2,9 @@
 package middleware
 
 import (
+	"bufio"
+	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -40,6 +43,18 @@ type responseRecorder struct {
 func (rr *responseRecorder) WriteHeader(code int) {
 	rr.status = code
 	rr.ResponseWriter.WriteHeader(code)
+}
+
+// Hijack forwards to the underlying ResponseWriter so WebSocket upgrades
+// on the /api/ws/* route work even though this middleware wraps the writer.
+// Without this, gorilla/websocket's Upgrade() fails with HTTP 500
+// ("websocket: response does not implement http.Hijacker").
+func (rr *responseRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := rr.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("middleware: ResponseWriter does not implement http.Hijacker")
+	}
+	return h.Hijack()
 }
 
 // Metrics wraps handlers to record Prometheus HTTP metrics.

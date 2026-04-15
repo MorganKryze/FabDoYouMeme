@@ -1,5 +1,15 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// Mock `$app/navigation` before importing room.svelte so the mocked `goto`
+// is wired in. vi.mock hoists to the top of the file and works for ESM too.
+const gotoMock = vi.fn();
+vi.mock('$app/navigation', () => ({
+  goto: (...args: unknown[]) => gotoMock(...args)
+}));
+
 import { RoomState } from './room.svelte';
+import { toast } from './toast.svelte';
+import { ws } from './ws.svelte';
 import type { Player, Round, WsMessage } from '$lib/api/types';
 
 function makePlayer(userId: string, username = userId): Player {
@@ -117,5 +127,42 @@ describe('RoomState.handleMessage', () => {
     });
 
     expect(r.hasSubmitted).toBe(true);
+  });
+
+  it('room_closed disconnects ws, toasts host message, resets state, navigates home', () => {
+    const toastSpy = vi.spyOn(toast, 'show');
+    const wsDisconnectSpy = vi.spyOn(ws, 'disconnect').mockImplementation(() => {});
+    gotoMock.mockClear();
+
+    r.state = 'playing';
+
+    r.handleMessage({
+      type: 'room_closed',
+      data: { reason: 'ended_by_host' }
+    } as unknown as WsMessage);
+
+    expect(wsDisconnectSpy).toHaveBeenCalled();
+    expect(toastSpy).toHaveBeenCalledWith(
+      expect.stringContaining('host'),
+      expect.anything()
+    );
+    expect(gotoMock).toHaveBeenCalledWith('/');
+    expect(r.code).toBe(null); // reset() was called
+  });
+
+  it('room_closed uses the admin-flavoured toast for ended_by_admin', () => {
+    const toastSpy = vi.spyOn(toast, 'show');
+    vi.spyOn(ws, 'disconnect').mockImplementation(() => {});
+    gotoMock.mockClear();
+
+    r.handleMessage({
+      type: 'room_closed',
+      data: { reason: 'ended_by_admin' }
+    } as unknown as WsMessage);
+
+    expect(toastSpy).toHaveBeenCalledWith(
+      expect.stringContaining('admin'),
+      expect.anything()
+    );
   });
 });

@@ -45,6 +45,7 @@ Requires session.
 | `PATCH` | `/api/rooms/:code/config`      | Update room config (host only, lobby state only)          |
 | `POST`  | `/api/rooms/:code/leave`       | Leave the room (lobby only; host leaving closes the room) |
 | `POST`  | `/api/rooms/:code/kick`        | Kick a player by `user_id` (host only, lobby or playing)  |
+| `POST`  | `/api/rooms/:code/end`         | Terminate the room (host or admin, lobby or playing)      |
 | `GET`   | `/api/rooms/:code/leaderboard` | Final leaderboard (finished rooms only)                   |
 
 ### Game types (`/api/game-types/*`)
@@ -201,8 +202,25 @@ All messages are JSON with a `type` field and an optional `data` object.
 | `submissions_closed` | Submission phase ended, voting opens                                   |
 | `vote_results`       | Scores for the completed round                                         |
 | `game_ended`         | Final leaderboard with `reason` field                                  |
+| `room_closed`        | Host or admin terminated the room — clients must disconnect            |
 | `room_state`         | Full snapshot sent on reconnect                                        |
 | `error`              | Server-side error with `code` and `message`                            |
+
+#### `room_closed`
+
+Sent when a host or admin terminates the room via `POST /api/rooms/:code/end`.
+Clients must treat this message as terminal: disconnect the socket (do not
+auto-reconnect), surface the reason to the user, and navigate away from the
+room.
+
+```json
+{ "type": "room_closed", "data": { "reason": "ended_by_host" } }
+```
+
+**Reasons:**
+
+- `ended_by_host` — the room's host clicked End Room.
+- `ended_by_admin` — an admin (not the host) clicked End Room.
 
 ### Timer contract
 

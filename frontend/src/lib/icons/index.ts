@@ -28,6 +28,8 @@ export {
   // --- Actions ---
   Plus,
   Send,
+  Link2,
+  Share2,
   Check,
   CheckCircle,
   Copy,

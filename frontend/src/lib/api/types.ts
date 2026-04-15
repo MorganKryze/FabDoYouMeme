@@ -49,6 +49,7 @@ export interface Room {
   code: string;
   game_type_id: string;
   game_type_slug: string;
+  game_type?: GameType | null;
   pack_id: string;
   host_id: string;
   mode: 'multiplayer' | 'solo';

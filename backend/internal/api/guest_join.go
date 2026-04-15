@@ -3,11 +3,13 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
@@ -63,6 +65,17 @@ func (h *RoomHandler) GuestJoin(w http.ResponseWriter, r *http.Request) {
 		TokenHash:   tokenHash,
 	})
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" &&
+			pgErr.ConstraintName == "guest_players_room_id_display_name_key" {
+			writeError(w, r, http.StatusConflict, "display_name_taken",
+				"That display name is already taken in this room")
+			return
+		}
+		if h.log != nil {
+			h.log.Warn("guest_join: create guest player failed",
+				"error", err, "room", code)
+		}
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to create guest player")
 		return
 	}
@@ -71,6 +84,10 @@ func (h *RoomHandler) GuestJoin(w http.ResponseWriter, r *http.Request) {
 		RoomID:        room.ID,
 		GuestPlayerID: pgtype.UUID{Bytes: guest.ID, Valid: true},
 	}); err != nil {
+		if h.log != nil {
+			h.log.Warn("guest_join: add guest to room failed",
+				"error", err, "room", code, "guest_id", guest.ID.String())
+		}
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to add guest to room")
 		return
 	}

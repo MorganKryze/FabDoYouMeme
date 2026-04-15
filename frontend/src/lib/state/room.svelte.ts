@@ -1,5 +1,7 @@
+import { goto } from '$app/navigation';
 import type { GameType, Player, LeaderboardEntry, Submission, Round, WsMessage } from '$lib/api/types';
 import { toast } from './toast.svelte';
+import { ws } from './ws.svelte';
 
 type RoomPhase = 'idle' | 'countdown' | 'submitting' | 'voting' | 'results';
 type RoomStatus = 'lobby' | 'playing' | 'finished';
@@ -20,9 +22,15 @@ export class RoomState {
   hasSubmitted = $state(false);
   hasVoted = $state(false);
 
-  init(data: { code: string; game_type: GameType; state: string; players: Player[]; host_id?: string }): void {
+  init(data: {
+    code: string;
+    game_type?: GameType | null;
+    state: string;
+    players?: Player[];
+    host_id?: string | null;
+  }): void {
     this.code = data.code;
-    this.gameType = data.game_type;
+    this.gameType = data.game_type ?? null;
     this.state = data.state as RoomStatus;
     this.hostUserId = data.host_id ?? null;
     this.players = (data.players ?? []).map(p => ({
@@ -120,6 +128,19 @@ export class RoomState {
         if (d.code === 'vote_closed' || d.code === 'already_voted') {
           this.hasVoted = true;
         }
+        break;
+      }
+      case 'room_closed': {
+        const d = msg.data as { reason?: string };
+        const reason = d?.reason ?? 'ended_by_host';
+        const message =
+          reason === 'ended_by_admin'
+            ? 'An admin ended this room'
+            : 'The host ended this room';
+        ws.disconnect();
+        toast.show(message, 'warning');
+        this.reset();
+        goto('/');
         break;
       }
     }

@@ -40,6 +40,7 @@ type hubEnv struct {
 	serverURL string
 	roomCode  string
 	hostID    string
+	hub       *game.Hub // nil when opts.skipPreCreate is true
 }
 
 // hubEnvOpts tunes room/hub timings for timing-sensitive tests. Zero-valued
@@ -179,8 +180,9 @@ func newHubEnvWith(t *testing.T, opts hubEnvOpts) *hubEnv {
 		clk = clock.Real{}
 	}
 	manager := game.NewManager(context.Background(), registry, q, cfg, slog.Default(), clk)
+	var createdHub *game.Hub
 	if !opts.skipPreCreate {
-		manager.GetOrCreate(ctx, room.Code, room.ID, gt.Slug, host.ID.String())
+		createdHub = manager.GetOrCreate(ctx, room.Code, room.ID, gt.Slug, host.ID.String())
 	}
 
 	// Passing [""] means the empty Origin (no header set by the test dialer)
@@ -207,6 +209,7 @@ func newHubEnvWith(t *testing.T, opts hubEnvOpts) *hubEnv {
 		serverURL: ts.URL,
 		roomCode:  room.Code,
 		hostID:    host.ID.String(),
+		hub:       createdHub,
 	}
 }
 

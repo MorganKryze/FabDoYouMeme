@@ -258,6 +258,7 @@ func main() {
 		r.Patch("/{code}/config", roomHandler.UpdateConfig)
 		r.Post("/{code}/leave", roomHandler.Leave)
 		r.Post("/{code}/kick", roomHandler.Kick)
+		r.Post("/{code}/end", roomHandler.End)
 		r.Get("/{code}/leaderboard", roomHandler.Leaderboard)
 	})
 

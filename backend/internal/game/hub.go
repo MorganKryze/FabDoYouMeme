@@ -435,6 +435,19 @@ func (h *Hub) handleMessage(ctx context.Context, msg playerMessage) {
 			h.broadcast(buildMessage("player_kicked", map[string]string{"user_id": d.TargetUserID}))
 		}
 
+	case "system:end_room":
+		var d struct {
+			Reason string `json:"reason"`
+		}
+		if err := json.Unmarshal(msg.data, &d); err != nil {
+			if h.log != nil {
+				h.log.Warn("hub: system:end_room payload unmarshal failed",
+					"error", err, "room", h.roomCode)
+			}
+			return
+		}
+		h.endRoomInternal(d.Reason)
+
 	default:
 		// Game-type-specific messages are prefixed with the slug
 		expected := h.gameTypeSlug + ":"
@@ -746,6 +759,36 @@ func (h *Hub) finishRoom(ctx context.Context, reason string, extra map[string]an
 		data[k] = v
 	}
 	h.broadcast(buildMessage("game_ended", data))
+}
+
+// endRoomInternal is the Run-goroutine half of EndRoom: broadcast
+// room_closed, tear down every player connection, and move the hub to
+// HubFinished. The rematch window is explicitly NOT set — a killed room
+// is terminal.
+//
+// Ordering is subtle: we queue the room_closed message on each player's
+// send channel, then close the send channel. writePump drains remaining
+// messages first, then sees the closed channel, writes a CloseMessage,
+// and its defer closes the underlying conn. That guarantees the client
+// sees room_closed before the close frame. We then empty h.players so
+// the follow-up unregister sent by readPump's read error is a no-op
+// (handleUnregister early-returns when the player is gone).
+func (h *Hub) endRoomInternal(reason string) {
+	if h.roundsCancel != nil {
+		h.roundsCancel()
+		h.roundsCancel = nil
+	}
+	h.state = HubFinished
+	h.rematchWindowExpires = time.Time{}
+
+	msg := buildMessage("room_closed", map[string]string{"reason": reason})
+	for _, p := range h.players {
+		h.safeSend(p, msg)
+	}
+	for _, p := range h.players {
+		close(p.send)
+	}
+	h.players = map[string]*connectedPlayer{}
 }
 
 // handleRematchRequest runs inside the Run goroutine when the host asks to
@@ -1078,6 +1121,27 @@ func (h *Hub) KickPlayer(ctx context.Context, userID string) error {
 	case h.incoming <- playerMessage{
 		player:  &connectedPlayer{userID: "system"},
 		msgType: "system:kick",
+		data:    data,
+	}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// EndRoom instructs the hub to terminate the room: broadcast room_closed to
+// every player and close every connection. Unlike finishRoom, there is no
+// rematch window — a killed room is terminal. Safe to call from outside the
+// Run goroutine; routes through h.incoming so all state mutations happen in
+// Run(). Same context-bounded send pattern as KickPlayer (finding 4.B).
+// Returns ctx.Err() when the context fires; a nil return means the
+// termination is in flight.
+func (h *Hub) EndRoom(ctx context.Context, reason string) error {
+	data, _ := json.Marshal(map[string]string{"reason": reason})
+	select {
+	case h.incoming <- playerMessage{
+		player:  &connectedPlayer{userID: "system"},
+		msgType: "system:end_room",
 		data:    data,
 	}:
 		return nil

@@ -149,6 +149,55 @@ func (h *RoomHandler) Kick(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// End handles POST /api/rooms/{code}/end.
+//
+// Host or admin can terminate a room in any non-finished state. The DB row
+// is flipped to 'finished' before the hub is notified so late joiners hitting
+// /join while the hub is tearing down get a clean 409 instead of a stale
+// lobby row. See also Leave above which uses the same DB-first ordering for
+// the lobby-only host-closes-room path.
+func (h *RoomHandler) End(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.GetSessionUser(r)
+	if !ok {
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+	room, err := h.db.GetRoomByCode(r.Context(), chi.URLParam(r, "code"))
+	if err != nil {
+		writeError(w, r, http.StatusNotFound, "not_found", "Room not found")
+		return
+	}
+	hostID, _ := uuid.Parse(u.UserID)
+	isAdmin := u.Role == "admin"
+	isHost := room.HostID.Valid && room.HostID.Bytes == hostID
+	if !isAdmin && !isHost {
+		writeError(w, r, http.StatusForbidden, "forbidden", "Only the host can end the room")
+		return
+	}
+	if room.State == "finished" {
+		writeError(w, r, http.StatusConflict, "room_already_finished",
+			"Room is already finished")
+		return
+	}
+	if _, err := h.db.SetRoomState(r.Context(), db.SetRoomStateParams{
+		ID:    room.ID,
+		State: "finished",
+	}); err != nil {
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to end room")
+		return
+	}
+	reason := "ended_by_host"
+	if isAdmin && !isHost {
+		reason = "ended_by_admin"
+	}
+	if hub, ok := h.manager.Get(room.Code); ok {
+		if err := hub.EndRoom(r.Context(), reason); err != nil && h.log != nil {
+			h.log.Warn("end room did not reach hub", "room", room.Code, "err", err)
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // Leaderboard handles GET /api/rooms/{code}/leaderboard.
 //
 // Contract (docs/api.md): "Final leaderboard (finished rooms only)". Finding
