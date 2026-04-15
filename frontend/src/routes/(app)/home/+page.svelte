@@ -22,6 +22,7 @@
     Users,
     PartyPopper,
     IdCard,
+    XCircle,
   } from '$lib/icons';
   import type { ActionData, PageData } from './$types';
   import type { HistoryRoom } from './+page.server';
@@ -136,19 +137,22 @@
 
     <!-- ─── Hero row: greeting (full-width) ──────────────────── -->
     <section use:reveal class="flex flex-col justify-center gap-1" aria-live="polite">
-      <p class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+      <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
         Welcome back
       </p>
       {#if greetingH1Parts && greetingSub}
         <h1 class="text-4xl font-bold" in:fade={{ duration: 150 }}>{greetingH1Parts.before}<span
             class="text-brand-accent font-extrabold">{usernameStr}</span>{greetingH1Parts.after}</h1>
-        <p class="text-sm font-semibold text-brand-text-muted mt-1" in:fade={{ duration: 150 }}>
+        <p class="text-sm font-semibold text-brand-text-mid mt-1" in:fade={{ duration: 150 }}>
           {greetingSub}
         </p>
       {:else}
-        <!-- SSR / pre-mount skeleton: blurred placeholder that reserves layout -->
-        <h1 class="text-4xl font-bold blur-sm opacity-40 select-none">Hey there.</h1>
-        <p class="text-sm font-semibold text-brand-text-muted mt-1 blur-sm opacity-40 select-none">
+        <!-- SSR / pre-mount skeleton: blurred placeholder that reserves layout.
+             aria-hidden so screen readers don't read the placeholder copy
+             inside the aria-live region before the rotated greeting arrives. -->
+        <!-- svelte-ignore a11y_hidden -->
+        <h1 aria-hidden="true" class="text-4xl font-bold blur-sm opacity-40 select-none">Hey there.</h1>
+        <p aria-hidden="true" class="text-sm font-semibold text-brand-text-mid mt-1 blur-sm opacity-40 select-none">
           Jump back into a room, or spin up a new one.
         </p>
       {/if}
@@ -163,16 +167,18 @@
       >
         <div class="flex items-center justify-between">
           <h2 class="text-lg font-bold">Got a code?</h2>
-          <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+          <span class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
             Jump in
           </span>
         </div>
 
         {#if form?.joinError}
           <div
-            class="rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-5 py-2 text-xs font-bold text-center"
+            role="alert"
+            class="inline-flex items-center justify-center gap-2 rounded-full border-[2.5px] border-brand-accent bg-brand-accent/15 px-5 py-2 text-xs font-bold text-center text-brand-text"
             style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
           >
+            <XCircle size={14} strokeWidth={2.5} />
             {form.joinError}
           </div>
         {/if}
@@ -190,7 +196,7 @@
             use:hoverEffect={'gradient'}
             type="submit"
             disabled={code.length !== 4}
-            class="h-16 px-6 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-40 cursor-pointer inline-flex items-center justify-center gap-2"
+            class="h-16 px-6 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-40 cursor-pointer inline-flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
           >
             <Play size={18} strokeWidth={2.5} />
             Play
@@ -204,14 +210,14 @@
         use:pressPhysics={'dark'}
         use:hoverEffect={'gradient'}
         use:physCard
-        class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white p-5 flex flex-col justify-between gap-2 min-w-[200px] no-underline"
+        class="group rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white p-5 flex flex-col justify-between gap-2 min-w-[200px] no-underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
         style="box-shadow: 0 5px 0 rgba(0,0,0,0.2);"
       >
-        <div class="text-[0.65rem] font-bold uppercase tracking-[0.2em] opacity-70">
+        <div class="text-xs font-bold uppercase tracking-[0.2em] opacity-70">
           Host
         </div>
         <div class="text-xl font-bold leading-tight">Start a<br />new game</div>
-        <div class="text-[0.65rem] font-bold uppercase tracking-[0.2em] opacity-70">
+        <div class="text-xs font-bold uppercase tracking-[0.2em] opacity-70 inline-flex items-center gap-1 transition-transform group-hover:translate-x-0.5">
           Pick a game →
         </div>
       </a>
@@ -224,11 +230,11 @@
         class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-1"
         style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
       >
-        <div class="flex items-center gap-1.5 text-[0.6rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+        <div class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
           <Gamepad2 size={12} strokeWidth={2.5} />
           Played
         </div>
-        <div class="text-3xl font-bold leading-none mt-1">{gamesPlayed}</div>
+        <div class="text-3xl font-bold leading-none mt-1 tabular-nums">{gamesPlayed}</div>
       </div>
 
       <div
@@ -236,11 +242,11 @@
         class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-1"
         style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
       >
-        <div class="flex items-center gap-1.5 text-[0.6rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+        <div class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
           <Trophy size={12} strokeWidth={2.5} />
           Wins
         </div>
-        <div class="text-3xl font-bold leading-none mt-1">{wins}</div>
+        <div class="text-3xl font-bold leading-none mt-1 tabular-nums">{wins}</div>
       </div>
 
       <div
@@ -248,11 +254,11 @@
         class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-1"
         style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
       >
-        <div class="flex items-center gap-1.5 text-[0.6rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+        <div class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
           <PartyPopper size={12} strokeWidth={2.5} />
           Win rate
         </div>
-        <div class="text-3xl font-bold leading-none mt-1">{winRate}%</div>
+        <div class="text-3xl font-bold leading-none mt-1 tabular-nums">{winRate}%</div>
       </div>
 
       <div
@@ -260,7 +266,7 @@
         class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-1"
         style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
       >
-        <div class="flex items-center gap-1.5 text-[0.6rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+        <div class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
           <Sparkles size={12} strokeWidth={2.5} />
           Favourite
         </div>
@@ -285,18 +291,28 @@
           </div>
           <a
             href="/profile"
-            class="text-xs font-bold text-brand-text-muted hover:text-brand-text transition-colors"
+            class="text-xs font-bold text-brand-text hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
           >
             See all →
           </a>
         </div>
 
         {#if history.length === 0}
-          <div class="flex flex-col items-center text-center gap-2 py-6">
+          <div class="flex flex-col items-center text-center gap-3 py-6">
             <p class="text-sm font-bold">No games yet.</p>
-            <p class="text-xs font-semibold text-brand-text-muted max-w-xs">
-              Host a room or drop in with a code — your history lands here after the first round.
+            <p class="text-xs font-semibold text-brand-text-mid max-w-xs">
+              Your history lands here after the first round.
             </p>
+            <a
+              href="/host"
+              use:pressPhysics={'ghost'}
+              use:hoverEffect={'swap'}
+              class="inline-flex items-center gap-2 px-5 h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text font-bold no-underline text-xs focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+              style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
+            >
+              <Play size={14} strokeWidth={2.5} />
+              Host your first room
+            </a>
           </div>
         {:else}
           <ul class="flex flex-col gap-2">
@@ -313,25 +329,25 @@
                   </span>
                   <div class="flex flex-col min-w-0">
                     <span class="font-bold truncate">{prettyGameSlug(room.game_type_slug)}</span>
-                    <span class="text-[0.65rem] font-semibold text-brand-text-muted truncate">
+                    <span class="text-xs font-semibold text-brand-text-mid truncate">
                       {room.pack_name} · {formatRelative(room.started_at)}
                     </span>
                   </div>
                 </div>
                 <div class="flex items-center gap-4 shrink-0">
                   <div class="text-right hidden sm:block">
-                    <div class="text-[0.6rem] font-bold uppercase tracking-[0.15em] text-brand-text-muted">
+                    <div class="text-xs font-bold uppercase tracking-[0.15em] text-brand-text-mid">
                       Rank
                     </div>
-                    <div class="font-bold text-sm">
-                      {room.rank}<span class="text-brand-text-muted">/{room.player_count}</span>
+                    <div class="font-bold text-sm tabular-nums">
+                      {room.rank}<span class="text-brand-text-mid">/{room.player_count}</span>
                     </div>
                   </div>
                   <div class="text-right">
-                    <div class="text-[0.6rem] font-bold uppercase tracking-[0.15em] text-brand-text-muted">
+                    <div class="text-xs font-bold uppercase tracking-[0.15em] text-brand-text-mid">
                       Score
                     </div>
-                    <div class="font-bold text-sm">{room.score}</div>
+                    <div class="font-bold text-sm tabular-nums">{room.score}</div>
                   </div>
                 </div>
               </li>
@@ -345,14 +361,14 @@
         use:reveal={{ delay: 3 }}
         class="rounded-[22px] border-[2.5px] border-dashed border-brand-border-heavy bg-brand-white/40 p-5 flex flex-col gap-3 relative overflow-hidden"
       >
-        <div class="absolute top-3 right-3 text-[0.55rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted px-2 py-0.5 rounded-full border-[2px] border-brand-border-heavy bg-brand-white">
+        <div class="absolute top-3 right-3 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid px-2 py-0.5 rounded-full border-[2px] border-brand-border-heavy bg-brand-white">
           Coming soon
         </div>
         <div class="flex items-center gap-2">
           <Users size={16} strokeWidth={2.5} />
           <h2 class="text-lg font-bold">Your circles</h2>
         </div>
-        <p class="text-xs font-semibold text-brand-text-muted">
+        <p class="text-xs font-semibold text-brand-text-mid">
           Track the people you play with most. See who you keep beating (or losing to), revisit old rooms, tag your favourite opponents.
         </p>
 
@@ -364,7 +380,7 @@
             >
               <div class="h-6 w-6 rounded-full bg-brand-surface border-[2px] border-brand-border-heavy"></div>
               <span class="font-bold">{name}</span>
-              <span class="ml-auto text-[0.6rem] font-semibold text-brand-text-muted">—</span>
+              <span class="ml-auto text-xs font-semibold text-brand-text-mid">—</span>
             </div>
           {/each}
         </div>
@@ -375,7 +391,7 @@
     <section class="flex flex-col gap-5">
       <div use:reveal={{ delay: 2 }} class="flex items-center justify-between">
         <div>
-          <p class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+          <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
             Host a new game
           </p>
           <h2 class="text-2xl font-bold">Pick a game type</h2>
@@ -389,17 +405,17 @@
             use:reveal={{ delay: i + 3 }}
             use:physCard
             use:hoverEffect={'gradient'}
-            class="group rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-6 flex flex-col gap-3 cursor-pointer"
+            class="group rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-6 flex flex-col gap-3 cursor-pointer no-underline text-brand-text focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
             style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
           >
-            <div class="inline-flex items-center gap-2 text-lg font-bold">
+            <h3 class="inline-flex items-center gap-2 text-lg font-bold m-0">
               <Sparkles size={18} strokeWidth={2.5} />
               {gt.name}
-            </div>
+            </h3>
             {#if gt.description}
-              <p class="text-sm font-semibold text-brand-text-muted line-clamp-3">{gt.description}</p>
+              <p class="text-sm font-semibold text-brand-text-mid line-clamp-3">{gt.description}</p>
             {/if}
-            <div class="mt-auto text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+            <div class="mt-auto text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid inline-flex items-center gap-1 transition-transform group-hover:translate-x-0.5">
               Host this →
             </div>
           </a>
@@ -409,51 +425,41 @@
   </div>
 </div>
 
-<footer class="border-t border-brand-border px-6 py-6 flex items-center justify-between text-xs font-semibold text-brand-text-muted">
+<footer class="border-t border-brand-border px-6 py-6 flex items-center justify-between text-xs font-semibold text-brand-text-mid">
   <p>© {new Date().getFullYear()} FabDoYouMeme</p>
-  <a href="/privacy" class="hover:text-brand-text transition-colors">Privacy Policy</a>
+  <a href="/privacy" class="hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60">Privacy Policy</a>
 </footer>
 
 <!-- ─── Floating Maker Card (home only) ─────────────────────────────
      Bottom-left floating button that expands into the full Maker Card
-     on click. Both elements are independently `fixed` so each scale
+     on click. Both elements are independently `fixed` so each slide
      transition anchors to the same bottom-left corner without layout
-     reflow between states.
+     reflow between states. The card carries its own close button
+     (passed via `onClose`) so the wrapper stays non-interactive and
+     card content remains selectable / focusable.
      ───────────────────────────────────────────────────────────── -->
+<svelte:window
+  onkeydown={(e) => {
+    if (e.key === 'Escape' && showMakerCard) showMakerCard = false;
+  }}
+/>
+
 {#if data.user}
   {#if showMakerCard}
-    <!-- Card slides in from off-screen-left (x: -380), slightly
-         delayed so the outgoing button has time to exit first.
-         On dismiss, it slides left back off-screen using cubicIn
-         (accelerates as it leaves). Card and button share the same
-         `top-32 left-6` anchor so they literally switch places. -->
     <div
-      class="fixed bottom-1/10 left-6 z-40 w-75 cursor-pointer"
+      class="fixed bottom-20 left-6 z-40 w-75"
       in:fly={{ x: -380, duration: 420, delay: 100, easing: cubicOut }}
       out:fly={{ x: -380, duration: 260, easing: cubicIn }}
-      role="button"
-      tabindex={0}
-      aria-label="Hide maker card"
-      onclick={() => (showMakerCard = false)}
-      onkeydown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          showMakerCard = false;
-        }
-      }}
     >
-      <MakerCard user={data.user} {medals} />
+      <MakerCard user={data.user} {medals} onClose={() => (showMakerCard = false)} />
     </div>
   {:else}
-    <!-- Button slides in from the same off-screen-left direction
-         after the outgoing card has had time to leave. On click it
-         exits leftward, freeing the slot for the card. -->
     <button
       type="button"
       onclick={() => (showMakerCard = true)}
       use:hoverEffect={'swap'}
       aria-label="Show maker card"
-      class="fixed bottom-1/10 left-6 z-40 inline-flex items-center justify-center h-14 w-14 rounded-full bg-brand-white border-[2.5px] border-brand-border-heavy cursor-pointer"
+      class="fixed bottom-20 left-6 z-40 inline-flex items-center justify-center h-14 w-14 rounded-full bg-brand-white border-[2.5px] border-brand-border-heavy cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
       style="box-shadow: 0 4px 0 rgba(0,0,0,0.12);"
       in:fly={{ x: -300, duration: 360, delay: 140, easing: cubicOut }}
       out:fly={{ x: -300, duration: 260, easing: cubicIn }}

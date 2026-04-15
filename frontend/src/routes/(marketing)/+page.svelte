@@ -17,6 +17,7 @@
     PartyPopper,
     Play,
     Hash,
+    Plus,
   } from '$lib/icons';
 
   let { data }: { data: PageData } = $props();
@@ -32,7 +33,7 @@
       n: 1,
       title: 'Host a room',
       body: 'Pick a game, spin up a 4-letter code, share it with your people.',
-      Icon: Home,
+      Icon: Plus,
     },
     {
       n: 2,
@@ -97,6 +98,23 @@
     name="description"
     content="A party meme game for you and your people. Self-hosted, invite-only, GDPR-first. Host a room, share the code, caption, vote, laugh."
   />
+
+  <!-- Open Graph / link unfurl (Discord, Slack, iMessage) -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="FabDoYouMeme — a private, self-hosted party meme game" />
+  <meta
+    property="og:description"
+    content="A party meme game for you and your people. Self-hosted, invite-only, GDPR-first."
+  />
+  <!-- TODO: drop a 1200×630 og-card.png into frontend/static/ and uncomment:
+  <meta property="og:image" content="/og-card.png" />
+  <meta name="twitter:card" content="summary_large_image" /> -->
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="FabDoYouMeme — a private, self-hosted party meme game" />
+  <meta
+    name="twitter:description"
+    content="A party meme game for you and your people. Self-hosted, invite-only, GDPR-first."
+  />
 </svelte:head>
 
 <div class="flex-1 flex flex-col items-center px-6">
@@ -107,15 +125,52 @@
       A party meme game for you and your people. Host a room, share the code,
       caption, vote, laugh.
     </p>
-    <p class="text-sm font-semibold text-brand-text-muted max-w-xl">
+    <p class="text-sm font-semibold text-brand-text-mid max-w-xl">
       Self-hosted, invite-only, GDPR-first. Built to stay inside your circle.
     </p>
+
+    <!-- Above-the-fold CTA — gives cold visitors an immediate path without scrolling -->
+    <div class="mt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+      {#if data.user}
+        <a
+          href="/home"
+          use:pressPhysics={'dark'}
+          use:hoverEffect={'gradient'}
+          class="inline-flex items-center justify-center gap-2 px-6 h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold no-underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+          style="box-shadow: 0 4px 0 rgba(0,0,0,0.08);"
+        >
+          <Home size={16} strokeWidth={2.5} />
+          Go to dashboard
+        </a>
+      {:else}
+        <a
+          href="/auth/magic-link"
+          use:pressPhysics={'dark'}
+          use:hoverEffect={'gradient'}
+          class="inline-flex items-center justify-center gap-2 px-6 h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold no-underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+          style="box-shadow: 0 4px 0 rgba(0,0,0,0.08);"
+        >
+          <Play size={16} strokeWidth={2.5} />
+          Sign in to host
+        </a>
+      {/if}
+      <a
+        href="#join"
+        use:pressPhysics={'ghost'}
+        use:hoverEffect={'swap'}
+        class="inline-flex items-center justify-center gap-2 px-6 h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white font-bold no-underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+        style="box-shadow: 0 4px 0 rgba(0,0,0,0.08);"
+      >
+        <Hash size={16} strokeWidth={2.5} />
+        Join with a code
+      </a>
+    </div>
   </section>
 
   <!-- ─── How it works ────────────────────────────────────────── -->
   <section class="w-full max-w-5xl pb-24">
     <div use:reveal class="text-center mb-12">
-      <div class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted mb-2">
+      <div class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid mb-2">
         How it works
       </div>
       <h2 class="text-4xl font-bold">Three steps. One code. Go.</h2>
@@ -139,7 +194,7 @@
             <step.Icon size={22} strokeWidth={2.5} />
           </div>
           <h3 class="text-xl font-bold mt-2">{step.title}</h3>
-          <p class="text-sm font-semibold text-brand-text-muted">{step.body}</p>
+          <p class="text-sm font-semibold text-brand-text-mid">{step.body}</p>
         </li>
       {/each}
     </ol>
@@ -148,11 +203,11 @@
   <!-- ─── Advantages ─────────────────────────────────────────── -->
   <section class="w-full max-w-5xl pb-24">
     <div use:reveal class="text-center mb-12">
-      <div class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted mb-2">
+      <div class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid mb-2">
         Why this exists
       </div>
       <h2 class="text-4xl font-bold">Yours. Not theirs.</h2>
-      <p class="text-sm font-semibold text-brand-text-muted mt-2 max-w-xl mx-auto">
+      <p class="text-sm font-semibold text-brand-text-mid mt-2 max-w-xl mx-auto">
         Most party game platforms turn your laughter into someone else's
         training data. This one doesn't.
       </p>
@@ -174,7 +229,7 @@
           </div>
           <div class="flex flex-col gap-1">
             <h3 class="text-xl font-bold">{adv.title}</h3>
-            <p class="text-sm font-semibold text-brand-text-muted">{adv.body}</p>
+            <p class="text-sm font-semibold text-brand-text-mid">{adv.body}</p>
           </div>
         </div>
       {/each}
@@ -184,7 +239,7 @@
   <!-- ─── Audiences ──────────────────────────────────────────── -->
   <section class="w-full max-w-5xl pb-24">
     <div use:reveal class="text-center mb-12">
-      <div class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted mb-2">
+      <div class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid mb-2">
         Who it's for
       </div>
       <h2 class="text-4xl font-bold">Bring your circle.</h2>
@@ -202,21 +257,21 @@
             <Sparkles size={16} strokeWidth={2.5} />
             {aud.title}
           </div>
-          <p class="text-xs font-semibold text-brand-text-muted leading-relaxed">{aud.body}</p>
+          <p class="text-sm font-semibold text-brand-text-mid leading-relaxed">{aud.body}</p>
         </div>
       {/each}
     </div>
   </section>
 
   <!-- ─── Final CTA ──────────────────────────────────────────── -->
-  <section use:reveal class="w-full max-w-3xl pb-20">
+  <section id="join" use:reveal class="w-full max-w-3xl pb-20 scroll-mt-24">
     <div
       class="rounded-[28px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-8 sm:p-10 flex flex-col items-center gap-8 text-center"
       style="box-shadow: 0 6px 0 rgba(0,0,0,0.08);"
     >
       <div class="flex flex-col items-center gap-2">
         <h2 class="text-3xl sm:text-4xl font-bold">Ready to play?</h2>
-        <p class="text-sm font-semibold text-brand-text-muted max-w-md">
+        <p class="text-sm font-semibold text-brand-text-mid max-w-md">
           Pick your lane. No wrong answer.
         </p>
       </div>
@@ -224,7 +279,7 @@
       <div class="relative w-full grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-0">
         <!-- Join lane -->
         <div class="flex flex-col items-center gap-4 md:pr-8">
-          <div class="inline-flex items-center gap-2 text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+          <div class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
             <Hash size={14} strokeWidth={2.5} />
             Got a code?
           </div>
@@ -240,7 +295,7 @@
             use:hoverEffect={'swap'}
             disabled={joinCode.length !== 4}
             onclick={() => join(joinCode)}
-            class="inline-flex items-center justify-center gap-2 px-6 h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white font-bold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            class="inline-flex items-center justify-center gap-2 px-6 h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white font-bold disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
             style="box-shadow: 0 4px 0 rgba(0,0,0,0.08);"
           >
             <Play size={16} strokeWidth={2.5} />
@@ -255,7 +310,7 @@
         >
           <span class="flex-1 md:w-[2.5px] md:flex-1 h-[2.5px] md:h-auto bg-brand-border-heavy rounded-full"></span>
           <span
-            class="inline-flex items-center justify-center h-8 min-w-8 px-2 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-[0.65rem] font-bold uppercase tracking-[0.15em]"
+            class="inline-flex items-center justify-center h-8 min-w-8 px-2 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-[0.7rem] font-bold uppercase tracking-[0.15em]"
             style="box-shadow: 0 2px 0 rgba(0,0,0,0.06);"
           >
             or
@@ -265,8 +320,8 @@
 
         <!-- Host lane -->
         <div class="flex flex-col items-center gap-4 md:pl-8">
-          <div class="inline-flex items-center gap-2 text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
-            <Home size={14} strokeWidth={2.5} />
+          <div class="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
+            <Sparkles size={14} strokeWidth={2.5} />
             Spinning one up?
           </div>
           <p class="text-sm font-semibold text-brand-text max-w-[16rem]">
@@ -277,7 +332,7 @@
               href="/home"
               use:pressPhysics={'dark'}
               use:hoverEffect={'gradient'}
-              class="mt-4 inline-flex items-center justify-center gap-2 px-6 h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold no-underline"
+              class="mt-4 inline-flex items-center justify-center gap-2 px-6 h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold no-underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
               style="box-shadow: 0 4px 0 rgba(0,0,0,0.08);"
             >
               <Home size={16} strokeWidth={2.5} />
@@ -288,7 +343,7 @@
               href="/auth/magic-link"
               use:pressPhysics={'dark'}
               use:hoverEffect={'gradient'}
-              class="mt-4 inline-flex items-center justify-center gap-2 px-6 h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold no-underline"
+              class="mt-4 inline-flex items-center justify-center gap-2 px-6 h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold no-underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
               style="box-shadow: 0 4px 0 rgba(0,0,0,0.08);"
             >
               <Play size={16} strokeWidth={2.5} />
@@ -298,7 +353,7 @@
         </div>
       </div>
 
-      <p class="text-xs text-brand-text-muted">
+      <p class="text-xs font-semibold text-brand-text-mid">
         {data.user ? 'You are signed in — host or join, your call.' : 'Hosting requires an account. Joining with a code does not.'}
       </p>
     </div>

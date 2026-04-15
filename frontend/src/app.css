@@ -60,6 +60,10 @@ body {
   transition: color 2s ease;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  body { animation: none; background-size: 100% 100%; }
+}
+
 /* SvelteKit injects this aria-live region to announce route changes to screen
    readers; recent versions ship it with no inline styles, so we hide it. */
 #svelte-announcer {
@@ -118,6 +122,15 @@ body {
 .reveal.d2 { transition-delay: 0.16s; }
 .reveal.d3 { transition-delay: 0.24s; }
 .reveal.d4 { transition-delay: 0.32s; }
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .reveal.d1, .reveal.d2, .reveal.d3, .reveal.d4 { transition-delay: 0s; }
+}
 
 /* ==========================================================================
    Page transitions (L1 motion kernel)

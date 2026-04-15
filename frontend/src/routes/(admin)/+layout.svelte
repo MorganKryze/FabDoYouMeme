@@ -4,6 +4,7 @@
   import Toast from '$lib/components/Toast.svelte';
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { Home, Users, Mail, Package, Sliders, User } from '$lib/icons';
+  import Wordmark from '$lib/components/Wordmark.svelte';
   import type { LayoutData } from './$types';
 
   let { children, data }: { children: any; data: LayoutData } = $props();
@@ -28,9 +29,11 @@
 <div class="relative z-[2] min-h-screen flex text-brand-text">
   <!-- Sidebar -->
   <nav class="w-48 shrink-0 border-r border-brand-border bg-brand-white flex flex-col py-4">
-    <div class="px-4 mb-6">
-      <a href="/" class="font-bold text-base">FabDoYouMeme</a>
-      <p class="text-xs text-brand-text-muted mt-0.5">Admin</p>
+    <div class="px-2 mb-6">
+      <Wordmark href="/" />
+      <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid mt-3 px-2">
+        Admin
+      </p>
     </div>
 
     <ul class="flex flex-col gap-0.5 px-2">
@@ -41,7 +44,7 @@
             href={item.href}
             use:hoverEffect={'swap'}
             aria-current={active ? 'page' : undefined}
-            class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+            class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors no-underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60
               {active
                 ? 'bg-brand-text text-brand-white'
                 : 'text-brand-text-mid hover:text-brand-text hover:bg-muted'}"
@@ -57,7 +60,7 @@
       <a
         href="/profile"
         use:hoverEffect={'swap'}
-        class="inline-flex items-center gap-1.5 text-xs text-brand-text-muted hover:text-brand-text transition-colors px-2 py-1 rounded-full"
+        class="inline-flex items-center gap-1.5 text-xs text-brand-text-mid hover:text-brand-text transition-colors px-2 py-1 rounded-full focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
       >
         <User size={12} strokeWidth={2.5} />
         {data.user.username}

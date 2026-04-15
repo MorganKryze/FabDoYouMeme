@@ -29,22 +29,29 @@ export function pressPhysics(node: HTMLElement, variant: Variant = 'primary') {
   node.style.transition = 'transform 0.1s, box-shadow 0.1s';
   node.style.boxShadow = restShadow;
 
+  const isDisabled = () =>
+    node.hasAttribute('disabled') || node.getAttribute('aria-disabled') === 'true';
+
   function onMouseEnter() {
+    if (isDisabled()) return;
     node.style.transform = 'translateY(-2px)';
     node.style.boxShadow = hoverShadow;
   }
 
   function onMouseLeave() {
+    if (isDisabled()) return;
     node.style.transform = '';
     node.style.boxShadow = restShadow;
   }
 
   function onMouseDown() {
+    if (isDisabled()) return;
     node.style.transform = 'translateY(3px)';
     node.style.boxShadow = pressShadow;
   }
 
   function onMouseUp() {
+    if (isDisabled()) return;
     node.style.transform = 'translateY(-2px)';
     node.style.boxShadow = hoverShadow;
   }

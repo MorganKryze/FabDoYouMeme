@@ -6,10 +6,10 @@
   import { user } from '$lib/state/user.svelte';
   import { page } from '$app/stores';
   import { hoverEffect } from '$lib/actions/hoverEffect';
-  import { pressPhysics } from '$lib/actions/pressPhysics';
   import { Wrench, HelpCircle, Shield, Settings, X } from '$lib/icons';
   import { onMount } from 'svelte';
   import LabHelpDrawer from '$lib/components/studio/LabHelpDrawer.svelte';
+  import Wordmark from '$lib/components/Wordmark.svelte';
   import type { LayoutData } from './$types';
 
   let { children, data }: { children: any; data: LayoutData } = $props();
@@ -81,14 +81,7 @@
        on the right. Admin sits immediately left of Lab so the two
        "operator" tools cluster together. -->
   <header class="flex items-center justify-between gap-4 px-6 pt-5 pb-4">
-    <a
-      href="/home"
-      use:pressPhysics={'ghost'}
-      class="text-lg font-bold tracking-tight no-underline"
-      aria-label="FabDoYouMeme home"
-    >
-      FabDoYouMeme
-    </a>
+    <Wordmark href="/home" />
 
     <div class="flex items-center gap-3">
       {#if data.user.role === 'admin'}

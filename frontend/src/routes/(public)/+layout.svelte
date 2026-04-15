@@ -1,7 +1,7 @@
 <!-- frontend/src/routes/(public)/+layout.svelte -->
 <script lang="ts">
   import '../../app.css';
-  import { pressPhysics } from '$lib/actions/pressPhysics';
+  import Wordmark from '$lib/components/Wordmark.svelte';
   let { children } = $props();
 </script>
 
@@ -10,14 +10,7 @@
        all public pages (magic-link, register, verify, /join, /join/[code])
        so every anonymous visitor has a visible exit. -->
   <header class="flex items-center py-5">
-    <a
-      href="/"
-      use:pressPhysics={'ghost'}
-      class="text-lg font-bold tracking-tight no-underline"
-      aria-label="FabDoYouMeme home"
-    >
-      FabDoYouMeme
-    </a>
+    <Wordmark href="/" />
   </header>
 
   <div class="flex-1 flex flex-col items-center justify-center">
@@ -27,8 +20,13 @@
     >
       {@render children()}
     </main>
-    <footer class="mt-8 text-xs text-brand-text-muted">
-      <a href="/privacy" class="underline hover:text-brand-text transition-colors">Privacy Policy</a>
+    <footer class="mt-8 text-xs text-brand-text-mid">
+      <a
+        href="/privacy"
+        class="underline hover:text-brand-text transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+      >
+        Privacy Policy
+      </a>
     </footer>
   </div>
 </div>

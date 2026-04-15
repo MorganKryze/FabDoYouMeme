@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Sparkles, Shield } from '$lib/icons';
+  import { Sparkles, Shield, X } from '$lib/icons';
   import { physCard } from '$lib/actions/physCard';
   import type { Medal } from '$lib/medals';
   import { formatMakerSince } from '$lib/medals';
@@ -12,9 +12,10 @@
       created_at: string;
     };
     medals: Medal[];
+    onClose?: () => void;
   }
 
-  let { user, medals }: Props = $props();
+  let { user, medals, onClose }: Props = $props();
 
   const initialLetter = $derived((user.username?.[0] ?? '?').toUpperCase());
   const serial = $derived(
@@ -29,10 +30,22 @@
   class="relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface px-5 pt-9 pb-5 flex flex-col gap-4"
   style="box-shadow: 0 6px 0 rgba(0,0,0,0.1);"
 >
+  {#if onClose}
+    <button
+      type="button"
+      onclick={(e) => { e.stopPropagation(); onClose?.(); }}
+      aria-label="Hide maker card"
+      class="absolute top-2 left-2 inline-flex items-center justify-center h-7 w-7 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+      style="box-shadow: 0 2px 0 rgba(0,0,0,0.1);"
+    >
+      <X size={12} strokeWidth={3} />
+    </button>
+  {/if}
+
   <!-- Corner stamp -->
   <div class="absolute top-3 right-3 inline-flex items-center gap-1.5">
     <Sparkles size={11} strokeWidth={2.75} />
-    <span class="text-[0.6rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+    <span class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
       Maker Card
     </span>
   </div>
@@ -47,7 +60,7 @@
       {initialLetter}
     </div>
     <div class="flex flex-col min-w-0 flex-1 pt-2">
-      <p class="text-[0.55rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+      <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
         Signed in as
       </p>
       <p
@@ -58,7 +71,7 @@
       </p>
       <div class="flex items-center gap-2 mt-2 flex-wrap">
         <span
-          class="inline-flex items-center gap-1 rounded-full border-[2px] border-brand-border-heavy bg-brand-white px-2 py-0.5 text-[0.55rem] font-bold uppercase tracking-[0.15em]"
+          class="inline-flex items-center gap-1 rounded-full border-[2px] border-brand-border-heavy bg-brand-white px-2 py-0.5 text-xs font-bold uppercase tracking-[0.15em]"
           style="box-shadow: 0 1.5px 0 rgba(0,0,0,0.08);"
         >
           {#if user.role === 'admin'}
@@ -69,7 +82,7 @@
             Maker
           {/if}
         </span>
-        <span class="font-mono text-[0.6rem] font-bold text-brand-text-muted tracking-[0.1em]">
+        <span class="font-mono text-xs font-bold text-brand-text-mid tracking-[0.1em] tabular-nums">
           ID · {serial}
         </span>
       </div>
@@ -81,7 +94,7 @@
 
   <!-- Medals -->
   <div class="flex flex-col gap-2">
-    <p class="text-[0.55rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+    <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
       Medals
     </p>
     <div class="flex items-center gap-2">
@@ -102,7 +115,7 @@
   </div>
 
   <!-- Maker since footer -->
-  <p class="text-[0.55rem] font-bold uppercase tracking-[0.15em] text-brand-text-muted">
+  <p class="text-xs font-bold uppercase tracking-[0.15em] text-brand-text-mid">
     Maker since · {makerSince}
   </p>
 </div>
