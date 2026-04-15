@@ -251,6 +251,20 @@ func (q *Queries) CreateVote(ctx context.Context, arg CreateVoteParams) (Vote, e
 	return i, err
 }
 
+const deleteRoom = `-- name: DeleteRoom :exec
+DELETE FROM rooms WHERE id = $1
+`
+
+// Hard-deletes a room and everything that references it via ON DELETE CASCADE:
+// room_players, guest_players, rounds, submissions, votes. Used by the cancel
+// path (POST /rooms/{code}/end) so a cancelled room vanishes from history and
+// leaderboard as if it was never created. Naturally-finished rooms keep using
+// SetRoomState so the rematch window and post-game history still work.
+func (q *Queries) DeleteRoom(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteRoom, id)
+	return err
+}
+
 const endRound = `-- name: EndRound :one
 UPDATE rounds SET ended_at = now() WHERE id = $1 RETURNING id, room_id, item_id, round_number, started_at, ended_at
 `
@@ -284,6 +298,46 @@ UPDATE rooms SET state = 'finished', finished_at = now() WHERE state = 'playing'
 
 func (q *Queries) FinishCrashedRooms(ctx context.Context) (pgconn.CommandTag, error) {
 	return q.db.Exec(ctx, finishCrashedRooms)
+}
+
+const getActiveRoomForUser = `-- name: GetActiveRoomForUser :one
+SELECT r.id, r.code, r.state, gt.slug::text AS game_type_slug, TRUE AS is_host
+FROM rooms r
+JOIN game_types gt ON r.game_type_id = gt.id
+WHERE r.host_id = $1 AND r.state IN ('lobby','playing')
+UNION ALL
+SELECT r.id, r.code, r.state, gt.slug::text AS game_type_slug, FALSE AS is_host
+FROM room_players rp
+JOIN rooms r ON rp.room_id = r.id
+JOIN game_types gt ON r.game_type_id = gt.id
+WHERE rp.user_id = $1 AND r.state IN ('lobby','playing')
+LIMIT 1
+`
+
+type GetActiveRoomForUserRow struct {
+	ID           uuid.UUID `json:"id"`
+	Code         string    `json:"code"`
+	State        string    `json:"state"`
+	GameTypeSlug string    `json:"game_type_slug"`
+	IsHost       bool      `json:"is_host"`
+}
+
+// Returns the single lobby/playing room the user is bound to, as either host
+// or participant. Returns no rows if the user is free. The two legs are
+// mutually exclusive in practice because RoomHandler.Create upserts the host
+// into room_players on creation — if both somehow match, prefer the host row
+// (listed first in the UNION).
+func (q *Queries) GetActiveRoomForUser(ctx context.Context, hostID pgtype.UUID) (GetActiveRoomForUserRow, error) {
+	row := q.db.QueryRow(ctx, getActiveRoomForUser, hostID)
+	var i GetActiveRoomForUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.State,
+		&i.GameTypeSlug,
+		&i.IsHost,
+	)
+	return i, err
 }
 
 const getCurrentRound = `-- name: GetCurrentRound :one
@@ -883,4 +937,24 @@ func (q *Queries) UpdateRoomConfig(ctx context.Context, arg UpdateRoomConfigPara
 		&i.RematchWindowExpiresAt,
 	)
 	return i, err
+}
+
+const upsertRoomPlayer = `-- name: UpsertRoomPlayer :exec
+INSERT INTO room_players (room_id, user_id)
+VALUES ($1, $2)
+ON CONFLICT (room_id, user_id) WHERE user_id IS NOT NULL DO NOTHING
+`
+
+type UpsertRoomPlayerParams struct {
+	RoomID uuid.UUID   `json:"room_id"`
+	UserID pgtype.UUID `json:"user_id"`
+}
+
+// Idempotent insert used by the hub (handleRegister) and RoomHandler.Create
+// so a registered user's participation is persisted exactly once per room.
+// Relies on the partial unique index room_players_user_unique from migration
+// 004; guests are not reachable via this query because user_id is NOT NULL.
+func (q *Queries) UpsertRoomPlayer(ctx context.Context, arg UpsertRoomPlayerParams) error {
+	_, err := q.db.Exec(ctx, upsertRoomPlayer, arg.RoomID, arg.UserID)
+	return err
 }

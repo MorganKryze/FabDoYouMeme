@@ -158,70 +158,115 @@
       {/if}
     </section>
 
-    <!-- ─── Quick actions: code + host shortcut ─────────────── -->
-    <section use:reveal={{ delay: 1 }} class="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-stretch">
-      <!-- Join by code -->
-      <div
-        class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-5 flex flex-col gap-3"
-        style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
-      >
-        <div class="flex items-center justify-between">
-          <h2 class="text-lg font-bold">Got a code?</h2>
-          <span class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
-            Jump in
-          </span>
-        </div>
-
-        {#if form?.joinError}
-          <div
-            role="alert"
-            class="inline-flex items-center justify-center gap-2 rounded-full border-[2.5px] border-brand-accent bg-brand-accent/15 px-5 py-2 text-xs font-bold text-center text-brand-text"
-            style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
-          >
-            <XCircle size={14} strokeWidth={2.5} />
-            {form.joinError}
-          </div>
-        {/if}
-
-        <form
-          bind:this={joinForm}
-          method="POST"
-          action="?/joinRoom"
-          use:enhance
-          class="grid grid-cols-[1fr_auto] gap-3 items-end"
+    <!-- ─── Quick actions: either "return to room" OR create/join ───
+         A user can be in at most one lobby/playing room at a time. When
+         data.activeRoom is set, the create + join affordances are hidden
+         and replaced with a single "return to your room" CTA — backed by
+         the backend's single-room enforcement in RoomHandler.Create and
+         WSHandler.ServeHTTP. ───────────────────────────────────────── -->
+    {#if data.activeRoom}
+      <section use:reveal={{ delay: 1 }}>
+        <a
+          href={`/rooms/${data.activeRoom.code}`}
+          use:pressPhysics={'dark'}
+          use:hoverEffect={'gradient'}
+          use:physCard
+          class="group block rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white p-6 no-underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+          style="box-shadow: 0 5px 0 rgba(0,0,0,0.2);"
         >
-          <RoomCodeInput bind:value={code} onenter={submitJoin} />
-          <button
-            use:pressPhysics={'dark'}
-            use:hoverEffect={'gradient'}
-            type="submit"
-            disabled={code.length !== 4}
-            class="h-16 px-6 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-40 cursor-pointer inline-flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
-          >
-            <Play size={18} strokeWidth={2.5} />
-            Play
-          </button>
-        </form>
-      </div>
+          <div class="flex items-center justify-between gap-4">
+            <div class="flex flex-col gap-1 min-w-0">
+              <span class="text-xs font-bold uppercase tracking-[0.2em] opacity-70">
+                {data.activeRoom.is_host ? 'Your room' : "You're in"} · {data.activeRoom.state === 'playing' ? 'In progress' : 'Lobby'}
+              </span>
+              <div class="text-xl font-bold leading-tight">
+                Return to your room
+              </div>
+              <div class="text-xs font-bold uppercase tracking-[0.2em] opacity-70 truncate">
+                {prettyGameSlug(data.activeRoom.game_type_slug)}
+              </div>
+            </div>
+            <div class="flex items-center gap-3 shrink-0">
+              <span
+                class="font-mono font-bold tracking-widest text-sm inline-flex items-center justify-center rounded-full bg-brand-white text-brand-text border-[2.5px] border-brand-border-heavy px-3 h-10"
+              >
+                {data.activeRoom.code}
+              </span>
+              <span class="inline-flex items-center justify-center h-12 w-12 rounded-full bg-brand-white text-brand-text border-[2.5px] border-brand-border-heavy transition-transform group-hover:translate-x-0.5">
+                <Play size={18} strokeWidth={2.5} />
+              </span>
+            </div>
+          </div>
+          <p class="text-xs font-semibold opacity-70 mt-3">
+            You can only be in one room at a time. Leave or finish this one to create or join another.
+          </p>
+        </a>
+      </section>
+    {:else}
+      <section use:reveal={{ delay: 1 }} class="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-stretch">
+        <!-- Join by code -->
+        <div
+          class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-5 flex flex-col gap-3"
+          style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
+        >
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-bold">Got a code?</h2>
+            <span class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
+              Jump in
+            </span>
+          </div>
 
-      <!-- Host shortcut -->
-      <a
-        href="/host"
-        use:pressPhysics={'dark'}
-        use:hoverEffect={'gradient'}
-        use:physCard
-        class="group rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white p-5 flex flex-col justify-between gap-2 min-w-[200px] no-underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
-        style="box-shadow: 0 5px 0 rgba(0,0,0,0.2);"
-      >
-        <div class="text-xs font-bold uppercase tracking-[0.2em] opacity-70">
-          Host
+          {#if form?.joinError}
+            <div
+              role="alert"
+              class="inline-flex items-center justify-center gap-2 rounded-full border-[2.5px] border-brand-accent bg-brand-accent/15 px-5 py-2 text-xs font-bold text-center text-brand-text"
+              style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
+            >
+              <XCircle size={14} strokeWidth={2.5} />
+              {form.joinError}
+            </div>
+          {/if}
+
+          <form
+            bind:this={joinForm}
+            method="POST"
+            action="?/joinRoom"
+            use:enhance
+            class="grid grid-cols-[1fr_auto] gap-3 items-end"
+          >
+            <RoomCodeInput bind:value={code} onenter={submitJoin} />
+            <button
+              use:pressPhysics={'dark'}
+              use:hoverEffect={'gradient'}
+              type="submit"
+              disabled={code.length !== 4}
+              class="h-16 px-6 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-40 cursor-pointer inline-flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+            >
+              <Play size={18} strokeWidth={2.5} />
+              Play
+            </button>
+          </form>
         </div>
-        <div class="text-xl font-bold leading-tight">Start a<br />new game</div>
-        <div class="text-xs font-bold uppercase tracking-[0.2em] opacity-70 inline-flex items-center gap-1 transition-transform group-hover:translate-x-0.5">
-          Pick a game →
-        </div>
-      </a>
-    </section>
+
+        <!-- Host shortcut -->
+        <a
+          href="/host"
+          use:pressPhysics={'dark'}
+          use:hoverEffect={'gradient'}
+          use:physCard
+          class="group rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white p-5 flex flex-col justify-between gap-2 min-w-[200px] no-underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+          style="box-shadow: 0 5px 0 rgba(0,0,0,0.2);"
+        >
+          <div class="text-xs font-bold uppercase tracking-[0.2em] opacity-70">
+            Host
+          </div>
+          <div class="text-xl font-bold leading-tight">Start a<br />new game</div>
+          <div class="text-xs font-bold uppercase tracking-[0.2em] opacity-70 inline-flex items-center gap-1 transition-transform group-hover:translate-x-0.5">
+            Pick a game →
+          </div>
+        </a>
+      </section>
+    {/if}
 
     <!-- ─── Stats row ────────────────────────────────────────── -->
     <section class="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -388,40 +433,42 @@
     </section>
 
     <!-- ─── Host a new game (game tile grid) ────────────────── -->
-    <section class="flex flex-col gap-5">
-      <div use:reveal={{ delay: 2 }} class="flex items-center justify-between">
-        <div>
-          <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
-            Host a new game
-          </p>
-          <h2 class="text-2xl font-bold">Pick a game type</h2>
+    {#if !data.activeRoom}
+      <section class="flex flex-col gap-5">
+        <div use:reveal={{ delay: 2 }} class="flex items-center justify-between">
+          <div>
+            <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
+              Host a new game
+            </p>
+            <h2 class="text-2xl font-bold">Pick a game type</h2>
+          </div>
         </div>
-      </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        {#each data.gameTypes as gt, i}
-          <a
-            href={`/host?game_type=${gt.slug}`}
-            use:reveal={{ delay: i + 3 }}
-            use:physCard
-            use:hoverEffect={'gradient'}
-            class="group rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-6 flex flex-col gap-3 cursor-pointer no-underline text-brand-text focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
-            style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
-          >
-            <h3 class="inline-flex items-center gap-2 text-lg font-bold m-0">
-              <Sparkles size={18} strokeWidth={2.5} />
-              {gt.name}
-            </h3>
-            {#if gt.description}
-              <p class="text-sm font-semibold text-brand-text-mid line-clamp-3">{gt.description}</p>
-            {/if}
-            <div class="mt-auto text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid inline-flex items-center gap-1 transition-transform group-hover:translate-x-0.5">
-              Host this →
-            </div>
-          </a>
-        {/each}
-      </div>
-    </section>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {#each data.gameTypes as gt, i}
+            <a
+              href={`/host?game_type=${gt.slug}`}
+              use:reveal={{ delay: i + 3 }}
+              use:physCard
+              use:hoverEffect={'gradient'}
+              class="group rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-6 flex flex-col gap-3 cursor-pointer no-underline text-brand-text focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+              style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
+            >
+              <h3 class="inline-flex items-center gap-2 text-lg font-bold m-0">
+                <Sparkles size={18} strokeWidth={2.5} />
+                {gt.name}
+              </h3>
+              {#if gt.description}
+                <p class="text-sm font-semibold text-brand-text-mid line-clamp-3">{gt.description}</p>
+              {/if}
+              <div class="mt-auto text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid inline-flex items-center gap-1 transition-transform group-hover:translate-x-0.5">
+                Host this →
+              </div>
+            </a>
+          {/each}
+        </div>
+      </section>
+    {/if}
   </div>
 </div>
 

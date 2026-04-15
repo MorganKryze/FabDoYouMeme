@@ -253,7 +253,7 @@ func (h *Hub) Run(ctx context.Context) {
 			return
 
 		case p := <-h.register:
-			h.handleRegister(p)
+			h.handleRegister(ctx, p)
 
 		case p := <-h.unregister:
 			h.handleUnregister(p)
@@ -270,7 +270,7 @@ func (h *Hub) Run(ctx context.Context) {
 	}
 }
 
-func (h *Hub) handleRegister(p *connectedPlayer) {
+func (h *Hub) handleRegister(ctx context.Context, p *connectedPlayer) {
 	existing, reconnecting := h.players[p.userID]
 	if reconnecting && existing.reconnecting {
 		// Player reconnecting within grace window.
@@ -315,6 +315,19 @@ func (h *Hub) handleRegister(p *connectedPlayer) {
 
 	h.players[p.userID] = p
 	h.playerTypes[p.userID] = p.isGuest
+	// Persist registered joiners into room_players so GetActiveRoomForUser,
+	// leaderboard aggregation, and post-game history all see them. Guests are
+	// already inserted at token mint time in api/guest_join.go. The upsert is
+	// idempotent, so reconnecting hosts / returning players are no-ops.
+	if !p.isGuest && h.db != nil {
+		if err := h.db.UpsertRoomPlayer(ctx, db.UpsertRoomPlayerParams{
+			RoomID: h.roomID,
+			UserID: pgUUID(p.userID),
+		}); err != nil && h.log != nil {
+			h.log.Warn("hub: upsert room_players failed",
+				"room", h.roomCode, "user_id", p.userID, "err", err)
+		}
+	}
 	h.broadcast(buildMessage("player_joined", playerJoinedPayload(p)))
 	go h.readPump(p)
 	go h.writePump(p)

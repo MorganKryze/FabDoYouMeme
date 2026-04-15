@@ -4,6 +4,7 @@ package api
 import (
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -124,6 +126,22 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	hostUUID, _ := uuid.Parse(u.UserID)
+	hostPG := pgtype.UUID{Bytes: hostUUID, Valid: true}
+
+	// Single-room enforcement: a user can be a participant in at most one
+	// lobby/playing room. A free user returns pgx.ErrNoRows; anything else is
+	// a real database error.
+	active, err := h.db.GetActiveRoomForUser(r.Context(), hostPG)
+	if err == nil {
+		writeError(w, r, http.StatusConflict, "already_in_active_room",
+			fmt.Sprintf("You are already in room %s. Leave it before creating a new one.", active.Code))
+		return
+	}
+	if !errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to check active room")
+		return
+	}
+
 	roomConfig := req.Config
 	if roomConfig == nil {
 		roomConfig = json.RawMessage(`{"round_duration_seconds":60,"voting_duration_seconds":30,"round_count":10}`)
@@ -132,13 +150,22 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Code:       generateRoomCode(),
 		GameTypeID: gameTypeID,
 		PackID:     packID,
-		HostID:     pgtype.UUID{Bytes: hostUUID, Valid: true},
+		HostID:     hostPG,
 		Mode:       req.Mode,
 		Config:     roomConfig,
 	})
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to create room")
 		return
+	}
+	// Persist the host into room_players so GetActiveRoomForUser and
+	// UpdatePlayerScore / leaderboard / history all agree on membership. The
+	// upsert is idempotent — safe to re-run on retried requests.
+	if err := h.db.UpsertRoomPlayer(r.Context(), db.UpsertRoomPlayerParams{
+		RoomID: room.ID,
+		UserID: hostPG,
+	}); err != nil && h.log != nil {
+		h.log.Warn("failed to persist host into room_players", "room", room.Code, "err", err)
 	}
 	writeJSON(w, http.StatusCreated, room)
 }

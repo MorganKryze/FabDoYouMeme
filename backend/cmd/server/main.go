@@ -180,6 +180,7 @@ func main() {
 	r.With(mw.RequireAuth).Route("/api/users/me", func(r chi.Router) {
 		r.Patch("/", authHandler.PatchMe)
 		r.Get("/history", authHandler.GetHistory)
+		r.Get("/active-room", authHandler.GetActiveRoom)
 		r.With(exportLimiter.PerUserMiddleware).Get("/export", authHandler.GetExport)
 	})
 

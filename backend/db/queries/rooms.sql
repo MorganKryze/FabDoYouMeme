@@ -17,6 +17,14 @@ WHERE id = $1 RETURNING *;
 -- name: UpdateRoomConfig :one
 UPDATE rooms SET config = $2 WHERE id = $1 AND state = 'lobby' RETURNING *;
 
+-- name: DeleteRoom :exec
+-- Hard-deletes a room and everything that references it via ON DELETE CASCADE:
+-- room_players, guest_players, rounds, submissions, votes. Used by the cancel
+-- path (POST /rooms/{code}/end) so a cancelled room vanishes from history and
+-- leaderboard as if it was never created. Naturally-finished rooms keep using
+-- SetRoomState so the rematch window and post-game history still work.
+DELETE FROM rooms WHERE id = $1;
+
 -- name: SetRematchWindow :one
 -- Stamps rematch_window_expires_at when a room transitions finished → (rematchable).
 -- Called by finishRoom() so the client's EndStage can show a countdown banner.
@@ -38,6 +46,15 @@ RETURNING *;
 
 -- name: AddRoomPlayer :one
 INSERT INTO room_players (room_id, user_id) VALUES ($1, $2) RETURNING *;
+
+-- name: UpsertRoomPlayer :exec
+-- Idempotent insert used by the hub (handleRegister) and RoomHandler.Create
+-- so a registered user's participation is persisted exactly once per room.
+-- Relies on the partial unique index room_players_user_unique from migration
+-- 004; guests are not reachable via this query because user_id is NOT NULL.
+INSERT INTO room_players (room_id, user_id)
+VALUES ($1, $2)
+ON CONFLICT (room_id, user_id) WHERE user_id IS NOT NULL DO NOTHING;
 
 -- name: AddGuestRoomPlayer :one
 INSERT INTO room_players (room_id, guest_player_id) VALUES ($1, $2) RETURNING *;
@@ -160,6 +177,24 @@ LEFT JOIN users u ON rp.user_id = u.id
 LEFT JOIN guest_players gp ON rp.guest_player_id = gp.id
 WHERE rp.room_id = $1
 ORDER BY rp.score DESC;
+
+-- name: GetActiveRoomForUser :one
+-- Returns the single lobby/playing room the user is bound to, as either host
+-- or participant. Returns no rows if the user is free. The two legs are
+-- mutually exclusive in practice because RoomHandler.Create upserts the host
+-- into room_players on creation — if both somehow match, prefer the host row
+-- (listed first in the UNION).
+SELECT r.id, r.code, r.state, gt.slug::text AS game_type_slug, TRUE AS is_host
+FROM rooms r
+JOIN game_types gt ON r.game_type_id = gt.id
+WHERE r.host_id = $1 AND r.state IN ('lobby','playing')
+UNION ALL
+SELECT r.id, r.code, r.state, gt.slug::text AS game_type_slug, FALSE AS is_host
+FROM room_players rp
+JOIN rooms r ON rp.room_id = r.id
+JOIN game_types gt ON r.game_type_id = gt.id
+WHERE rp.user_id = $1 AND r.state IN ('lobby','playing')
+LIMIT 1;
 
 -- name: GetRecentRoomsForUser :many
 -- Powers the "Recent rooms" strip on the new Home page. Scoped to the session

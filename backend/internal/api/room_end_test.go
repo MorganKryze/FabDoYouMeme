@@ -3,12 +3,14 @@ package api_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/testutil"
@@ -57,12 +59,10 @@ func TestAPI_EndRoom_HostInLobby_Succeeds(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("want 204, got %d — body: %s", rec.Code, rec.Body.String())
 	}
-	updated, err := q.GetRoomByCode(context.Background(), room.Code)
-	if err != nil {
-		t.Fatalf("GetRoomByCode: %v", err)
-	}
-	if updated.State != "finished" {
-		t.Fatalf("want room.state=finished, got %q", updated.State)
+	// Cancel is destructive — the row must be gone so the room vanishes from
+	// history and leaderboard as if it was never created.
+	if _, err := q.GetRoomByCode(context.Background(), room.Code); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("want pgx.ErrNoRows after cancel, got %v", err)
 	}
 }
 
@@ -77,9 +77,8 @@ func TestAPI_EndRoom_HostDuringPlaying_Succeeds(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("want 204, got %d — body: %s", rec.Code, rec.Body.String())
 	}
-	updated, _ := q.GetRoomByCode(context.Background(), room.Code)
-	if updated.State != "finished" {
-		t.Fatalf("want room.state=finished, got %q", updated.State)
+	if _, err := q.GetRoomByCode(context.Background(), room.Code); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("want pgx.ErrNoRows after cancel, got %v", err)
 	}
 }
 

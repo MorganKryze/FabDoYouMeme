@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 
@@ -170,6 +171,47 @@ func (h *Handler) GetHistory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"rooms":       rooms,
 		"next_cursor": nextCursor,
+	})
+}
+
+type activeRoom struct {
+	Code         string `json:"code"`
+	State        string `json:"state"`
+	GameTypeSlug string `json:"game_type_slug"`
+	IsHost       bool   `json:"is_host"`
+}
+
+// GetActiveRoom handles GET /api/users/me/active-room. Returns the single
+// lobby/playing room the caller is bound to (as host or participant), or
+// {"room": null} if they are free. Powers the single-room enforcement UX on
+// the home dashboard.
+func (h *Handler) GetActiveRoom(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.GetSessionUser(r)
+	if !ok {
+		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+	userID, err := uuid.Parse(u.UserID)
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Invalid session")
+		return
+	}
+	row, err := h.db.GetActiveRoomForUser(r.Context(), pgtype.UUID{Bytes: userID, Valid: true})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeJSON(w, http.StatusOK, map[string]any{"room": nil})
+			return
+		}
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to load active room")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"room": activeRoom{
+			Code:         row.Code,
+			State:        row.State,
+			GameTypeSlug: row.GameTypeSlug,
+			IsHost:       row.IsHost,
+		},
 	})
 }
 

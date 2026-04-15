@@ -3,7 +3,19 @@ import type { Actions, PageServerLoad } from './$types';
 import type { GameType } from '$lib/api/types';
 import { API_BASE, apiFetch } from '$lib/server/backend';
 
+type ActiveRoomResponse = {
+  room: { code: string } | null;
+};
+
 export const load: PageServerLoad = async ({ fetch, url }) => {
+  // Single-room enforcement: if the caller already has an active room, bounce
+  // them back to /home which will display the "Return to your room" card.
+  // Mirrors the gate in backend/internal/api/rooms.go RoomHandler.Create.
+  const activeRes = await fetch(`${API_BASE}/api/users/me/active-room`);
+  if (activeRes.ok) {
+    const { room } = (await activeRes.json()) as ActiveRoomResponse;
+    if (room) throw redirect(303, '/home');
+  }
   const gameTypes = await apiFetch<GameType[]>(fetch, '/api/game-types');
   const preselectedSlug = url.searchParams.get('game_type') ?? '';
   const preselected = gameTypes.find((gt) => gt.slug === preselectedSlug) ?? null;
@@ -48,7 +60,9 @@ export const actions: Actions = {
           'This pack has no items compatible with the selected game type.',
         pack_insufficient_items:
           'This pack does not have enough items for the selected round count.',
-        invalid_game_type: 'Invalid game type selected.'
+        invalid_game_type: 'Invalid game type selected.',
+        already_in_active_room:
+          "You're already in a room — return to it or leave it first."
       };
       return fail(400, {
         error: messages[code] ?? 'Could not create room. Try again.'

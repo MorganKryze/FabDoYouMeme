@@ -151,11 +151,19 @@ func (h *RoomHandler) Kick(w http.ResponseWriter, r *http.Request) {
 
 // End handles POST /api/rooms/{code}/end.
 //
-// Host or admin can terminate a room in any non-finished state. The DB row
-// is flipped to 'finished' before the hub is notified so late joiners hitting
-// /join while the hub is tearing down get a clean 409 instead of a stale
-// lobby row. See also Leave above which uses the same DB-first ordering for
-// the lobby-only host-closes-room path.
+// Host or admin can cancel a room in any non-finished state. Cancel is
+// destructive: the row (and everything that references it via ON DELETE
+// CASCADE — room_players, guest_players, rounds, submissions, votes) is
+// hard-deleted so the room disappears from history and leaderboard as if it
+// was never created. This is distinct from natural game completion
+// (finishRoom), which keeps the row in 'finished' state for the rematch
+// window and post-game history.
+//
+// Ordering: we notify the hub first so connected players get a room_closed
+// frame before their sockets drop, then delete the row. The hub's
+// endRoomInternal cancels round goroutines and empties h.players, so any
+// follow-up FK violations from in-flight writes are harmless (logged at
+// hub level) and the cascade itself is atomic at the DB layer.
 func (h *RoomHandler) End(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.GetSessionUser(r)
 	if !ok {
@@ -179,13 +187,6 @@ func (h *RoomHandler) End(w http.ResponseWriter, r *http.Request) {
 			"Room is already finished")
 		return
 	}
-	if _, err := h.db.SetRoomState(r.Context(), db.SetRoomStateParams{
-		ID:    room.ID,
-		State: "finished",
-	}); err != nil {
-		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to end room")
-		return
-	}
 	reason := "ended_by_host"
 	if isAdmin && !isHost {
 		reason = "ended_by_admin"
@@ -194,6 +195,10 @@ func (h *RoomHandler) End(w http.ResponseWriter, r *http.Request) {
 		if err := hub.EndRoom(r.Context(), reason); err != nil && h.log != nil {
 			h.log.Warn("end room did not reach hub", "room", room.Code, "err", err)
 		}
+	}
+	if err := h.db.DeleteRoom(r.Context(), room.ID); err != nil {
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to cancel room")
+		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

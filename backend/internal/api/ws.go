@@ -3,11 +3,15 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/auth"
@@ -63,6 +67,24 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, r, http.StatusUnauthorized, "unauthorized", err.Error())
 		return
+	}
+
+	// Single-room enforcement for registered users: reject with a plain JSON
+	// 409 before the upgrade so the SvelteKit join form can surface it.
+	// Guests are already scoped to one room by token mint (see guest_join.go).
+	if !ident.IsGuest && h.queries != nil {
+		if uid, parseErr := uuid.Parse(ident.ID); parseErr == nil {
+			active, aerr := h.queries.GetActiveRoomForUser(r.Context(), pgtype.UUID{Bytes: uid, Valid: true})
+			if aerr == nil && active.Code != roomCode {
+				writeError(w, r, http.StatusConflict, "already_in_active_room",
+					"You are already in room "+active.Code)
+				return
+			}
+			if aerr != nil && !errors.Is(aerr, pgx.ErrNoRows) {
+				writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to check active room")
+				return
+			}
+		}
 	}
 
 	hub, err := h.manager.GetOrLoad(r.Context(), roomCode)
