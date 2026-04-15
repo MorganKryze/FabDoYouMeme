@@ -167,6 +167,12 @@
               >
                 <span class="flex items-center gap-1.5 truncate">
                   <span class="truncate {pack.status === 'banned' ? 'line-through text-brand-text-muted' : ''}">{pack.name}</span>
+                  {#if pack.is_system}
+                    <span class="shrink-0 text-[9px] font-bold uppercase tracking-wider text-brand-text-muted border border-brand-border px-1 py-[1px] rounded"
+                          title="This pack is bundled with the server and is read-only">
+                      System
+                    </span>
+                  {/if}
                   {#if pack.status === 'banned'}
                     <span class="shrink-0 text-[9px] font-bold uppercase tracking-wider text-red-600 border border-red-600 px-1 py-[1px] rounded"
                           title="This pack has been banned by a moderator and cannot be used in games">

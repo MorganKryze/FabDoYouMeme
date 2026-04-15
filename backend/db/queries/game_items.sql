@@ -12,9 +12,12 @@ SELECT * FROM game_items WHERE id = $1;
 SELECT gi.*, giv.media_key, giv.payload, giv.version_number
 FROM game_items gi
 LEFT JOIN game_item_versions giv ON gi.current_version_id = giv.id
-WHERE gi.pack_id = $1
+WHERE gi.pack_id = $1 AND gi.deleted_at IS NULL
 ORDER BY gi.position ASC
 LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
+
+-- name: SoftDeleteItem :exec
+UPDATE game_items SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: SetCurrentVersion :one
 UPDATE game_items SET current_version_id = $2 WHERE id = $1 RETURNING *;

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
@@ -214,5 +215,123 @@ func TestSetStatus_Flagged(t *testing.T) {
 	json.NewDecoder(rec.Body).Decode(&resp)
 	if resp["status"] != "flagged" {
 		t.Errorf("want status=flagged, got %v", resp["status"])
+	}
+}
+
+// ── system-pack guard tests ───────────────────────────────────────────────
+
+// seedSystemPack upserts the sentinel system-pack row via the canonical
+// UpsertSystemPack query. Kept in sync with systempack.SystemPackID.
+func seedSystemPack(t *testing.T, q *db.Queries) db.GamePack {
+	t.Helper()
+	desc := "bundled"
+	pack, err := q.UpsertSystemPack(context.Background(), db.UpsertSystemPackParams{
+		ID:          uuid.MustParse("00000000-0000-0000-0000-000000000001"),
+		Name:        "Demo Pack",
+		Description: &desc,
+	})
+	if err != nil {
+		t.Fatalf("upsert system pack: %v", err)
+	}
+	return pack
+}
+
+func TestUpdatePack_SystemPack_Returns403(t *testing.T) {
+	h, q := newPackHandler(t)
+	admin := seedAdmin(t, q)
+	pack := seedSystemPack(t, q)
+
+	body := `{"name":"Renamed","description":"x","visibility":"public"}`
+	applyCtx := newChiCtx("id", pack.ID.String())
+	req := applyCtx(httptest.NewRequest(http.MethodPatch, "/api/packs/"+pack.ID.String(), bytes.NewBufferString(body)))
+	req = withUser(req, admin.ID.String(), admin.Username, admin.Email, admin.Role)
+	rec := httptest.NewRecorder()
+	h.Update(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("want 403, got %d — body: %s", rec.Code, rec.Body.String())
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte("system_pack_readonly")) {
+		t.Errorf("want error code system_pack_readonly, got %s", rec.Body.String())
+	}
+}
+
+func TestDeletePack_SystemPack_Returns403(t *testing.T) {
+	h, q := newPackHandler(t)
+	admin := seedAdmin(t, q)
+	pack := seedSystemPack(t, q)
+
+	applyCtx := newChiCtx("id", pack.ID.String())
+	req := applyCtx(httptest.NewRequest(http.MethodDelete, "/api/packs/"+pack.ID.String(), nil))
+	req = withUser(req, admin.ID.String(), admin.Username, admin.Email, admin.Role)
+	rec := httptest.NewRecorder()
+	h.Delete(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("want 403, got %d", rec.Code)
+	}
+}
+
+func TestSetStatus_SystemPack_Returns403(t *testing.T) {
+	h, q := newPackHandler(t)
+	admin := seedAdmin(t, q)
+	pack := seedSystemPack(t, q)
+
+	body := `{"status":"flagged"}`
+	applyCtx := newChiCtx("id", pack.ID.String())
+	req := applyCtx(httptest.NewRequest(http.MethodPatch, "/api/packs/"+pack.ID.String()+"/status", bytes.NewBufferString(body)))
+	req = withUser(req, admin.ID.String(), admin.Username, admin.Email, admin.Role)
+	rec := httptest.NewRecorder()
+	h.SetStatus(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("want 403, got %d", rec.Code)
+	}
+}
+
+func TestGetPack_PublicPack_NonOwner_Returns200(t *testing.T) {
+	h, q := newPackHandler(t)
+	owner := seedAdmin(t, q)
+	playerSlug := testutil.SeedName(t) + "_p"
+	player, err := q.CreateUser(context.Background(), db.CreateUserParams{
+		Username: playerSlug, Email: playerSlug + "@test.com",
+		Role: "player", IsActive: true, ConsentAt: time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("create player: %v", err)
+	}
+
+	pack, _ := q.CreatePack(context.Background(), db.CreatePackParams{
+		Name:       testutil.SeedName(t),
+		OwnerID:    pgtype.UUID{Bytes: owner.ID, Valid: true},
+		Visibility: "public",
+	})
+
+	applyCtx := newChiCtx("id", pack.ID.String())
+	req := applyCtx(httptest.NewRequest(http.MethodGet, "/api/packs/"+pack.ID.String(), nil))
+	req = withUser(req, player.ID.String(), player.Username, player.Email, player.Role)
+	rec := httptest.NewRecorder()
+	h.GetByID(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Errorf("want 200 for public pack viewed by non-owner, got %d — body: %s",
+			rec.Code, rec.Body.String())
+	}
+}
+
+func TestCreateItem_SystemPack_Returns403(t *testing.T) {
+	h, q := newPackHandler(t)
+	admin := seedAdmin(t, q)
+	pack := seedSystemPack(t, q)
+
+	body := `{"name":"x","payload_version":1}`
+	applyCtx := newChiCtx("id", pack.ID.String())
+	req := applyCtx(httptest.NewRequest(http.MethodPost, "/api/packs/"+pack.ID.String()+"/items", bytes.NewBufferString(body)))
+	req = withUser(req, admin.ID.String(), admin.Username, admin.Email, admin.Role)
+	rec := httptest.NewRecorder()
+	h.CreateItem(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("want 403, got %d", rec.Code)
 	}
 }

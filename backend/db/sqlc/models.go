@@ -31,13 +31,14 @@ type AuditLog struct {
 }
 
 type GameItem struct {
-	ID               uuid.UUID   `json:"id"`
-	PackID           uuid.UUID   `json:"pack_id"`
-	Position         int32       `json:"position"`
-	PayloadVersion   int32       `json:"payload_version"`
-	CurrentVersionID pgtype.UUID `json:"current_version_id"`
-	CreatedAt        time.Time   `json:"created_at"`
-	Name             string      `json:"name"`
+	ID               uuid.UUID          `json:"id"`
+	PackID           uuid.UUID          `json:"pack_id"`
+	Position         int32              `json:"position"`
+	PayloadVersion   int32              `json:"payload_version"`
+	CurrentVersionID pgtype.UUID        `json:"current_version_id"`
+	CreatedAt        time.Time          `json:"created_at"`
+	Name             string             `json:"name"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
 }
 
 type GameItemVersion struct {
@@ -60,6 +61,7 @@ type GamePack struct {
 	Status      string             `json:"status"`
 	CreatedAt   time.Time          `json:"created_at"`
 	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
+	IsSystem    bool               `json:"is_system"`
 }
 
 type GameType struct {

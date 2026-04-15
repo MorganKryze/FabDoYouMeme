@@ -47,6 +47,23 @@ WHERE gi.pack_id = $1
   AND gi.payload_version = ANY(sqlc.arg(versions)::int[])
   AND gp.deleted_at IS NULL;
 
+-- name: UpsertSystemPack :one
+-- Upserts the bundled "system" pack row with a fixed sentinel UUID. Called
+-- once per boot from backend/internal/systempack. Forces is_official,
+-- visibility, status, is_system, and deleted_at back to their canonical values
+-- on every boot so the pack cannot drift from its managed state.
+INSERT INTO game_packs (id, name, description, owner_id, is_official, visibility, status, is_system)
+VALUES ($1, $2, $3, NULL, true, 'public', 'active', true)
+ON CONFLICT (id) DO UPDATE
+  SET name = EXCLUDED.name,
+      description = EXCLUDED.description,
+      is_official = true,
+      visibility = 'public',
+      status = 'active',
+      is_system = true,
+      deleted_at = NULL
+RETURNING *;
+
 -- name: CanUserDownloadMedia :one
 -- Authorization predicate for /api/assets/download-url. Returns true when the
 -- given user_id is allowed to download the media at media_key, which holds

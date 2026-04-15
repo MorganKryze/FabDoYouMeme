@@ -66,8 +66,30 @@ On every start the backend:
 2. Checks for `SEED_ADMIN_EMAIL` and creates the admin user if no admin exists
 3. Marks any rooms with `state = playing` as `finished` (crash recovery — rooms can't be resumed)
 4. Closes any `lobby` rooms older than 24 hours
+5. Syncs the bundled system pack (see below)
 
-All four operations are idempotent.
+All five operations are idempotent.
+
+#### System pack sync
+
+After storage initialisation and before the HTTP server is mounted, the
+backend runs `systempack.Sync()`. The sync:
+
+1. Upserts a fixed-UUID pack row (`00000000-0000-0000-0000-000000000001`,
+   `owner_id=NULL`, `visibility=public`, `is_system=true`).
+2. Walks `backend/internal/systempack/demo-pack/` (embedded via `//go:embed`),
+   hashes each file with SHA-256, and compares against
+   `game_item_versions.payload->>'sha256'` for the pack's existing items.
+3. Emits one of four operations per file: create, update (new version),
+   no-op, or retire (soft-delete the item). Removed files become
+   `deleted_at = now()` rows; history is preserved for past rounds via the
+   `rounds.item_id` foreign key.
+4. Errors are non-fatal — a RustFS blip logs an Error and the server
+   continues. The next successful boot reconciles.
+
+The `is_system` flag is enforced at the API layer by `ensureNotSystem` on
+every mutating pack/item handler; there is no admin bypass. The only way
+to modify the demo pack is to change files in the repo and redeploy.
 
 ---
 

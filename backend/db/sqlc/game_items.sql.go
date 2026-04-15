@@ -18,7 +18,7 @@ const createItem = `-- name: CreateItem :one
 
 INSERT INTO game_items (pack_id, name, position, payload_version)
 SELECT $1, $2, COALESCE(MAX(position), 0) + 1, $3 FROM game_items WHERE pack_id = $1
-RETURNING id, pack_id, position, payload_version, current_version_id, created_at, name
+RETURNING id, pack_id, position, payload_version, current_version_id, created_at, name, deleted_at
 `
 
 type CreateItemParams struct {
@@ -39,6 +39,7 @@ func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (GameIte
 		&i.CurrentVersionID,
 		&i.CreatedAt,
 		&i.Name,
+		&i.DeletedAt,
 	)
 	return i, err
 }
@@ -80,7 +81,7 @@ func (q *Queries) DeleteItem(ctx context.Context, id uuid.UUID) error {
 }
 
 const getItemByID = `-- name: GetItemByID :one
-SELECT id, pack_id, position, payload_version, current_version_id, created_at, name FROM game_items WHERE id = $1
+SELECT id, pack_id, position, payload_version, current_version_id, created_at, name, deleted_at FROM game_items WHERE id = $1
 `
 
 func (q *Queries) GetItemByID(ctx context.Context, id uuid.UUID) (GameItem, error) {
@@ -94,12 +95,13 @@ func (q *Queries) GetItemByID(ctx context.Context, id uuid.UUID) (GameItem, erro
 		&i.CurrentVersionID,
 		&i.CreatedAt,
 		&i.Name,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const getRandomUnplayedItems = `-- name: GetRandomUnplayedItems :many
-SELECT gi.id, gi.pack_id, gi.position, gi.payload_version, gi.current_version_id, gi.created_at, gi.name, giv.media_key, giv.payload, giv.id AS version_id
+SELECT gi.id, gi.pack_id, gi.position, gi.payload_version, gi.current_version_id, gi.created_at, gi.name, gi.deleted_at, giv.media_key, giv.payload, giv.id AS version_id
 FROM game_items gi
 JOIN game_item_versions giv ON gi.current_version_id = giv.id
 WHERE gi.pack_id = $1
@@ -118,16 +120,17 @@ type GetRandomUnplayedItemsParams struct {
 }
 
 type GetRandomUnplayedItemsRow struct {
-	ID               uuid.UUID       `json:"id"`
-	PackID           uuid.UUID       `json:"pack_id"`
-	Position         int32           `json:"position"`
-	PayloadVersion   int32           `json:"payload_version"`
-	CurrentVersionID pgtype.UUID     `json:"current_version_id"`
-	CreatedAt        time.Time       `json:"created_at"`
-	Name             string          `json:"name"`
-	MediaKey         *string         `json:"media_key"`
-	Payload          json.RawMessage `json:"payload"`
-	VersionID        uuid.UUID       `json:"version_id"`
+	ID               uuid.UUID          `json:"id"`
+	PackID           uuid.UUID          `json:"pack_id"`
+	Position         int32              `json:"position"`
+	PayloadVersion   int32              `json:"payload_version"`
+	CurrentVersionID pgtype.UUID        `json:"current_version_id"`
+	CreatedAt        time.Time          `json:"created_at"`
+	Name             string             `json:"name"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	MediaKey         *string            `json:"media_key"`
+	Payload          json.RawMessage    `json:"payload"`
+	VersionID        uuid.UUID          `json:"version_id"`
 }
 
 func (q *Queries) GetRandomUnplayedItems(ctx context.Context, arg GetRandomUnplayedItemsParams) ([]GetRandomUnplayedItemsRow, error) {
@@ -147,6 +150,7 @@ func (q *Queries) GetRandomUnplayedItems(ctx context.Context, arg GetRandomUnpla
 			&i.CurrentVersionID,
 			&i.CreatedAt,
 			&i.Name,
+			&i.DeletedAt,
 			&i.MediaKey,
 			&i.Payload,
 			&i.VersionID,
@@ -190,10 +194,10 @@ func (q *Queries) HardDeleteVersion(ctx context.Context, id uuid.UUID) error {
 }
 
 const listItemsForPack = `-- name: ListItemsForPack :many
-SELECT gi.id, gi.pack_id, gi.position, gi.payload_version, gi.current_version_id, gi.created_at, gi.name, giv.media_key, giv.payload, giv.version_number
+SELECT gi.id, gi.pack_id, gi.position, gi.payload_version, gi.current_version_id, gi.created_at, gi.name, gi.deleted_at, giv.media_key, giv.payload, giv.version_number
 FROM game_items gi
 LEFT JOIN game_item_versions giv ON gi.current_version_id = giv.id
-WHERE gi.pack_id = $1
+WHERE gi.pack_id = $1 AND gi.deleted_at IS NULL
 ORDER BY gi.position ASC
 LIMIT $3 OFFSET $2
 `
@@ -205,16 +209,17 @@ type ListItemsForPackParams struct {
 }
 
 type ListItemsForPackRow struct {
-	ID               uuid.UUID   `json:"id"`
-	PackID           uuid.UUID   `json:"pack_id"`
-	Position         int32       `json:"position"`
-	PayloadVersion   int32       `json:"payload_version"`
-	CurrentVersionID pgtype.UUID `json:"current_version_id"`
-	CreatedAt        time.Time   `json:"created_at"`
-	Name             string      `json:"name"`
-	MediaKey         *string     `json:"media_key"`
-	Payload          []byte      `json:"payload"`
-	VersionNumber    *int32      `json:"version_number"`
+	ID               uuid.UUID          `json:"id"`
+	PackID           uuid.UUID          `json:"pack_id"`
+	Position         int32              `json:"position"`
+	PayloadVersion   int32              `json:"payload_version"`
+	CurrentVersionID pgtype.UUID        `json:"current_version_id"`
+	CreatedAt        time.Time          `json:"created_at"`
+	Name             string             `json:"name"`
+	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	MediaKey         *string            `json:"media_key"`
+	Payload          []byte             `json:"payload"`
+	VersionNumber    *int32             `json:"version_number"`
 }
 
 func (q *Queries) ListItemsForPack(ctx context.Context, arg ListItemsForPackParams) ([]ListItemsForPackRow, error) {
@@ -234,6 +239,7 @@ func (q *Queries) ListItemsForPack(ctx context.Context, arg ListItemsForPackPara
 			&i.CurrentVersionID,
 			&i.CreatedAt,
 			&i.Name,
+			&i.DeletedAt,
 			&i.MediaKey,
 			&i.Payload,
 			&i.VersionNumber,
@@ -296,7 +302,7 @@ func (q *Queries) ReorderItems(ctx context.Context, arg ReorderItemsParams) erro
 }
 
 const setCurrentVersion = `-- name: SetCurrentVersion :one
-UPDATE game_items SET current_version_id = $2 WHERE id = $1 RETURNING id, pack_id, position, payload_version, current_version_id, created_at, name
+UPDATE game_items SET current_version_id = $2 WHERE id = $1 RETURNING id, pack_id, position, payload_version, current_version_id, created_at, name, deleted_at
 `
 
 type SetCurrentVersionParams struct {
@@ -315,8 +321,18 @@ func (q *Queries) SetCurrentVersion(ctx context.Context, arg SetCurrentVersionPa
 		&i.CurrentVersionID,
 		&i.CreatedAt,
 		&i.Name,
+		&i.DeletedAt,
 	)
 	return i, err
+}
+
+const softDeleteItem = `-- name: SoftDeleteItem :exec
+UPDATE game_items SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) SoftDeleteItem(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, softDeleteItem, id)
+	return err
 }
 
 const softDeleteVersion = `-- name: SoftDeleteVersion :exec

@@ -83,7 +83,7 @@ const createPack = `-- name: CreatePack :one
 
 INSERT INTO game_packs (name, description, owner_id, is_official, visibility)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at
+RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system
 `
 
 type CreatePackParams struct {
@@ -114,12 +114,13 @@ func (q *Queries) CreatePack(ctx context.Context, arg CreatePackParams) (GamePac
 		&i.Status,
 		&i.CreatedAt,
 		&i.DeletedAt,
+		&i.IsSystem,
 	)
 	return i, err
 }
 
 const getPackByID = `-- name: GetPackByID :one
-SELECT id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at FROM game_packs WHERE id = $1 AND deleted_at IS NULL
+SELECT id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system FROM game_packs WHERE id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetPackByID(ctx context.Context, id uuid.UUID) (GamePack, error) {
@@ -135,6 +136,7 @@ func (q *Queries) GetPackByID(ctx context.Context, id uuid.UUID) (GamePack, erro
 		&i.Status,
 		&i.CreatedAt,
 		&i.DeletedAt,
+		&i.IsSystem,
 	)
 	return i, err
 }
@@ -173,7 +175,7 @@ func (q *Queries) GetPackNamesByIDs(ctx context.Context, ids []uuid.UUID) ([]Get
 }
 
 const listAllPacksAdmin = `-- name: ListAllPacksAdmin :many
-SELECT id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at FROM game_packs WHERE deleted_at IS NULL
+SELECT id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system FROM game_packs WHERE deleted_at IS NULL
 ORDER BY created_at DESC LIMIT $2 OFFSET $1
 `
 
@@ -201,6 +203,7 @@ func (q *Queries) ListAllPacksAdmin(ctx context.Context, arg ListAllPacksAdminPa
 			&i.Status,
 			&i.CreatedAt,
 			&i.DeletedAt,
+			&i.IsSystem,
 		); err != nil {
 			return nil, err
 		}
@@ -213,7 +216,7 @@ func (q *Queries) ListAllPacksAdmin(ctx context.Context, arg ListAllPacksAdminPa
 }
 
 const listPacksForUser = `-- name: ListPacksForUser :many
-SELECT id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at FROM game_packs
+SELECT id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system FROM game_packs
 WHERE deleted_at IS NULL
   AND (owner_id = $1 OR (visibility = 'public' AND status = 'active'))
 ORDER BY created_at DESC
@@ -245,6 +248,7 @@ func (q *Queries) ListPacksForUser(ctx context.Context, arg ListPacksForUserPara
 			&i.Status,
 			&i.CreatedAt,
 			&i.DeletedAt,
+			&i.IsSystem,
 		); err != nil {
 			return nil, err
 		}
@@ -257,7 +261,7 @@ func (q *Queries) ListPacksForUser(ctx context.Context, arg ListPacksForUserPara
 }
 
 const setPackStatus = `-- name: SetPackStatus :one
-UPDATE game_packs SET status = $2 WHERE id = $1 RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at
+UPDATE game_packs SET status = $2 WHERE id = $1 RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system
 `
 
 type SetPackStatusParams struct {
@@ -278,6 +282,7 @@ func (q *Queries) SetPackStatus(ctx context.Context, arg SetPackStatusParams) (G
 		&i.Status,
 		&i.CreatedAt,
 		&i.DeletedAt,
+		&i.IsSystem,
 	)
 	return i, err
 }
@@ -292,7 +297,7 @@ func (q *Queries) SoftDeletePack(ctx context.Context, id uuid.UUID) error {
 }
 
 const updatePack = `-- name: UpdatePack :one
-UPDATE game_packs SET name = $2, description = $3, visibility = $4 WHERE id = $1 RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at
+UPDATE game_packs SET name = $2, description = $3, visibility = $4 WHERE id = $1 RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system
 `
 
 type UpdatePackParams struct {
@@ -320,6 +325,49 @@ func (q *Queries) UpdatePack(ctx context.Context, arg UpdatePackParams) (GamePac
 		&i.Status,
 		&i.CreatedAt,
 		&i.DeletedAt,
+		&i.IsSystem,
+	)
+	return i, err
+}
+
+const upsertSystemPack = `-- name: UpsertSystemPack :one
+INSERT INTO game_packs (id, name, description, owner_id, is_official, visibility, status, is_system)
+VALUES ($1, $2, $3, NULL, true, 'public', 'active', true)
+ON CONFLICT (id) DO UPDATE
+  SET name = EXCLUDED.name,
+      description = EXCLUDED.description,
+      is_official = true,
+      visibility = 'public',
+      status = 'active',
+      is_system = true,
+      deleted_at = NULL
+RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system
+`
+
+type UpsertSystemPackParams struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Description *string   `json:"description"`
+}
+
+// Upserts the bundled "system" pack row with a fixed sentinel UUID. Called
+// once per boot from backend/internal/systempack. Forces is_official,
+// visibility, status, is_system, and deleted_at back to their canonical values
+// on every boot so the pack cannot drift from its managed state.
+func (q *Queries) UpsertSystemPack(ctx context.Context, arg UpsertSystemPackParams) (GamePack, error) {
+	row := q.db.QueryRow(ctx, upsertSystemPack, arg.ID, arg.Name, arg.Description)
+	var i GamePack
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Description,
+		&i.OwnerID,
+		&i.IsOfficial,
+		&i.Visibility,
+		&i.Status,
+		&i.CreatedAt,
+		&i.DeletedAt,
+		&i.IsSystem,
 	)
 	return i, err
 }

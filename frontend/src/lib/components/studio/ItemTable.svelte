@@ -17,6 +17,10 @@
   let uploading = $state(false);
   let uploadProgress = $state<{ name: string; done: number; total: number } | null>(null);
 
+  const isSystem = $derived(
+    studio.packs.find((p) => p.id === studio.selectedPackId)?.is_system ?? false
+  );
+
   async function selectItem(item: GameItem) {
     studio.selectItem(item.id);
     studio.versions = await listVersions(studio.selectedPackId!, item.id).catch(() => []);
@@ -77,6 +81,7 @@
   function onDropZone(e: DragEvent) {
     e.preventDefault();
     dragOverZone = false;
+    if (isSystem) return;
     const files = Array.from(e.dataTransfer?.files ?? []);
     void bulkUpload(files);
   }
@@ -99,14 +104,20 @@
       </span>
     </h2>
 
-    <label
-      use:pressPhysics={'ghost'}
-      class="h-8 px-3 rounded-md border border-brand-border text-xs font-medium cursor-pointer flex items-center gap-1.5"
-    >
-      <input type="file" accept="image/jpeg,image/png,image/webp" multiple class="sr-only" onchange={onFileInput} />
-      <Upload size={12} strokeWidth={2.5} />
-      Bulk Import
-    </label>
+    {#if isSystem}
+      <span class="text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted border border-brand-border rounded-full px-2 py-1" title="Bundled system pack — managed on the server filesystem">
+        Read-only
+      </span>
+    {:else}
+      <label
+        use:pressPhysics={'ghost'}
+        class="h-8 px-3 rounded-md border border-brand-border text-xs font-medium cursor-pointer flex items-center gap-1.5"
+      >
+        <input type="file" accept="image/jpeg,image/png,image/webp" multiple class="sr-only" onchange={onFileInput} />
+        <Upload size={12} strokeWidth={2.5} />
+        Bulk Import
+      </label>
+    {/if}
   </div>
 
   <!-- Drop zone overlay -->
@@ -167,14 +178,16 @@
               </td>
               <td class="px-4 py-2 text-right text-brand-text-muted">v{item.version_number ?? 1}</td>
               <td class="px-4 py-2 text-right">
-                <button
-                  type="button"
-                  onclick={(e) => { e.stopPropagation(); handleDelete(item); }}
-                  class="text-brand-text-muted hover:text-red-600 transition-colors inline-flex items-center p-1 rounded-full"
-                  aria-label="Delete item"
-                >
-                  <Trash2 size={14} strokeWidth={2.5} />
-                </button>
+                {#if !isSystem}
+                  <button
+                    type="button"
+                    onclick={(e) => { e.stopPropagation(); handleDelete(item); }}
+                    class="text-brand-text-muted hover:text-red-600 transition-colors inline-flex items-center p-1 rounded-full"
+                    aria-label="Delete item"
+                  >
+                    <Trash2 size={14} strokeWidth={2.5} />
+                  </button>
+                {/if}
               </td>
             </tr>
           {/each}

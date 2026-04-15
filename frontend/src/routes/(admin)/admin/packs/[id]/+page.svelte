@@ -87,9 +87,17 @@
     <span class="text-sm text-brand-text-muted ml-1">({items.length} items)</span>
     <div class="flex-1"></div>
 
+    {#if data.pack.is_system}
+      <span class="h-9 px-3 rounded-lg border border-brand-border text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted inline-flex items-center"
+            title="Bundled system pack — managed on the server filesystem">
+        System · read-only
+      </span>
+    {/if}
+
     <!-- Moderation dropdown — sits next to Add Items. The current status row
          is disabled so you can't re-submit the state that's already applied
          (which is how we got the triple-toast screenshot). -->
+    {#if !data.pack.is_system}
     <div class="relative">
       <button
         type="button"
@@ -169,16 +177,19 @@
         </div>
       {/if}
     </div>
+    {/if}
 
-    <label
-      use:pressPhysics={'ghost'}
-      use:hoverEffect={'swap'}
-      class="h-9 px-4 rounded-lg border border-brand-border text-sm font-medium cursor-pointer flex items-center gap-1.5"
-    >
-      <input type="file" accept="image/jpeg,image/png,image/webp" multiple class="sr-only" onchange={handleFileInput} disabled={uploading} />
-      <Upload size={14} strokeWidth={2.5} />
-      {uploading ? 'Uploading…' : 'Add Items'}
-    </label>
+    {#if !data.pack.is_system}
+      <label
+        use:pressPhysics={'ghost'}
+        use:hoverEffect={'swap'}
+        class="h-9 px-4 rounded-lg border border-brand-border text-sm font-medium cursor-pointer flex items-center gap-1.5"
+      >
+        <input type="file" accept="image/jpeg,image/png,image/webp" multiple class="sr-only" onchange={handleFileInput} disabled={uploading} />
+        <Upload size={14} strokeWidth={2.5} />
+        {uploading ? 'Uploading…' : 'Add Items'}
+      </label>
+    {/if}
   </div>
 
   {#if data.pack.description}
@@ -227,17 +238,19 @@
             <td class="px-4 py-3 font-medium">{item.name}</td>
             <td class="px-4 py-3 text-brand-text-muted text-xs">v{item.version_number ?? 1}</td>
             <td class="px-4 py-3 text-right">
-              <form method="POST" action="?/deleteItem" use:enhance
-                onsubmit={(e) => !confirm(`Delete "${item.name}"?`) && e.preventDefault()}>
-                <input type="hidden" name="item_id" value={item.id} />
-                <button
-                  type="submit"
-                  use:hoverEffect={'swap'}
-                  class="text-brand-text-muted hover:text-red-600 transition-colors inline-flex items-center p-1 rounded-full"
-                  aria-label="Delete item">
-                  <Trash2 size={14} strokeWidth={2.5} />
-                </button>
-              </form>
+              {#if !data.pack.is_system}
+                <form method="POST" action="?/deleteItem" use:enhance
+                  onsubmit={(e) => !confirm(`Delete "${item.name}"?`) && e.preventDefault()}>
+                  <input type="hidden" name="item_id" value={item.id} />
+                  <button
+                    type="submit"
+                    use:hoverEffect={'swap'}
+                    class="text-brand-text-muted hover:text-red-600 transition-colors inline-flex items-center p-1 rounded-full"
+                    aria-label="Delete item">
+                    <Trash2 size={14} strokeWidth={2.5} />
+                  </button>
+                </form>
+              {/if}
             </td>
           </tr>
         {/each}

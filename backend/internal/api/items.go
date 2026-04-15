@@ -83,6 +83,9 @@ func (h *PackHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
+	if !h.ensureNotSystem(w, r, pack) {
+		return
+	}
 	var req struct {
 		Name           string `json:"name"`
 		PayloadVersion int    `json:"payload_version"`
@@ -134,6 +137,9 @@ func (h *PackHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 	ownerID, _ := uuid.Parse(u.UserID)
 	if u.Role != "admin" && (!pack.OwnerID.Valid || pack.OwnerID.Bytes != ownerID) {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
+		return
+	}
+	if !h.ensureNotSystem(w, r, pack) {
 		return
 	}
 	var req struct {
@@ -190,6 +196,9 @@ func (h *PackHandler) DeleteItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
+	if !h.ensureNotSystem(w, r, pack) {
+		return
+	}
 	if err := h.db.DeleteItem(r.Context(), itemID); err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Delete failed")
 		return
@@ -217,6 +226,9 @@ func (h *PackHandler) ReorderItems(w http.ResponseWriter, r *http.Request) {
 	ownerID, _ := uuid.Parse(u.UserID)
 	if u.Role != "admin" && (!pack.OwnerID.Valid || pack.OwnerID.Bytes != ownerID) {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
+		return
+	}
+	if !h.ensureNotSystem(w, r, pack) {
 		return
 	}
 	var req struct {

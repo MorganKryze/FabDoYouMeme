@@ -3,7 +3,11 @@
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { Save, RotateCcw } from '$lib/icons';
 
-  let { src, onSave }: { src: string | null; onSave: (blob: Blob) => void } = $props();
+  let { src, onSave, readOnly = false }: {
+    src: string | null;
+    onSave: (blob: Blob) => void;
+    readOnly?: boolean;
+  } = $props();
 
   type Orientation = 'landscape' | 'portrait' | 'square';
   const DIMENSIONS: Record<Orientation, { w: number; h: number }> = {
@@ -207,13 +211,15 @@
     </div>
   </div>
 
-  <button
-    type="button"
-    onclick={save}
-    use:pressPhysics={'dark'}
-    class="h-10 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center justify-center gap-1.5"
-  >
-    <Save size={14} strokeWidth={2.5} />
-    Save as new version
-  </button>
+  {#if !readOnly}
+    <button
+      type="button"
+      onclick={save}
+      use:pressPhysics={'dark'}
+      class="h-10 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center justify-center gap-1.5"
+    >
+      <Save size={14} strokeWidth={2.5} />
+      Save as new version
+    </button>
+  {/if}
 </div>

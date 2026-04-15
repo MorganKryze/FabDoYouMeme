@@ -32,6 +32,7 @@ import (
 	memecaption "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_caption"
 	mw "github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/storage"
+	"github.com/MorganKryze/FabDoYouMeme/backend/internal/systempack"
 )
 
 func main() {
@@ -98,6 +99,12 @@ func main() {
 	if err != nil {
 		logger.Error("storage init failed", "error", err)
 		os.Exit(1)
+	}
+
+	// ── System pack sync (idempotent, non-fatal) ─────────────────────────────
+	if err := systempack.Sync(context.Background(), queries, store, logger); err != nil {
+		logger.Error("startup: system pack sync", "error", err)
+		// Non-fatal — a RustFS blip or migration gap shouldn't stop the server.
 	}
 
 	// ── Game registry ─────────────────────────────────────────────────────────

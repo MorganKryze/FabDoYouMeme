@@ -32,6 +32,19 @@ func NewPackHandler(pool *pgxpool.Pool, cfg *config.Config, store storage.Storag
 	return &PackHandler{db: db.New(pool), cfg: cfg, storage: store}
 }
 
+// ensureNotSystem writes a 403 system_pack_readonly response and returns false
+// when the given pack is managed by systempack. Every mutating pack/item
+// handler must call this after loading the pack and before any write.
+// There is NO admin bypass — the filesystem is the only way to update.
+func (h *PackHandler) ensureNotSystem(w http.ResponseWriter, r *http.Request, pack db.GamePack) bool {
+	if pack.IsSystem {
+		writeError(w, r, http.StatusForbidden, "system_pack_readonly",
+			"This pack is managed by the server and cannot be modified.")
+		return false
+	}
+	return true
+}
+
 // Create handles POST /api/packs.
 func (h *PackHandler) Create(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.GetSessionUser(r)
@@ -126,7 +139,9 @@ func (h *PackHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ownerID, _ := uuid.Parse(u.UserID)
-	if u.Role != "admin" && (!pack.OwnerID.Valid || pack.OwnerID.Bytes != ownerID) {
+	isOwner := pack.OwnerID.Valid && pack.OwnerID.Bytes == ownerID
+	isPublicActive := pack.Visibility == "public" && pack.Status == "active" && !pack.DeletedAt.Valid
+	if u.Role != "admin" && !isOwner && !isPublicActive {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
@@ -153,6 +168,9 @@ func (h *PackHandler) Update(w http.ResponseWriter, r *http.Request) {
 	ownerID, _ := uuid.Parse(u.UserID)
 	if u.Role != "admin" && (!pack.OwnerID.Valid || pack.OwnerID.Bytes != ownerID) {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
+		return
+	}
+	if !h.ensureNotSystem(w, r, pack) {
 		return
 	}
 	var req struct {
@@ -212,6 +230,9 @@ func (h *PackHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
+	if !h.ensureNotSystem(w, r, pack) {
+		return
+	}
 	if err := h.db.SoftDeletePack(r.Context(), packID); err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Delete failed")
 		return
@@ -229,6 +250,14 @@ func (h *PackHandler) SetStatus(w http.ResponseWriter, r *http.Request) {
 	packID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid pack ID")
+		return
+	}
+	pack, err := h.db.GetPackByID(r.Context(), packID)
+	if err != nil {
+		writeError(w, r, http.StatusNotFound, "not_found", "Pack not found")
+		return
+	}
+	if !h.ensureNotSystem(w, r, pack) {
 		return
 	}
 	var req struct{ Status string `json:"status"` }

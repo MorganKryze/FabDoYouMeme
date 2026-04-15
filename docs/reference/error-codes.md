@@ -34,6 +34,7 @@ Canonical reference for every `snake_case` error code emitted by the system.
 | `solo_mode_not_supported`  | 422  | `POST /api/rooms`                                | `mode='solo'` requested but `game_types.supports_solo = false`                                                             |
 | `room_not_lobby`           | 409  | `PATCH /api/rooms/:code/config`                  | Room state is not `lobby`; config is locked once the game starts                                                           |
 | `positions_invalid`        | 422  | `PATCH /api/packs/:id/items/reorder`             | Positions array does not cover all items, contains duplicates, does not start at 1, or contains item IDs from another pack |
+| `system_pack_readonly`     | 403  | Every mutating pack/item handler                 | Attempt to modify a pack managed by `systempack` (bundled demo pack). The filesystem is the only way to update it.         |
 | `rate_limited`             | 429  | Rate-limit middleware                            | Too many requests — see [self-hosting.md](../self-hosting.md) for per-route limits                                         |
 
 ### Special: smtp_failure (201 + warning)

@@ -16,6 +16,9 @@
   const activeVersion = $derived(
     studio.versions.find((v) => v.id === item?.current_version_id) ?? null
   );
+  const isSystem = $derived(
+    studio.packs.find((p) => p.id === studio.selectedPackId)?.is_system ?? false
+  );
 
   async function handleImageSave(blob: Blob) {
     if (!studio.selectedPackId || !studio.selectedItemId || !item) return;
@@ -76,6 +79,7 @@
         <ImageEditor
           src={activeVersion?.media_url ?? null}
           onSave={handleImageSave}
+          readOnly={isSystem}
         />
       {/key}
     </div>
