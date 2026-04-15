@@ -38,6 +38,12 @@ type Config struct {
 	SeedAdminEmail string
 	LogLevel       string
 
+	// AppEnv gates env-specific features. Legal values: "dev", "preprod",
+	// "prod". Defaults to "prod" when unset — fail safe, because features
+	// that disable in prod should stay disabled if the operator forgets to
+	// set it. Consumed by danger-zone route registration in main.go.
+	AppEnv string
+
 	ReconnectGraceWindow time.Duration
 	WSRateLimit          int
 	WSReadLimitBytes     int64
@@ -92,6 +98,7 @@ func Load() (*Config, error) {
 		MagicLinkBaseURL: os.Getenv("FRONTEND_URL"),
 		SeedAdminEmail:   os.Getenv("SEED_ADMIN_EMAIL"),
 		LogLevel:         getEnv("LOG_LEVEL", "info"),
+		AppEnv:           getEnv("APP_ENV", "prod"),
 	}
 
 	// Fail-loud on bad FRONTEND_URL (finding 4.D). url.Parse accepts almost
@@ -213,6 +220,15 @@ func (cfg *Config) validateBounds() error {
 
 		int64Bound("WS_READ_LIMIT_BYTES", cfg.WSReadLimitBytes, 64, 1_048_576),
 		int64Bound("MAX_UPLOAD_SIZE_BYTES", cfg.MaxUploadSizeBytes, 1, 104_857_600),
+
+		func() error {
+			switch cfg.AppEnv {
+			case "dev", "preprod", "prod":
+				return nil
+			default:
+				return fmt.Errorf("APP_ENV=%q must be one of dev, preprod, prod", cfg.AppEnv)
+			}
+		}(),
 	}
 	for _, e := range checks {
 		if e != nil {

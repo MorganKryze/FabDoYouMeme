@@ -67,6 +67,7 @@ export {
   X,
   PartyPopper,
   IdCard,
+  AlertTriangle,
 
   // --- Theme ---
   Sun,

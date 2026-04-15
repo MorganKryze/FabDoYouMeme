@@ -6,11 +6,19 @@
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { adminApi } from '$lib/api/admin';
   import { toast } from '$lib/state/toast.svelte';
-  import { RotateCw, Copy, Info } from '$lib/icons';
+  import {
+    RotateCw,
+    Copy,
+    Info,
+    Package,
+    ImageIcon,
+    Server
+  } from '$lib/icons';
   import type {
     DeepHealthResponse,
     DeepHealthCheck,
     AdminStats,
+    AdminStorageStats,
     AuditEntry
   } from '$lib/api/types';
   import type { PageData } from './$types';
@@ -22,6 +30,9 @@
     untrack(() => data.health ?? null)
   );
   let stats = $state<AdminStats | null>(untrack(() => data.stats ?? null));
+  let storageStats = $state<AdminStorageStats | null>(
+    untrack(() => data.storage ?? null)
+  );
   let audit = $state<AuditEntry[]>(untrack(() => data.audit ?? []));
   let refreshing = $state(false);
   let lastRefreshAt = $state<number>(Date.now());
@@ -63,7 +74,10 @@
       'Likely causes: SMTP provider rate-limiting, credentials rotated, or relay DNS/TLS misconfig. Dev stacks should hit Mailpit; check SMTP_HOST and outbox toast state.'
   };
 
-  const STATS_STORAGE_KEY = 'admin:stats:baseline';
+  // Versioned key: bump the suffix whenever the AdminStats shape changes
+  // so stale baselines from a previous schema don't produce NaN deltas.
+  // v2: swapped total_packs → games_played.
+  const STATS_STORAGE_KEY = 'admin:stats:baseline:v2';
 
   // ── Helpers ──────────────────────────────────────────────────────────────
   function formatAge(ms: number): string {
@@ -99,6 +113,18 @@
     if (status === 'ok') return '#22c55e'; // green-500 — readable on light & dark
     if (status === 'degraded') return '#ef4444'; // red-500
     return '#94a3b8'; // slate-400 for skipped
+  }
+
+  // Humanize byte counts for the storage widget. Under 1 MB shows KB to one
+  // decimal so empty/seed installs don't read as a flat "0 MB".
+  function formatBytes(bytes: number): string {
+    if (!Number.isFinite(bytes) || bytes <= 0) return '0 MB';
+    const kb = bytes / 1024;
+    if (kb < 1024) return `${kb.toFixed(1)} KB`;
+    const mb = kb / 1024;
+    if (mb < 1024) return `${mb.toFixed(mb < 10 ? 1 : 0)} MB`;
+    const gb = mb / 1024;
+    return `${gb.toFixed(gb < 10 ? 2 : 1)} GB`;
   }
 
   // Sub-ms latencies get one decimal ("0.3 ms"); anything >= 1 is rounded
@@ -181,6 +207,15 @@
       recordSample(h);
     } catch {
       ok = false;
+    }
+    // Storage stats walk the RustFS bucket — keep them off the hot path so
+    // a slow/unreachable RustFS never stalls the health+stats refresh or
+    // trips the network-degraded backoff. Failure silently retains the
+    // previous snapshot, matching the audit feed behaviour below.
+    try {
+      storageStats = await adminApi.getStorageStats();
+    } catch {
+      /* keep previous snapshot on failure */
     }
     // Audit refresh is best-effort and never blocks: operators care most
     // about health + stats freshness, the audit feed is low-frequency.
@@ -278,7 +313,7 @@
       {#each [
         { label: 'Active Rooms', value: stats.active_rooms, field: 'active_rooms' as const },
         { label: 'Total Users', value: stats.total_users, field: 'total_users' as const },
-        { label: 'Total Packs', value: stats.total_packs, field: 'total_packs' as const },
+        { label: 'Games Played', value: stats.games_played, field: 'games_played' as const },
         { label: 'Pending Invites', value: stats.pending_invites, field: 'pending_invites' as const },
       ] as card, i}
         {@const d = delta(card.field)}
@@ -299,6 +334,53 @@
         </div>
       {/each}
     </div>
+  {/if}
+
+  {#if storageStats}
+    <section class="flex flex-col gap-3">
+      <h2 class="text-base font-semibold">Storage</h2>
+      <div
+        use:reveal
+        use:physCard
+        class="rounded-xl border border-brand-border bg-brand-white p-4 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:divide-x sm:divide-brand-border"
+      >
+        {#each [
+          {
+            label: 'Packs',
+            value: storageStats.packs_count.toLocaleString(),
+            Icon: Package,
+          },
+          {
+            label: 'Assets',
+            value: storageStats.assets_count.toLocaleString(),
+            Icon: ImageIcon,
+          },
+          {
+            label: 'Used on RustFS',
+            value: formatBytes(storageStats.total_bytes),
+            Icon: Server,
+          },
+        ] as item}
+          {@const IconCmp = item.Icon}
+          <div class="flex items-center gap-3 sm:px-4 first:sm:pl-0 last:sm:pr-0">
+            <div
+              class="shrink-0 inline-flex items-center justify-center h-10 w-10 rounded-lg bg-muted/40 text-brand-text-muted"
+              aria-hidden="true"
+            >
+              <IconCmp size={20} strokeWidth={2} />
+            </div>
+            <div class="flex flex-col">
+              <p class="text-xs uppercase tracking-wider text-brand-text-muted">
+                {item.label}
+              </p>
+              <p class="text-xl font-bold tabular-nums leading-tight">
+                {item.value}
+              </p>
+            </div>
+          </div>
+        {/each}
+      </div>
+    </section>
   {/if}
 
   {#if health}

@@ -54,6 +54,10 @@ services:
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
       PORT: ${BACKEND_PORT:-8080}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Stage marker gating /api/admin/danger/* route registration in
+      # cmd/server/main.go. Fails safe to "prod" — a missing value keeps
+      # the danger zone unmounted. Legal values: dev, preprod, prod.
+      APP_ENV: ${APP_ENV:-prod}
       RECONNECT_GRACE_WINDOW: ${RECONNECT_GRACE_WINDOW:-30s}
       WS_RATE_LIMIT: ${WS_RATE_LIMIT:-20}
       WS_READ_LIMIT_BYTES: ${WS_READ_LIMIT_BYTES:-4096}
@@ -90,6 +94,11 @@ services:
       # WebSocket upgrades to API_URL, so the backend port never needs
       # to be published to the host.
       API_URL: http://backend:8080
+      # Frontend-visible stage marker mirroring the backend's APP_ENV.
+      # Gates rendering of the admin sidebar "Danger zone" nav link and
+      # the /admin/danger page load function. Fails safe to "prod" — a
+      # missing value hides the UI entirely. Must match APP_ENV above.
+      PUBLIC_APP_ENV: ${PUBLIC_APP_ENV:-prod}
       # Legal / privacy policy (served at /privacy). Injected at runtime via
       # `$env/dynamic/public` so operators can update disclosure content
       # without rebuilding the image. See docs/self-hosting.md for details.

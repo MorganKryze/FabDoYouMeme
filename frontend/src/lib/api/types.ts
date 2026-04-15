@@ -189,8 +189,14 @@ export interface BulkUploadOutcome {
 export interface AdminStats {
   active_rooms: number;
   total_users: number;
-  total_packs: number;
+  games_played: number;
   pending_invites: number;
+}
+
+export interface AdminStorageStats {
+  packs_count: number;
+  assets_count: number;
+  total_bytes: number;
 }
 
 export interface AuditEntry {
@@ -203,6 +209,32 @@ export interface AuditEntry {
   resource_label: string;
   changes: unknown;
   created_at: string;
+}
+
+// ── Destructive admin actions ("danger zone") ────────────────────────────
+// Shape of the server response for every /api/admin/danger/* endpoint.
+// Every count is absolute — a zero field means "nothing of that kind was
+// touched by this action" (not "action failed"). `s3_error` only appears
+// when the S3 purge step raised an error after the DB transaction
+// committed; callers should surface it but treat the DB-side counts as
+// authoritative.
+export interface DangerReport {
+  rooms_deleted: number;
+  room_players_deleted: number;
+  rounds_deleted: number;
+  submissions_deleted: number;
+  votes_deleted: number;
+  packs_deleted: number;
+  items_deleted: number;
+  versions_deleted: number;
+  invites_deleted: number;
+  sessions_deleted: number;
+  magic_tokens_deleted: number;
+  notifications_deleted: number;
+  users_deleted: number;
+  s3_objects_deleted: number;
+  s3_error?: string;
+  excluded_self?: boolean;
 }
 
 // ── Deep health response (admin dashboard) ────────────────────────────────

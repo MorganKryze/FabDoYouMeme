@@ -1,9 +1,10 @@
 <script lang="ts">
   import '../../app.css';
   import { page } from '$app/stores';
+  import { env } from '$env/dynamic/public';
   import Toast from '$lib/components/Toast.svelte';
   import { hoverEffect } from '$lib/actions/hoverEffect';
-  import { Home, Users, Mail, Package, Sliders, User } from '$lib/icons';
+  import { Home, Users, Mail, Package, Sliders, User, AlertTriangle } from '$lib/icons';
   import Wordmark from '$lib/components/Wordmark.svelte';
   import type { LayoutData } from './$types';
 
@@ -16,6 +17,12 @@
     { href: '/admin/packs', label: 'Packs', Icon: Package },
     { href: '/admin/game-types', label: 'Game Types', Icon: Sliders },
   ] as const;
+
+  // Danger zone visibility mirrors the backend's APP_ENV gate. Fails safe
+  // to hidden when PUBLIC_APP_ENV is unset — the backend applies the same
+  // default so an operator cannot accidentally expose the nav link via
+  // partial env config.
+  const dangerVisible = (env.PUBLIC_APP_ENV || 'prod') !== 'prod';
 
   // Dashboard uses exact match because every other admin path also starts
   // with `/admin`; all other items use "exact OR prefix+boundary" so nested
@@ -55,6 +62,25 @@
         </li>
       {/each}
     </ul>
+
+    {#if dangerVisible}
+      {@const href = '/admin/danger'}
+      {@const active = isActive(href, $page.url.pathname)}
+      <div class="mx-2 mt-3 border-t border-brand-border pt-3">
+        <a
+          {href}
+          use:hoverEffect={'swap'}
+          aria-current={active ? 'page' : undefined}
+          class="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors no-underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-red-300
+            {active
+              ? 'bg-red-600 text-white'
+              : 'text-red-600 hover:text-red-700 hover:bg-red-50'}"
+        >
+          <AlertTriangle size={16} strokeWidth={2.5} />
+          Danger zone
+        </a>
+      </div>
+    {/if}
 
     <div class="mt-auto px-4 pt-4 border-t border-brand-border">
       <a

@@ -72,6 +72,21 @@ func (q *Queries) CountActiveRooms(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countFinishedRooms = `-- name: CountFinishedRooms :one
+SELECT COUNT(*) FROM rooms WHERE state = 'finished'
+`
+
+// Counts rooms that reached the 'finished' state — i.e. a played-to-completion
+// game. Used by the admin dashboard "Total Games Played" card. Rooms that
+// were abandoned in lobby and auto-closed by startup cleanup are also in
+// this state, but at this scale the signal is close enough to "real games".
+func (q *Queries) CountFinishedRooms(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countFinishedRooms)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createGuestSubmission = `-- name: CreateGuestSubmission :one
 INSERT INTO submissions (round_id, guest_player_id, payload) VALUES ($1, $2, $3) RETURNING id, round_id, user_id, payload, created_at, guest_player_id
 `

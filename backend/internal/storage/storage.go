@@ -31,6 +31,18 @@ type Storage interface {
 	// Delete removes the object at key. Non-fatal if key does not exist.
 	Delete(ctx context.Context, key string) error
 
+	// Purge deletes every object whose key starts with prefix. Returns the
+	// total number of objects deleted. Pass "" to empty the bucket. Uses
+	// paginated ListObjectsV2 + batched DeleteObjects; non-transactional.
+	// On failure during a batch, returns the running count and the error so
+	// callers can report partial success in an audit log.
+	Purge(ctx context.Context, prefix string) (int64, error)
+
+	// Stats walks every object whose key starts with prefix and returns the
+	// object count and aggregate byte size. Pass "" to sum the whole bucket.
+	// Uses paginated ListObjectsV2 — cost scales linearly with object count.
+	Stats(ctx context.Context, prefix string) (objectCount int64, totalBytes int64, err error)
+
 	// Probe checks connectivity to the storage backend.
 	// Returns nil if the bucket is reachable.
 	Probe(ctx context.Context) error

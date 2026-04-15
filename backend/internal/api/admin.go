@@ -18,6 +18,7 @@ import (
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/auth"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
+	"github.com/MorganKryze/FabDoYouMeme/backend/internal/storage"
 )
 
 // writeAuditLog is a best-effort admin audit write. Failures are intentionally
@@ -41,11 +42,12 @@ func writeAuditLog(ctx context.Context, q *db.Queries, adminUserID, action, reso
 
 // AdminHandler handles /api/admin/* routes (users, invites, notifications).
 type AdminHandler struct {
-	db *db.Queries
+	db    *db.Queries
+	store storage.Storage
 }
 
-func NewAdminHandler(pool *pgxpool.Pool) *AdminHandler {
-	return &AdminHandler{db: db.New(pool)}
+func NewAdminHandler(pool *pgxpool.Pool, store storage.Storage) *AdminHandler {
+	return &AdminHandler{db: db.New(pool), store: store}
 }
 
 // ListUsers handles GET /api/admin/users.
@@ -252,7 +254,10 @@ func (h *AdminHandler) ListNotifications(w http.ResponseWriter, r *http.Request)
 // GetStats handles GET /api/admin/stats. Returns the four counters rendered
 // in the admin dashboard hero row. Counts are computed per-request — at this
 // scale the four COUNT(*) queries are cheap enough that caching would add
-// complexity without measurable benefit.
+// complexity without measurable benefit. The pack count now lives in the
+// storage widget (GET /api/admin/storage); the hero row surfaces games
+// played instead so operators get a "lifetime activity" signal alongside
+// the live counters.
 func (h *AdminHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	activeRooms, err := h.db.CountActiveRooms(ctx)
@@ -265,9 +270,9 @@ func (h *AdminHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to count users")
 		return
 	}
-	totalPacks, err := h.db.CountAllPacks(ctx)
+	gamesPlayed, err := h.db.CountFinishedRooms(ctx)
 	if err != nil {
-		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to count packs")
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to count games played")
 		return
 	}
 	pendingInvites, err := h.db.CountPendingInvites(ctx)
@@ -278,7 +283,7 @@ func (h *AdminHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]int64{
 		"active_rooms":    activeRooms,
 		"total_users":     totalUsers,
-		"total_packs":     totalPacks,
+		"games_played":    gamesPlayed,
 		"pending_invites": pendingInvites,
 	})
 }
@@ -286,6 +291,33 @@ func (h *AdminHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 // strPtrEmpty returns a pointer to the empty string — CountUsers takes
 // *string as its search filter and interprets nil/empty as "no filter".
 func strPtrEmpty() *string { s := ""; return &s }
+
+// GetStorageStats handles GET /api/admin/storage. Returns the summary shown
+// in the dashboard storage widget: pack count from the DB, and object count
+// plus total bytes from a live walk of the RustFS bucket.
+//
+// The bucket walk is intentionally kept out of GetStats (which is four cheap
+// COUNT(*) queries) so the hero-row refresh path stays fast; this endpoint
+// is only hit when the dashboard renders the widget, and scales linearly
+// with object count.
+func (h *AdminHandler) GetStorageStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	packsCount, err := h.db.CountAllPacks(ctx)
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to count packs")
+		return
+	}
+	objectCount, totalBytes, err := h.store.Stats(ctx, "")
+	if err != nil {
+		writeError(w, r, http.StatusBadGateway, "storage_unreachable", "Failed to read storage stats")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int64{
+		"packs_count":  packsCount,
+		"assets_count": objectCount,
+		"total_bytes":  totalBytes,
+	})
+}
 
 // auditEntry is the wire shape for GET /api/admin/audit. We flatten the
 // sqlc row so the frontend doesn't have to understand pgtype.UUID's

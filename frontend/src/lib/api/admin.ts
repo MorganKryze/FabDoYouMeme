@@ -5,7 +5,9 @@ import type {
   PaginatedResponse,
   DeepHealthResponse,
   AdminStats,
-  AuditEntry
+  AdminStorageStats,
+  AuditEntry,
+  DangerReport
 } from './types';
 
 export const adminApi = {
@@ -45,6 +47,35 @@ export const adminApi = {
 
   getHealth: () => api.get<DeepHealthResponse>('/api/health/deep'),
   getStats: () => api.get<AdminStats>('/api/admin/stats'),
+  getStorageStats: () =>
+    api.get<AdminStorageStats>('/api/admin/storage'),
   listAudit: (limit = 10) =>
-    api.get<{ data: AuditEntry[] }>(`/api/admin/audit?limit=${limit}`)
+    api.get<{ data: AuditEntry[] }>(`/api/admin/audit?limit=${limit}`),
+
+  // Destructive admin actions ("danger zone"). The confirmation phrase is
+  // hardcoded here to match the server-side expected value — both sides
+  // must agree or the backend responds 400 invalid_confirmation. Keep
+  // these strings in lockstep with backend/internal/api/danger.go.
+  danger: {
+    wipeGameHistory: () =>
+      api.post<DangerReport>('/api/admin/danger/wipe-game-history', {
+        confirmation: 'wipe game history'
+      }),
+    wipePacksAndMedia: () =>
+      api.post<DangerReport>('/api/admin/danger/wipe-packs-and-media', {
+        confirmation: 'wipe packs and media'
+      }),
+    wipeInvites: () =>
+      api.post<DangerReport>('/api/admin/danger/wipe-invites', {
+        confirmation: 'wipe invites'
+      }),
+    wipeSessions: () =>
+      api.post<DangerReport>('/api/admin/danger/wipe-sessions', {
+        confirmation: 'force logout everyone'
+      }),
+    fullReset: () =>
+      api.post<DangerReport>('/api/admin/danger/full-reset', {
+        confirmation: 'RESET TO FIRST BOOT'
+      })
+  }
 };

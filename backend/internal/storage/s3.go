@@ -11,6 +11,7 @@ import (
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 )
 
 // S3Storage is the concrete Storage implementation backed by an S3-compatible store (RustFS).
@@ -131,6 +132,70 @@ func (s *S3Storage) Probe(ctx context.Context) error {
 		return fmt.Errorf("storage probe: %w", err)
 	}
 	return nil
+}
+
+// Purge deletes every object under prefix. Uses ListObjectsV2Pager +
+// batched DeleteObjects (max 1000 keys per batch, the S3 limit). Returns
+// the running total on error so the caller can surface partial progress
+// in audit logs. Passing "" empties the entire bucket.
+func (s *S3Storage) Purge(ctx context.Context, prefix string) (int64, error) {
+	var total int64
+	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(s.bucket),
+		Prefix: aws.String(prefix),
+	})
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return total, fmt.Errorf("purge list: %w", err)
+		}
+		if len(page.Contents) == 0 {
+			continue
+		}
+		ids := make([]s3types.ObjectIdentifier, 0, len(page.Contents))
+		for _, obj := range page.Contents {
+			if obj.Key == nil {
+				continue
+			}
+			ids = append(ids, s3types.ObjectIdentifier{Key: obj.Key})
+		}
+		if len(ids) == 0 {
+			continue
+		}
+		_, err = s.client.DeleteObjects(ctx, &s3.DeleteObjectsInput{
+			Bucket: aws.String(s.bucket),
+			Delete: &s3types.Delete{Objects: ids, Quiet: aws.Bool(true)},
+		})
+		if err != nil {
+			return total, fmt.Errorf("purge delete batch: %w", err)
+		}
+		total += int64(len(ids))
+	}
+	return total, nil
+}
+
+// Stats walks every object under prefix and returns the object count and
+// aggregate byte size. Uses the same paginator strategy as Purge; failure
+// returns the running totals so the caller can still surface partial data.
+func (s *S3Storage) Stats(ctx context.Context, prefix string) (int64, int64, error) {
+	var count, bytes int64
+	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(s.bucket),
+		Prefix: aws.String(prefix),
+	})
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return count, bytes, fmt.Errorf("stats list: %w", err)
+		}
+		for _, obj := range page.Contents {
+			count++
+			if obj.Size != nil {
+				bytes += *obj.Size
+			}
+		}
+	}
+	return count, bytes, nil
 }
 
 // Compile-time interface check

@@ -135,7 +135,7 @@ func main() {
 	roomHandler      := api.NewRoomHandler(pool, cfg, manager, logger)
 	assetHandler     := api.NewAssetHandler(pool, cfg, store)
 	gameTypeHandler  := api.NewGameTypeHandler(pool, registry)
-	adminHTTPHandler := api.NewAdminHandler(pool)
+	adminHTTPHandler := api.NewAdminHandler(pool, store)
 	wsHandler        := api.NewWSHandler(manager, queries, cfg.AllowedOrigins)
 	healthHandler    := api.NewHealthHandler(pool, store, emailSvc.Probe)
 
@@ -194,8 +194,24 @@ func main() {
 		r.Get("/notifications", adminHTTPHandler.ListNotifications)
 		r.Patch("/notifications/{id}", adminHTTPHandler.MarkNotificationRead)
 		r.Get("/stats", adminHTTPHandler.GetStats)
+		r.Get("/storage", adminHTTPHandler.GetStorageStats)
 		r.Get("/audit", adminHTTPHandler.ListAudit)
 	})
+
+	// Destructive admin actions ("danger zone"). Mounted ONLY when
+	// the service is running in dev or preprod — in prod the routes
+	// literally do not exist (404, not 403), so a leaked admin token
+	// cannot hit them. Prod resets go through `make prod-clean`.
+	if cfg.AppEnv != "prod" {
+		dangerHandler := api.NewDangerHandler(pool, store)
+		r.With(mw.RequireAuth, mw.RequireAdmin).Route("/api/admin/danger", func(r chi.Router) {
+			r.Post("/wipe-game-history", dangerHandler.WipeGameHistory)
+			r.Post("/wipe-packs-and-media", dangerHandler.WipePacksAndMedia)
+			r.Post("/wipe-invites", dangerHandler.WipeInvites)
+			r.Post("/wipe-sessions", dangerHandler.WipeSessions)
+			r.Post("/full-reset", dangerHandler.FullReset)
+		})
+	}
 
 	// Game types
 	r.With(mw.RequireAuth).Route("/api/game-types", func(r chi.Router) {

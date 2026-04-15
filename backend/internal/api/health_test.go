@@ -30,8 +30,12 @@ func (s *stubStorage) Upload(_ context.Context, _ string, _ io.Reader, _ string,
 func (s *stubStorage) Download(_ context.Context, _ string) (io.ReadCloser, string, int64, error) {
 	return io.NopCloser(&bytes.Buffer{}), "", 0, nil
 }
-func (s *stubStorage) Delete(_ context.Context, _ string) error { return nil }
-func (s *stubStorage) Probe(_ context.Context) error            { return nil }
+func (s *stubStorage) Delete(_ context.Context, _ string) error         { return nil }
+func (s *stubStorage) Purge(_ context.Context, _ string) (int64, error) { return 0, nil }
+func (s *stubStorage) Stats(_ context.Context, _ string) (int64, int64, error) {
+	return 0, 0, nil
+}
+func (s *stubStorage) Probe(_ context.Context) error { return nil }
 
 func newHealthHandler() *api.HealthHandler {
 	return api.NewHealthHandler(testutil.Pool(), &stubStorage{}, nil)

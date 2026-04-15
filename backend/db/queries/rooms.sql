@@ -88,6 +88,13 @@ UPDATE room_players SET score = 0 WHERE room_id = $1;
 -- stats card. Finished rooms are excluded — operators care about live activity.
 SELECT COUNT(*) FROM rooms WHERE state IN ('lobby', 'playing');
 
+-- name: CountFinishedRooms :one
+-- Counts rooms that reached the 'finished' state — i.e. a played-to-completion
+-- game. Used by the admin dashboard "Total Games Played" card. Rooms that
+-- were abandoned in lobby and auto-closed by startup cleanup are also in
+-- this state, but at this scale the signal is close enough to "real games".
+SELECT COUNT(*) FROM rooms WHERE state = 'finished';
+
 -- name: FinishCrashedRooms :execresult
 UPDATE rooms SET state = 'finished', finished_at = now() WHERE state = 'playing';
 

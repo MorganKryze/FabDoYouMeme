@@ -108,6 +108,15 @@ All variables come from `.env`. Never commit this file.
 | `RUSTFS_SECRET_KEY` | yes      | —                   | RustFS secret key                                                           |
 | `RUSTFS_BUCKET`     | no       | `fabyoumeme-assets` | S3 bucket name                                                              |
 
+### Stage gate
+
+These two variables must match each other. They gate the [danger zone](#danger-zone) — a set of destructive admin actions that are unmounted entirely in prod (the routes return 404, not 403). `APP_ENV` is read by the Go backend; `PUBLIC_APP_ENV` is the SvelteKit-visible mirror that the admin sidebar and danger zone page read through `$env/dynamic/public`. **Both default to `prod` when unset — fail safe.** A partially configured deploy cannot accidentally expose the danger zone.
+
+| Variable         | Required | Default | Description                                                                                                 |
+| ---------------- | -------- | ------- | ----------------------------------------------------------------------------------------------------------- |
+| `APP_ENV`        | no       | `prod`  | Backend stage marker. Legal values: `dev`, `preprod`, `prod`. Gates mounting of `/api/admin/danger/*`.      |
+| `PUBLIC_APP_ENV` | no       | `prod`  | Frontend stage marker. Must match `APP_ENV`. Gates rendering of the admin sidebar "Danger zone" nav entry. |
+
 ### URLs & routing
 
 | Variable             | Required | Default | Description                                                                                                                                                                                                  |
@@ -197,6 +206,26 @@ See [`docs/reference/privacy-policy.md`](reference/privacy-policy.md) for the fu
 | `RUSTFS_ACCESS_KEY` / `RUSTFS_SECRET_KEY` | All asset operations fail                   | Rotate in RustFS admin console, update `.env`, restart backend      |
 | `SMTP_PASSWORD`                           | Email delivery fails (magic links broken)   | Update `.env`, restart backend                                      |
 | Session tokens (in DB)                    | None — tokens are random and self-contained | Invalidate individual sessions by deleting rows in `sessions` table |
+
+---
+
+## Danger zone
+
+The admin UI exposes a set of destructive actions under **Admin → Danger zone** that permanently delete data and cannot be undone. These actions exist to reset a dev or preprod deployment to a known state without tearing down the whole Docker stack (which would also lose the database volume).
+
+**They are unmounted entirely in production.** When `APP_ENV=prod` (the default), the backend does not register the `/api/admin/danger/*` routes at all — requests return `404 not found`, not `403 forbidden`. The frontend mirrors this: the sidebar nav link is hidden and the `/admin/danger` page throws a 404 load error when `PUBLIC_APP_ENV=prod`. Both variables default to `prod` when unset, so a partially configured `.env` cannot accidentally expose the feature.
+
+To enable the danger zone in dev or preprod, set **both** `APP_ENV` and `PUBLIC_APP_ENV` to `dev` or `preprod` in the corresponding `.env` file (see [Stage gate](#stage-gate) above). Each action requires typing an exact confirmation phrase in a modal; the phrase is also sent as a JSON body field and validated server-side, so a forged request without the exact phrase is rejected with `400 invalid_confirmation`.
+
+| Action                    | Deletes                                                                                                                                         | Preserves                                                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Wipe game history         | All rooms, rounds, submissions, and votes                                                                                                       | Packs, items, users, invites, sessions, object storage                                                                  |
+| Wipe packs and media      | All packs, items, pack media rows, AND all game history that depends on them. Empties the entire object storage bucket via `storage.Purge("")` | Users, invites, sessions                                                                                                |
+| Wipe invites              | All invite tokens                                                                                                                               | Everything else — existing users stay logged in and keep their accounts. Only future sign-ups are affected.             |
+| Force logout everyone     | All sessions and magic-link tokens **except the acting admin's own**                                                                            | The acting admin's session. All other users are bounced to login on their next request.                                |
+| Full reset to first boot  | Everything above AND all non-protected users                                                                                                    | The acting admin, the bootstrap admin, the sentinel user (for GDPR-anonymized records), and game type seed data        |
+
+Every invocation is written to the admin audit log with the action name, the acting admin ID, and a JSON summary of what was deleted. Check [`docs/reference/decisions.md`](reference/decisions.md) (ADR-012) for the design rationale — in particular why routes are unmounted rather than returning 403.
 
 ---
 
