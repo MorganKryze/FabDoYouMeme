@@ -7,13 +7,17 @@
 
   let { children, data }: { children: any; data: LayoutData } = $props();
 
+  let unsubscribe: (() => void) | null = null;
+
   onMount(() => {
     room.init(data.room);
     ws.connect(data.room.code);
-    ws.onMessage('*', (msg) => room.handleMessage(msg as WsMessage));
+    unsubscribe = ws.onMessage('*', (msg) => room.handleMessage(msg as WsMessage));
   });
 
   onDestroy(() => {
+    unsubscribe?.();
+    unsubscribe = null;
     ws.disconnect();
     room.reset();
   });
@@ -41,12 +45,6 @@
         </div>
       {/if}
     </div>
-  {:else if ws.status === 'reconnecting'}
-    <div class="border-b border-brand-border px-4 py-2 flex items-center justify-end">
-      <div class="text-xs font-bold animate-pulse" style="color: var(--brand-accent);">
-        Reconnecting… (attempt {ws.retryCount} / 10)
-      </div>
-    </div>
   {/if}
 
   <div class="flex-1 flex overflow-hidden">
@@ -65,6 +63,7 @@
         <ul class="flex flex-col gap-2">
           {#each room.players as player, i}
             {@const colors = ['#E8937F', '#8BC9B1', '#D4A5C9', '#A8D8EA', '#FDDCB5', '#B5E2D0']}
+            {@const hasSubmitted = room.submittedPlayerIds.has(player.user_id)}
             <li
               class="flex items-center gap-3 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-3 py-2 transition-transform duration-300"
               style="box-shadow: 0 4px 0 rgba(0,0,0,0.06);"
@@ -81,6 +80,15 @@
                   <span class="text-[0.6rem] font-bold text-brand-text-muted uppercase tracking-[0.1em] ml-1">guest</span>
                 {/if}
               </span>
+              {#if room.phase === 'submitting'}
+                <span
+                  class="text-base leading-none shrink-0"
+                  title={hasSubmitted ? 'Submitted' : 'Still writing…'}
+                  aria-label={hasSubmitted ? 'Submitted' : 'Still writing'}
+                >
+                  {hasSubmitted ? '\u2713' : '\u23F3'}
+                </span>
+              {/if}
               {#if player.is_host}
                 <span class="text-[0.7rem] font-semibold text-brand-text-muted shrink-0">Host</span>
               {/if}

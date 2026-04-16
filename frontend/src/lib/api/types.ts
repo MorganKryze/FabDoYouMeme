@@ -117,6 +117,7 @@ export type WsMessageType =
   | 'player_joined'
   | 'player_left'
   | 'player_kicked'
+  | 'player_submitted'
   | 'reconnecting'
   | 'game_started'
   | 'round_started'

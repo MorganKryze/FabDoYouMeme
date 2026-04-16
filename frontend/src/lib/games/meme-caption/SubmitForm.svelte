@@ -1,7 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { ws } from '$lib/state/ws.svelte';
-  import { room } from '$lib/state/room.svelte';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { Send } from '$lib/icons';
@@ -35,7 +34,7 @@
 
   function submit() {
     if (submitted || isExpired || caption.trim().length === 0) return;
-    ws.send('meme_caption:submit', { caption: caption.trim() });
+    ws.send('meme-caption:submit', { caption: caption.trim() });
     submitted = true;
   }
 </script>
@@ -122,19 +121,4 @@
       </div>
     </div>
   {/if}
-
-  <!-- Player submission status -->
-  <div class="flex flex-wrap gap-2">
-    {#each room.players as player}
-      {@const hasSub = room.submissions.some((s) => s.user_id === player.user_id)}
-      <span
-        class="flex items-center gap-1 text-xs font-bold px-3 py-1.5 rounded-full border-[2.5px]
-          {hasSub
-            ? 'border-brand-border-heavy bg-brand-white text-brand-text'
-            : 'border-brand-border bg-brand-surface text-brand-text-muted'}"
-      >
-        {hasSub ? '\u2713' : '\u23F3'} {player.username}
-      </span>
-    {/each}
-  </div>
 </div>

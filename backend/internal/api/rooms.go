@@ -171,12 +171,12 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetByCode handles GET /api/rooms/:code.
+// GetByCode handles GET /api/rooms/{code}. Intentionally unauthenticated so
+// the frontend's /rooms/{code}?as=guest SSR load works for visitors arriving
+// via a shared link (their guest_token lives in client storage and cannot be
+// forwarded from the server-side load). Returns only public room metadata.
+// The WS handshake is where real identity is enforced (see ws.go).
 func (h *RoomHandler) GetByCode(w http.ResponseWriter, r *http.Request) {
-	_, ok := middleware.GetSessionUser(r)
-	if !ok {
-		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
-		return
-	}
 	room, err := h.db.GetRoomByCode(r.Context(), chi.URLParam(r, "code"))
 	if err != nil {
 		writeError(w, r, http.StatusNotFound, "not_found", "Room not found")

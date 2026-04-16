@@ -21,6 +21,10 @@ export class RoomState {
 
   hasSubmitted = $state(false);
   hasVoted = $state(false);
+  // IDs of players (users or guests) who have submitted in the current round.
+  // Cleared on round_started; populated by player_submitted broadcasts so the
+  // player panel can show per-player progress during the submission phase.
+  submittedPlayerIds = $state<Set<string>>(new Set());
 
   init(data: {
     code: string;
@@ -64,7 +68,18 @@ export class RoomState {
         this.submissions = [];
         this.hasSubmitted = false;
         this.hasVoted = false;
+        this.submittedPlayerIds = new Set();
         break;
+      case 'player_submitted': {
+        const d = msg.data as { user_id?: string; player_id?: string };
+        const id = d.player_id ?? d.user_id;
+        if (id) {
+          // Reassign so Svelte picks up the mutation — $state(Set) tracks
+          // identity, not internal set members.
+          this.submittedPlayerIds = new Set([...this.submittedPlayerIds, id]);
+        }
+        break;
+      }
       case 'submissions_closed':
         this.phase = 'voting';
         break;
@@ -160,6 +175,7 @@ export class RoomState {
     this.rematchWindowExpiresAt = null;
     this.hasSubmitted = false;
     this.hasVoted = false;
+    this.submittedPlayerIds = new Set();
   }
 }
 

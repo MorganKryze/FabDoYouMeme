@@ -140,6 +140,10 @@ body {
      (header, admin sidebar, etc.) stays pinned across navigation. */
   main { view-transition-name: page-main; }
 
+  /* The Toast container is promoted to its own named group so page-main's
+     pageIn animation cannot paint over a visible toast during navigation. */
+  #toast-root { view-transition-name: toast-layer; }
+
   ::view-transition-old(root),
   ::view-transition-new(root) {
     animation: none;
@@ -150,6 +154,20 @@ body {
   }
   ::view-transition-new(page-main) {
     animation: pageIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  /* Toasts sit in a named group so they stay above the page-main transition
+     during navigation. We force the group's z-index explicitly because DOM
+     order alone is not enough once ::view-transition-group(page-main) has
+     its own transform/opacity animation running — the toast layer must
+     always paint last. Disabling its own animation keeps it visually static
+     while the page content crossfades underneath. */
+  ::view-transition-group(toast-layer) {
+    z-index: 2147483647;
+  }
+  ::view-transition-old(toast-layer),
+  ::view-transition-new(toast-layer) {
+    animation: none;
   }
 
   @keyframes pageOut {

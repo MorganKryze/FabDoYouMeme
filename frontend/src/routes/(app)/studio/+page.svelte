@@ -1,5 +1,6 @@
 <script lang="ts">
   import { studio } from '$lib/state/studio.svelte';
+  import { user } from '$lib/state/user.svelte';
   import { reveal } from '$lib/actions/reveal';
   import PackNavigator from '$lib/components/studio/PackNavigator.svelte';
   import ItemTable from '$lib/components/studio/ItemTable.svelte';
@@ -17,6 +18,10 @@
   const isSelectedSystem = $derived(
     studio.packs.find((p) => p.id === studio.selectedPackId)?.is_system ?? false
   );
+
+  const hasPersonalPack = $derived(
+    studio.packs.some((p) => p.owner_id === user.id)
+  );
 </script>
 
 <svelte:head>
@@ -31,10 +36,10 @@
 
   <!-- Center: Item Table (flexible) -->
   <div class="flex-1 min-w-0 border-r border-brand-border overflow-y-auto">
-    {#if studio.packs.length === 0}
-      <LabWelcome />
-    {:else if studio.selectedPackId}
+    {#if studio.selectedPackId}
       <ItemTable />
+    {:else if !hasPersonalPack}
+      <LabWelcome />
     {:else}
       <div class="flex items-center justify-center h-full text-brand-text-muted text-sm">
         Select a pack to view items.

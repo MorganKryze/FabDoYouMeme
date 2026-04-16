@@ -36,12 +36,11 @@ func (h *GameTypeHTTPHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, types)
 }
 
-// GetBySlug handles GET /api/game-types/:slug.
+// GetBySlug handles GET /api/game-types/:slug. Intentionally unauthenticated
+// so guests arriving at /rooms/{code}?as=guest can resolve the game type name
+// during SSR (the layout load has no guest token to forward). Returns only
+// public descriptor metadata.
 func (h *GameTypeHTTPHandler) GetBySlug(w http.ResponseWriter, r *http.Request) {
-	if _, ok := middleware.GetSessionUser(r); !ok {
-		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
-		return
-	}
 	slug := chi.URLParam(r, "slug")
 	gt, err := h.db.GetGameTypeBySlug(r.Context(), slug)
 	if err != nil {

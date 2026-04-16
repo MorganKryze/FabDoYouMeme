@@ -9,8 +9,16 @@
   } as const;
 </script>
 
+<!--
+  The `toast-root` id promotes this container into its own named
+  view-transition group (`toast-layer` — see rule in app.css). That group
+  is forced to paint above ::view-transition-group(page-main) so the
+  incoming page's snapshot cannot briefly cover a visible toast during
+  navigation.
+-->
 <div
-  class="fixed bottom-4 right-4 z-50 flex flex-col-reverse gap-3 pointer-events-none"
+  id="toast-root"
+  class="fixed bottom-4 right-4 z-[100] flex flex-col-reverse gap-3 pointer-events-none"
   aria-live="polite"
   aria-atomic="false"
 >

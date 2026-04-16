@@ -214,9 +214,12 @@ func main() {
 		})
 	}
 
-	// Game types
-	r.With(mw.RequireAuth).Route("/api/game-types", func(r chi.Router) {
-		r.Get("/", gameTypeHandler.List)
+	// Game types — GET /{slug} is pre-auth so the /rooms/{code}?as=guest
+	// layout load can resolve the game type name for guests who arrived via
+	// a shared link and have no session cookie. List stays auth-gated because
+	// it's used by the in-app studio/admin flows only.
+	r.Route("/api/game-types", func(r chi.Router) {
+		r.With(mw.RequireAuth).Get("/", gameTypeHandler.List)
 		r.Get("/{slug}", gameTypeHandler.GetBySlug)
 	})
 
@@ -253,23 +256,34 @@ func main() {
 	})
 
 	// Rooms
-	r.With(mw.RequireAuth).Route("/api/rooms", func(r chi.Router) {
-		r.With(roomLimiter.Middleware).Post("/", roomHandler.Create)
-		r.Get("/{code}", roomHandler.GetByCode)
-		r.Patch("/{code}/config", roomHandler.UpdateConfig)
-		r.Post("/{code}/leave", roomHandler.Leave)
-		r.Post("/{code}/kick", roomHandler.Kick)
-		r.Post("/{code}/end", roomHandler.End)
-		r.Get("/{code}/leaderboard", roomHandler.Leaderboard)
-	})
+	r.Route("/api/rooms", func(r chi.Router) {
+		r.With(mw.RequireAuth, roomLimiter.Middleware).Post("/", roomHandler.Create)
 
-	// Pre-auth guest join — deliberately OUTSIDE the RequireAuth block so
-	// visitors without an account can join a room via a shared code. Rate
-	// limited with the existing room bucket to prevent enumeration. The WS
-	// handshake verifies the returned guest token against the room, so a
-	// successful call here does not yet grant access — it must be paired
-	// with a matching WS upgrade.
-	r.With(roomLimiter.Middleware).Post("/api/rooms/{code}/guest-join", roomHandler.GuestJoin)
+		// Pre-auth reads: the layout load for /rooms/{code}?as=guest runs
+		// server-side during SSR and has no guest token to forward (the token
+		// lives in the client's localStorage, set by the guest-join response).
+		// Opening GetByCode mirrors the guest-join endpoint below — both expose
+		// only public room metadata (code, state, game_type_slug, config), and
+		// existence is already inferable from a successful guest-join. The WS
+		// handshake remains the real identity gate (see ws.go:resolveIdentity).
+		r.Get("/{code}", roomHandler.GetByCode)
+
+		// Pre-auth guest join — visitors without an account can join a room
+		// via a shared code. Rate limited with the existing room bucket to
+		// prevent enumeration. The WS handshake verifies the returned guest
+		// token against the room, so a successful call here does not yet
+		// grant access — it must be paired with a matching WS upgrade.
+		r.With(roomLimiter.Middleware).Post("/{code}/guest-join", roomHandler.GuestJoin)
+
+		r.Group(func(r chi.Router) {
+			r.Use(mw.RequireAuth)
+			r.Patch("/{code}/config", roomHandler.UpdateConfig)
+			r.Post("/{code}/leave", roomHandler.Leave)
+			r.Post("/{code}/kick", roomHandler.Kick)
+			r.Post("/{code}/end", roomHandler.End)
+			r.Get("/{code}/leaderboard", roomHandler.Leaderboard)
+		})
+	})
 
 	// WebSocket — intentionally not gated by RequireAuth. The handler resolves
 	// identity itself (session cookie OR guest_token query param) and rejects

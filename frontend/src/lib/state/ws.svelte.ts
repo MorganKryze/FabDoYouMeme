@@ -14,6 +14,7 @@ class WsState {
   #pingTimer: ReturnType<typeof setInterval> | null = null;
   #pongTimeout: ReturnType<typeof setTimeout> | null = null;
   #pongUnsub: (() => void) | null = null;
+  #deliberateClose = false;
 
   /** Connect to a room's WebSocket. */
   connect(roomCode: string) {
@@ -26,6 +27,7 @@ class WsState {
     if (this.#ws) {
       this.#ws.close();
     }
+    this.#deliberateClose = false;
     // Same-origin WebSocket — the custom Node server in `frontend/server.js`
     // tunnels `/api/ws/*` upgrades to the backend container. Deriving the
     // URL from `window.location` means production (behind a reverse proxy)
@@ -55,6 +57,13 @@ class WsState {
 
     this.#ws.addEventListener('close', () => {
       this.#stopPing();
+      // Deliberate close (ws.disconnect, or after a room_closed frame):
+      // don't flip to 'reconnecting' — that would falsely toast a
+      // "Connection lost" message for a disconnect we initiated ourselves.
+      if (this.#deliberateClose) {
+        this.status = 'closed';
+        return;
+      }
       if (this.retryCount < 10) {
         this.status = 'reconnecting';
         const delay =
@@ -105,6 +114,7 @@ class WsState {
     this.#roomCode = null;
     if (this.#retryTimer) clearTimeout(this.#retryTimer);
     this.#stopPing();
+    this.#deliberateClose = true;
     this.#ws?.close();
     this.#ws = null;
     this.status = 'closed';

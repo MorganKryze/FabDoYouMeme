@@ -29,7 +29,7 @@
 
   function vote() {
     if (!selectedId || voted) return;
-    ws.send('meme_caption:vote', { submission_id: selectedId });
+    ws.send('meme-caption:vote', { submission_id: selectedId });
     voted = true;
   }
 </script>

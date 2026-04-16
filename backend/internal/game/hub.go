@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"net/url"
 	"time"
 
 	"github.com/google/uuid"
@@ -678,8 +679,12 @@ func (h *Hub) runRounds(ctx context.Context) {
 		}
 
 		mediaURL := ""
-		if item.MediaKey != nil {
-			mediaURL = *item.MediaKey
+		if item.MediaKey != nil && *item.MediaKey != "" {
+			// Mirror api.MediaURL: expose the backend-served proxy URL rather
+			// than the raw storage key. The frontend loads it via <img src=…>
+			// straight from the round_started payload — leaking the media_key
+			// unchanged would 404 in the browser.
+			mediaURL = "/api/assets/media?key=" + url.QueryEscape(*item.MediaKey)
 		}
 		endsAt := h.clock.Now().Add(roundDuration)
 		if !h.sendRoundCtrl(ctx, roundCtrlStartRound{
@@ -925,6 +930,13 @@ func (h *Hub) handleGameMessage(ctx context.Context, msg playerMessage) {
 			Payload: msg.data,
 		}
 		h.safeSend(msg.player, buildMessage("submission_accepted", nil))
+		// Announce progress (no caption content) so every client can flip the
+		// submitted-indicator on the player panel without waiting for the
+		// round to close.
+		h.broadcast(buildMessage("player_submitted", map[string]any{
+			"user_id":   msg.player.userID,
+			"player_id": msg.player.userID,
+		}))
 
 	case "vote":
 		if h.roundPhase != phaseVoting {
