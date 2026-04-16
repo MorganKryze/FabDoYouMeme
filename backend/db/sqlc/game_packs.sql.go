@@ -12,6 +12,37 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const canGuestDownloadMedia = `-- name: CanGuestDownloadMedia :one
+SELECT EXISTS (
+  SELECT 1
+  FROM game_item_versions giv
+  JOIN rounds rd ON rd.item_id = giv.item_id
+  JOIN room_players rp ON rp.room_id = rd.room_id
+  WHERE giv.media_key = $1
+    AND giv.deleted_at IS NULL
+    AND rp.guest_player_id = $2::uuid
+) AS allowed
+`
+
+type CanGuestDownloadMediaParams struct {
+	MediaKey      *string   `json:"media_key"`
+	GuestPlayerID uuid.UUID `json:"guest_player_id"`
+}
+
+// Authorization predicate for guest reads of /api/assets/media. Guests have no
+// session and cannot own packs, so the user-side rules in CanUserDownloadMedia
+// don't apply. Instead we scope visibility to "items the guest could plausibly
+// have seen in the room they joined" — a version is readable iff it belongs to
+// an item that was actually used in a round of a room the guest is currently a
+// player of. Narrower than "any media in the pack backing the room" so a guest
+// can't enumerate unshown items via media_key guessing.
+func (q *Queries) CanGuestDownloadMedia(ctx context.Context, arg CanGuestDownloadMediaParams) (bool, error) {
+	row := q.db.QueryRow(ctx, canGuestDownloadMedia, arg.MediaKey, arg.GuestPlayerID)
+	var allowed bool
+	err := row.Scan(&allowed)
+	return allowed, err
+}
+
 const canUserDownloadMedia = `-- name: CanUserDownloadMedia :one
 SELECT EXISTS (
   SELECT 1

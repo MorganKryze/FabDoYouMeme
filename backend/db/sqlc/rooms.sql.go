@@ -259,7 +259,7 @@ DELETE FROM rooms WHERE id = $1
 // room_players, guest_players, rounds, submissions, votes. Used by the cancel
 // path (POST /rooms/{code}/end) so a cancelled room vanishes from history and
 // leaderboard as if it was never created. Naturally-finished rooms keep using
-// SetRoomState so the rematch window and post-game history still work.
+// SetRoomState so post-game history still works.
 func (q *Queries) DeleteRoom(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteRoom, id)
 	return err
@@ -732,86 +732,6 @@ type RemoveRoomPlayerParams struct {
 func (q *Queries) RemoveRoomPlayer(ctx context.Context, arg RemoveRoomPlayerParams) error {
 	_, err := q.db.Exec(ctx, removeRoomPlayer, arg.RoomID, arg.UserID)
 	return err
-}
-
-const resetRoomPlayerScores = `-- name: ResetRoomPlayerScores :exec
-UPDATE room_players SET score = 0 WHERE room_id = $1
-`
-
-// Zeroes out scores for every player in the room. Used by the rematch flow
-// (B2) so a resurrected room starts cleanly without wiping participation rows.
-func (q *Queries) ResetRoomPlayerScores(ctx context.Context, roomID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, resetRoomPlayerScores, roomID)
-	return err
-}
-
-const resurrectRoom = `-- name: ResurrectRoom :one
-UPDATE rooms
-   SET state = 'lobby',
-       finished_at = NULL,
-       rematch_window_expires_at = NULL
- WHERE id = $1
-   AND host_id = $2
-   AND state = 'finished'
-   AND rematch_window_expires_at IS NOT NULL
-   AND rematch_window_expires_at > now()
-RETURNING id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at
-`
-
-type ResurrectRoomParams struct {
-	ID     uuid.UUID   `json:"id"`
-	HostID pgtype.UUID `json:"host_id"`
-}
-
-// Transitions a finished room back to lobby iff the rematch window is still open
-// and the caller is the host. Returns the updated row, or no rows if the gate fails.
-func (q *Queries) ResurrectRoom(ctx context.Context, arg ResurrectRoomParams) (Room, error) {
-	row := q.db.QueryRow(ctx, resurrectRoom, arg.ID, arg.HostID)
-	var i Room
-	err := row.Scan(
-		&i.ID,
-		&i.Code,
-		&i.GameTypeID,
-		&i.PackID,
-		&i.HostID,
-		&i.Mode,
-		&i.State,
-		&i.Config,
-		&i.CreatedAt,
-		&i.FinishedAt,
-		&i.RematchWindowExpiresAt,
-	)
-	return i, err
-}
-
-const setRematchWindow = `-- name: SetRematchWindow :one
-UPDATE rooms SET rematch_window_expires_at = $2 WHERE id = $1 RETURNING id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at
-`
-
-type SetRematchWindowParams struct {
-	ID                     uuid.UUID          `json:"id"`
-	RematchWindowExpiresAt pgtype.Timestamptz `json:"rematch_window_expires_at"`
-}
-
-// Stamps rematch_window_expires_at when a room transitions finished → (rematchable).
-// Called by finishRoom() so the client's EndStage can show a countdown banner.
-func (q *Queries) SetRematchWindow(ctx context.Context, arg SetRematchWindowParams) (Room, error) {
-	row := q.db.QueryRow(ctx, setRematchWindow, arg.ID, arg.RematchWindowExpiresAt)
-	var i Room
-	err := row.Scan(
-		&i.ID,
-		&i.Code,
-		&i.GameTypeID,
-		&i.PackID,
-		&i.HostID,
-		&i.Mode,
-		&i.State,
-		&i.Config,
-		&i.CreatedAt,
-		&i.FinishedAt,
-		&i.RematchWindowExpiresAt,
-	)
-	return i, err
 }
 
 const setRoomState = `-- name: SetRoomState :one

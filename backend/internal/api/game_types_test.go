@@ -18,7 +18,7 @@ import (
 
 func newGameTypeHandler() *api.GameTypeHTTPHandler {
 	registry := game.NewRegistry()
-	registry.Register(memecaption.New())
+	registry.Register(memecaption.New(12))
 	return api.NewGameTypeHandler(testutil.Pool(), registry)
 }
 

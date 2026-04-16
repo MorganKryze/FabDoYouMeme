@@ -22,27 +22,8 @@ UPDATE rooms SET config = $2 WHERE id = $1 AND state = 'lobby' RETURNING *;
 -- room_players, guest_players, rounds, submissions, votes. Used by the cancel
 -- path (POST /rooms/{code}/end) so a cancelled room vanishes from history and
 -- leaderboard as if it was never created. Naturally-finished rooms keep using
--- SetRoomState so the rematch window and post-game history still work.
+-- SetRoomState so post-game history still works.
 DELETE FROM rooms WHERE id = $1;
-
--- name: SetRematchWindow :one
--- Stamps rematch_window_expires_at when a room transitions finished → (rematchable).
--- Called by finishRoom() so the client's EndStage can show a countdown banner.
-UPDATE rooms SET rematch_window_expires_at = $2 WHERE id = $1 RETURNING *;
-
--- name: ResurrectRoom :one
--- Transitions a finished room back to lobby iff the rematch window is still open
--- and the caller is the host. Returns the updated row, or no rows if the gate fails.
-UPDATE rooms
-   SET state = 'lobby',
-       finished_at = NULL,
-       rematch_window_expires_at = NULL
- WHERE id = $1
-   AND host_id = $2
-   AND state = 'finished'
-   AND rematch_window_expires_at IS NOT NULL
-   AND rematch_window_expires_at > now()
-RETURNING *;
 
 -- name: AddRoomPlayer :one
 INSERT INTO room_players (room_id, user_id) VALUES ($1, $2) RETURNING *;
@@ -94,11 +75,6 @@ UPDATE room_players SET score = score + $3
 UPDATE room_players SET score = score + $3
  WHERE room_id = $1 AND guest_player_id = $2
  RETURNING *;
-
--- name: ResetRoomPlayerScores :exec
--- Zeroes out scores for every player in the room. Used by the rematch flow
--- (B2) so a resurrected room starts cleanly without wiping participation rows.
-UPDATE room_players SET score = 0 WHERE room_id = $1;
 
 -- name: CountActiveRooms :one
 -- Counts rooms currently in lobby or playing state. Used by the admin dashboard

@@ -16,20 +16,27 @@ import (
 var ErrSelfVote = errors.New("cannot_vote_for_self")
 
 // Handler implements game.GameTypeHandler for the meme-caption game type.
-type Handler struct{}
+type Handler struct {
+	// maxPlayers is the per-room join cap, read from game_types.config at
+	// registration time. 0 means unbounded (hub treats 0 as "no explicit cap").
+	maxPlayers int
+}
 
-func New() *Handler { return &Handler{} }
+// New creates a Handler with the given player cap. Pass 0 for unbounded.
+// In main.go, derive maxPlayers from game_types.config.max_players; when
+// that field is NULL, pass the compile-time default (12) as a fallback so
+// existing deployments that have not tuned the DB value keep their cap.
+func New(maxPlayers int) *Handler { return &Handler{maxPlayers: maxPlayers} }
 
 func (h *Handler) Slug() string                    { return "meme-caption" }
 func (h *Handler) SupportedPayloadVersions() []int { return []int{1} }
 func (h *Handler) SupportsSolo() bool              { return false }
 
-// MaxPlayers caps rooms at 12 concurrent players. The UI is designed around
-// 4–12-player lobbies; beyond that the caption/vote cycle becomes unwieldy
-// and the room_state broadcast payload starts to bloat. Setting the cap in
-// the handler (rather than relying on game_types.config) lets the hub short
-// circuit registration before allocating player state.
-func (h *Handler) MaxPlayers() int { return 12 }
+// MaxPlayers returns the configured per-room player cap.
+// 0 means unbounded — the hub skips the cap check when MaxPlayers returns 0.
+// The value is set at registration time from game_types.config.max_players;
+// NULL in the DB falls back to the compile-time default of 12.
+func (h *Handler) MaxPlayers() int { return h.maxPlayers }
 
 type submitPayload struct {
 	Caption string `json:"caption"`
@@ -101,17 +108,17 @@ func (h *Handler) BuildSubmissionsShownPayload(submissions []game.Submission) (j
 }
 
 type submissionResult struct {
-	ID             string `json:"id"`
-	Caption        string `json:"caption"`
-	AuthorUsername string `json:"author_username,omitempty"` // revealed after voting
-	VotesReceived  int    `json:"votes_received"`
-	PointsAwarded  int    `json:"points_awarded"`
+	ID            string `json:"id"`
+	Caption       string `json:"caption"`
+	Username      string `json:"username,omitempty"` // revealed after voting
+	VotesReceived int    `json:"votes_received"`
+	PointsAwarded int    `json:"points_awarded"`
 }
 
 // BuildVoteResultsPayload reveals authors and scores after voting closes.
-// Note: author username is not available in the Submission struct (only UserID).
-// The hub must pass username-enriched submissions; for now we use user IDs.
-// Phase 7 hub wiring enriches this with usernames from the DB.
+// The hub populates Submission.AuthorUsername before calling this method so
+// the reveal payload includes the display name. The result is embedded in
+// vote_results.data.results by the hub.
 func (h *Handler) BuildVoteResultsPayload(
 	submissions []game.Submission,
 	votes []game.Vote,
@@ -130,6 +137,7 @@ func (h *Handler) BuildVoteResultsPayload(
 		results = append(results, submissionResult{
 			ID:            s.ID.String(),
 			Caption:       strings.TrimSpace(p.Caption),
+			Username:      s.AuthorUsername,
 			VotesReceived: votesPerSub[s.ID],
 			PointsAwarded: scores[s.UserID],
 		})

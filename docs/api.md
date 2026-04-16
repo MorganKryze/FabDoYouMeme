@@ -45,7 +45,7 @@ Requires session.
 | `PATCH` | `/api/rooms/:code/config`      | Update room config (host only, lobby state only)          |
 | `POST`  | `/api/rooms/:code/leave`       | Leave the room (lobby only; host leaving closes the room) |
 | `POST`  | `/api/rooms/:code/kick`        | Kick a player by `user_id` (host only, lobby or playing)  |
-| `POST`  | `/api/rooms/:code/end`         | Terminate the room (host or admin, lobby or playing)      |
+| `POST`  | `/api/rooms/:code/end`         | End the room (host or admin): lobby→hard-delete, playing→persist as finished |
 | `GET`   | `/api/rooms/:code/leaderboard` | Final leaderboard (finished rooms only)                   |
 
 ### Game types (`/api/game-types/*`)
@@ -212,6 +212,10 @@ Sent when a host or admin terminates the room via `POST /api/rooms/:code/end`.
 Clients must treat this message as terminal: disconnect the socket (do not
 auto-reconnect), surface the reason to the user, and navigate away from the
 room.
+
+The server's DB action after broadcasting `room_closed` is state-dependent: a
+lobby room is hard-deleted (disappears from history), while a playing room is
+marked `finished` so gameplay data is preserved for the leaderboard.
 
 ```json
 { "type": "room_closed", "data": { "reason": "ended_by_host" } }

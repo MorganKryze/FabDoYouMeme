@@ -213,10 +213,7 @@
         Room code
       </p>
 
-      <div
-        class="font-mono font-bold tracking-[0.15em] text-brand-text select-all leading-none"
-        style="font-size: clamp(3.5rem, 12vw, 6.5rem);"
-      >
+      <div class="font-mono font-bold tracking-[0.15em] text-brand-text select-all leading-none text-4xl">
         {room.code ?? '----'}
       </div>
 

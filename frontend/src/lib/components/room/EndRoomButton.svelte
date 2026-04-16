@@ -8,6 +8,14 @@
   import { fade, scale } from 'svelte/transition';
   import { backOut } from 'svelte/easing';
 
+  interface Props {
+    /** When true, renders a quiet text link instead of the large icon button.
+     *  Use in the status bar during playing/finished states. */
+    compact?: boolean;
+  }
+
+  let { compact = false }: Props = $props();
+
   const canEnd = $derived(
     (user.id !== null && room.hostUserId === user.id) || user.role === 'admin'
   );
@@ -45,6 +53,9 @@
     error = null;
     try {
       await roomsApi.end(room.code);
+      // Safety net: reset pending so the button isn't stuck if the WS
+      // room_closed event doesn't fire (e.g. socket already closed).
+      pending = false;
     } catch (e) {
       pending = false;
       const message =
@@ -73,17 +84,30 @@
 <svelte:window onkeydown={handleKeydown} />
 
 {#if canEnd}
-  <button
-    bind:this={triggerEl}
-    use:pressPhysics={'ghost'}
-    type="button"
-    onclick={openModal}
-    class="h-14 w-14 shrink-0 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text-mid hover:text-red-600 hover:border-red-600 inline-flex items-center justify-center cursor-pointer transition-colors"
-    title="Cancel room"
-    aria-label="Cancel room"
-  >
-    <X size={20} strokeWidth={2.5} />
-  </button>
+  {#if compact}
+    <button
+      bind:this={triggerEl}
+      type="button"
+      onclick={openModal}
+      class="text-xs text-brand-text-muted hover:text-red-500 font-semibold cursor-pointer transition-colors"
+      title="End game"
+      aria-label="End game"
+    >
+      End game
+    </button>
+  {:else}
+    <button
+      bind:this={triggerEl}
+      use:pressPhysics={'ghost'}
+      type="button"
+      onclick={openModal}
+      class="h-14 w-14 shrink-0 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text-mid hover:text-red-600 hover:border-red-600 inline-flex items-center justify-center cursor-pointer transition-colors"
+      title="Cancel room"
+      aria-label="Cancel room"
+    >
+      <X size={20} strokeWidth={2.5} />
+    </button>
+  {/if}
 {/if}
 
 {#if open}

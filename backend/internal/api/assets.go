@@ -18,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
+	"github.com/MorganKryze/FabDoYouMeme/backend/internal/auth"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/config"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/storage"
@@ -240,39 +241,72 @@ func (h *AssetHandler) UploadDirect(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"media_key": key})
 }
 
-// GetMedia handles GET /api/assets/media?key=...
+// GetMedia handles GET /api/assets/media?key=...[&guest_token=...]
 //
 // Proxies the object at media_key through the backend so the browser never
-// talks directly to RustFS. Used by <img> tags for thumbnails and by the
-// studio ImageEditor. Authorization mirrors DownloadURL: admins can read
-// anything, regular users can read media belonging to packs they own or to
-// public+active packs.
+// talks directly to RustFS. Used by <img> tags for thumbnails (studio, admin)
+// and by in-game round prompts (gameplay). The handler self-resolves identity
+// so both registered users (session cookie) and guests (guest_token query
+// param, minted via POST /rooms/{code}/guest-join) can fetch media they are
+// entitled to see. This mirrors WSHandler.resolveIdentity; the route is
+// therefore mounted outside the RequireAuth middleware group.
+//
+// Authorization:
+//   - admin: any media_key
+//   - registered user: CanUserDownloadMedia (owner OR public+active pack)
+//   - guest: CanGuestDownloadMedia (media used in a round of a room the
+//     guest is currently joined to) — narrower than the pack-wide predicate
+//     so a guest can't enumerate unshown items via media_key guessing.
 //
 // The media_key is passed as a query parameter (URL-encoded). We don't support
 // path-style routing because the key itself contains slashes.
 func (h *AssetHandler) GetMedia(w http.ResponseWriter, r *http.Request) {
-	u, ok := middleware.GetSessionUser(r)
-	if !ok {
-		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
-		return
-	}
-
 	mediaKey := r.URL.Query().Get("key")
 	if mediaKey == "" {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "key query parameter is required")
 		return
 	}
 
-	if u.Role != "admin" {
-		uid, err := uuid.Parse(u.UserID)
+	if u, ok := middleware.GetSessionUser(r); ok {
+		if u.Role != "admin" {
+			uid, err := uuid.Parse(u.UserID)
+			if err != nil {
+				writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
+				return
+			}
+			mk := mediaKey
+			allowed, err := h.db.CanUserDownloadMedia(r.Context(), db.CanUserDownloadMediaParams{
+				MediaKey: &mk,
+				UserID:   uid,
+			})
+			if err != nil {
+				writeError(w, r, http.StatusInternalServerError, "internal_error", "Authorization check failed")
+				return
+			}
+			if !allowed {
+				writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
+				return
+			}
+		}
+	} else {
+		// No session — fall through to guest_token. We deliberately collapse
+		// every failure below into a single 401 (missing, malformed, expired,
+		// or wrong-media token all look alike) so a probing caller can't tell
+		// which gate rejected them, same policy as WSHandler.resolveIdentity.
+		token := r.URL.Query().Get("guest_token")
+		if token == "" {
+			writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
+			return
+		}
+		gp, err := h.db.GetGuestPlayerByTokenHash(r.Context(), auth.HashToken(token))
 		if err != nil {
-			writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
+			writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 			return
 		}
 		mk := mediaKey
-		allowed, err := h.db.CanUserDownloadMedia(r.Context(), db.CanUserDownloadMediaParams{
-			MediaKey: &mk,
-			UserID:   uid,
+		allowed, err := h.db.CanGuestDownloadMedia(r.Context(), db.CanGuestDownloadMediaParams{
+			MediaKey:      &mk,
+			GuestPlayerID: gp.ID,
 		})
 		if err != nil {
 			writeError(w, r, http.StatusInternalServerError, "internal_error", "Authorization check failed")

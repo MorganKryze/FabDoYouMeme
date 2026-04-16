@@ -38,26 +38,32 @@ The backend hub drives the round lifecycle autonomously once `start` is received
 1. Selects the next item from the pack (items are shuffled at round start, not reused)
 2. Broadcasts `round_started` with the item, timer info (`duration_seconds` + `ends_at`), and round number
 3. Accepts submissions until the timer expires or all players have submitted
-4. Broadcasts `submissions_closed`, starts the voting timer
-5. Accepts votes until the timer expires or all players have voted
-6. Calculates scores, broadcasts `vote_results`
-7. Waits for the host to send `next_round` before advancing
+4. If at least one submission exists: broadcasts `submissions_closed` and starts the voting timer. If zero submissions: skips voting entirely.
+5. Accepts votes until the timer expires or all players have voted (skipped when step 4 had zero submissions)
+6. Calculates scores, broadcasts `vote_results` (submissions and scores are empty when voting was skipped)
+7. **Server-paced (default, `host_paced: false`)**: waits 3 seconds then automatically advances. **Host-paced (`host_paced: true`)**: waits for the host to send `next_round`; auto-advances after a 5-minute safety ceiling if the host never responds.
 8. Repeats until all rounds are complete
 
 ### Finished phase
 
 The room moves to `finished` when:
 
-- All rounds complete (`reason: "completed"`)
+- All rounds complete (`reason: "game_complete"`)
 - The host disconnects and the grace window expires (`reason: "host_disconnected"`)
-- All players disconnect simultaneously and none return (`reason: "all_players_disconnected"`)
+- All players disconnect simultaneously and none return within the grace ceiling (`reason: "all_players_disconnected"`)
 - The pack runs out of unused items mid-game (`reason: "pack_exhausted"`)
 
 Finished rooms are permanent — they cannot be resumed. The leaderboard is accessible via `GET /api/rooms/:code/leaderboard` after the game ends.
 
 ### Out-of-band termination
 
-`Hub.EndRoom(ctx, reason)` is the out-of-band termination path, invoked by the `POST /api/rooms/:code/end` handler after the DB row has already been flipped to `finished`. Unlike `finishRoom` — which leaves the hub alive for a rematch window — `EndRoom` broadcasts `room_closed` to every player, closes every send channel (so `writePump` drains remaining messages, writes a close frame, and exits), and leaves no rematch opportunity. Reasons are `ended_by_host` (host clicked End Room) or `ended_by_admin` (a platform admin ended a room they do not host).
+`Hub.EndRoom(ctx, reason)` is the out-of-band termination path, invoked by the `POST /api/rooms/:code/end` handler. It broadcasts `room_closed` to every player, closes every send channel (so `writePump` drains remaining messages, writes a close frame, and exits), and leaves no rematch opportunity. Reasons are `ended_by_host` (host clicked End Room) or `ended_by_admin` (a platform admin ended a room they do not host).
+
+The handler's DB action is state-dependent:
+
+- **lobby** — the row (and all FK-cascaded data: room_players, guest_players, rounds, submissions, votes) is hard-deleted so the room disappears from history as if it was never created.
+- **playing** — the row is marked `state='finished'` so gameplay data (rounds, submissions, votes) is preserved for post-game history and leaderboard queries. The hub is still notified first so clients receive `room_closed` before their sockets drop.
+- **finished** — rejected with 409; the room is already done.
 
 ---
 
@@ -74,7 +80,7 @@ When a player disconnects mid-game, they are not immediately removed. Instead:
 - If the player reconnects within the window, the hub sends a full `room_state` snapshot and the player continues
 - If the timer expires, `player_left` is broadcast and their pending turn is skipped
 
-If all players are simultaneously in the grace window, the round timer pauses. If at least one reconnects, the game resumes.
+If all players are simultaneously in the grace window, the round timer pauses and `round_paused` is broadcast. When at least one reconnects, the timer resumes from the remaining duration and `round_resumed { ends_at }` is broadcast with the adjusted deadline. If no player reconnects before the grace ceiling (`RECONNECT_GRACE_WINDOW`) elapses, the room ends with `reason: "all_players_disconnected"`.
 
 ### Heartbeat
 
@@ -90,30 +96,37 @@ Game types are registered handler units. The entire backend game logic is contai
 
 A `*game.Registry` is constructed in `main.go`, and each handler is added via `registry.Register(handler)`. The slug is taken from the handler itself (`h.Slug()`) — there is no separate slug argument. Duplicate slugs panic at startup rather than failing silently at runtime, so a misconfiguration is caught on the first boot.
 
+Before registering, `main.go` fetches the game type's DB row and reads operator-tunable values from `game_types.config` (e.g. `max_players`), then passes them to the handler constructor. If the DB row is missing or a field is `NULL`, the constructor falls back to a compile-time default so a freshly-deployed instance stays functional without manual DB tuning.
+
 ```go
 // backend/cmd/server/main.go
 registry := game.NewRegistry()
-registry.Register(memecaption.New())
-// registry.Register(trivia.New())   // future game types added here
+// Fetch meme-caption config from DB; fall back to compile-time default (12) when max_players is NULL.
+gtRow, _ := queries.GetGameTypeBySlug(ctx, "meme-caption")
+// ... parse gtRow.Config.max_players ...
+registry.Register(memecaption.New(maxPlayers))
+// registry.Register(trivia.New(triaMaxPlayers))   // future game types added here
 ```
 
 The registry is then passed to the game manager and the `GameTypeHandler` HTTP handler, which are the only components that resolve slugs back to handlers (`registry.Get(slug)`).
 
 ### The `GameTypeHandler` interface
 
-The interface defines nine methods. The hub calls them during gameplay and never knows which game type it is running — game-specific WebSocket messages use a prefixed type (`meme-caption:submit`, `trivia:answer`) so the protocol can carry any game type without changes.
+The interface defines nine methods. The hub calls them during gameplay and never knows which game type it is running.
+
+**Event naming convention:** phase-transition events (`round_started`, `submissions_closed`, `vote_results`, `game_ended`) are **universal** — every game type uses the same event names. Incoming game-specific messages are slug-prefixed (`meme-caption:submit`, `meme-caption:vote`). The handler-produced blobs are embedded inside the universal events: `submissions_closed.data.submissions_shown` and `vote_results.data.results`.
 
 | Method                           | Purpose                                                                                        |
 | -------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `Slug()`                         | Matches `game_types.slug` in the DB (e.g. `"meme-caption"`); also the registry key             |
 | `SupportedPayloadVersions()`     | Declares which item payload versions this handler can process                                  |
 | `SupportsSolo()`                 | Whether the handler permits single-player rooms                                                |
-| `MaxPlayers()`                   | Absolute per-room cap; `0` means no cap. Checked in `handleRegister` before allocating state   |
+| `MaxPlayers()`                   | Per-room cap read from `game_types.config.max_players` at startup; `0` means no cap. `NULL` in the DB → handler falls back to its compile-time default. Checked in `handleRegister` before allocating state. |
 | `ValidateSubmission()`           | Validates a player's submission payload                                                        |
 | `ValidateVote()`                 | Validates a vote (self-vote check; hub has already verified phase + duplicate)                 |
 | `CalculateRoundScores()`         | Computes per-player points from votes                                                          |
-| `BuildSubmissionsShownPayload()` | Transforms raw submissions into the anonymous display payload for `{slug}:submissions_shown`   |
-| `BuildVoteResultsPayload()`      | Builds the reveal payload for `{slug}:vote_results`                                            |
+| `BuildSubmissionsShownPayload()` | Transforms raw submissions into the anonymous display blob embedded in `submissions_closed.data.submissions_shown` |
+| `BuildVoteResultsPayload()`      | Builds the author-reveal blob embedded in `vote_results.data.results`                                              |
 
 Implementations must be safe to call from a single hub goroutine — the hub is single-threaded per room, so no additional locking is needed.
 
@@ -122,7 +135,7 @@ Implementations must be safe to call from a single hub goroutine — the hub is 
 A game type has two halves that must agree on the slug:
 
 1. **DB row** in `game_types` — holds the operator-tunable metadata: name, description, `supports_solo`, and the `config` JSONB with round/voting duration bounds, player bounds, and round count bounds. Seeded via a migration in `backend/db/migrations/`.
-2. **Go handler** in `backend/internal/game/types/{slug}/` — holds the behaviour (validation, scoring, payload builders) and hard caps (`MaxPlayers`).
+2. **Go handler** in `backend/internal/game/types/{slug}/` — holds the behaviour (validation, scoring, payload builders). `MaxPlayers()` returns the value read from the DB config at startup, not a hardcoded constant.
 
 If either half is missing, the game type is unusable: a missing handler means `registry.Get(slug)` returns `false` and room creation is rejected; a missing DB row means there is nothing for the UI to list under `/api/game-types` even though the handler is registered.
 
@@ -130,7 +143,7 @@ If either half is missing, the game type is unusable: a missing handler means `r
 
 1. **Migration** — add `backend/db/migrations/NNN_seed_{slug}.up.sql` (and a matching `.down.sql`) inserting a row into `game_types` with the slug, name, description, `supports_solo`, and the config JSONB (min/max/default for round duration, voting duration, player count, round count). Use `002_seed_game_types.up.sql` as the template.
 2. **Handler package** — create `backend/internal/game/types/{slug}/handler.go` implementing every method on `game.GameTypeHandler`. Add a compile-time assertion at the bottom of the file: `var _ game.GameTypeHandler = (*Handler)(nil)`. This turns a missing method into a build error instead of a runtime panic.
-3. **Register at startup** — in `backend/cmd/server/main.go`, add `registry.Register(yourpkg.New())` alongside the existing `memecaption` line.
+3. **Register at startup** — in `backend/cmd/server/main.go`, fetch the game type's DB row, parse `max_players` from its `config` JSONB (fall back to a sensible default when `NULL`), then call `registry.Register(yourpkg.New(maxPlayers))` alongside the existing `memecaption` block.
 4. **Frontend plugin** — create `frontend/src/lib/games/{slug}/` with `SubmitForm.svelte`, `VoteForm.svelte`, `ResultsView.svelte`, and `GameRules.svelte`, plus an `index.ts` that re-exports them. The room page selects the bundle by slug at runtime.
 5. **Optional frontend routes** — only if the game needs views that do not fit the default room layout.
 
@@ -150,7 +163,7 @@ The launch game type. Gameplay per round:
 6. Authors are revealed; each player receives 1 point per vote they received
 7. Tied captions both receive full points (no tiebreaker)
 
-Author identity is hidden during voting: the payload broadcast at `submissions_closed` contains no `author_id` or `author_username`. They are revealed only in `vote_results`.
+Author identity is hidden during voting: `submissions_closed.data.submissions_shown.submissions` contains no author fields. Authors are revealed in `vote_results.data.results.submissions[].username` after voting closes.
 
 A player cannot vote for their own submission. The hub pre-validates this before calling the handler.
 

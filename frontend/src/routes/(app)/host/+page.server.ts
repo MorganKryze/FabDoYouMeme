@@ -28,6 +28,7 @@ export const actions: Actions = {
     const game_type_id = data.get('game_type_id') as string;
     const pack_id = data.get('pack_id') as string;
     const is_solo = data.get('is_solo') === 'true';
+    const host_paced = data.get('host_paced') === 'true';
 
     // Defaults are placeholders — host tunes rounds/durations inside the
     // room's waiting stage (F3). Server still accepts a config because
@@ -42,7 +43,8 @@ export const actions: Actions = {
         config: {
           round_count: 5,
           round_duration_seconds: 60,
-          voting_duration_seconds: 30
+          voting_duration_seconds: 30,
+          host_paced
         }
       })
     });

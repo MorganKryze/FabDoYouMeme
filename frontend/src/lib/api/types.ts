@@ -63,6 +63,8 @@ export interface RoomConfig {
   round_duration_seconds: number;
   voting_duration_seconds: number;
   round_count: number;
+  /** When true, the host manually advances rounds via "Next Round". Default false (server auto-advances after 3s). */
+  host_paced?: boolean;
 }
 
 export interface Invite {
@@ -125,9 +127,7 @@ export type WsMessageType =
   | 'vote_results'
   | 'game_ended'
   | 'room_state'
-  | 'error'
-  | `meme-caption:submissions_shown`
-  | `meme-caption:vote_results`;
+  | 'error';
 
 export interface WsMessage {
   type: WsMessageType | string;
@@ -143,9 +143,10 @@ export interface Player {
 }
 
 export interface LeaderboardEntry {
-  user_id: string;
-  username: string;
-  total_score: number;
+  player_id: string;
+  display_name: string;
+  is_guest: boolean;
+  score: number;
   rank: number;
 }
 
@@ -157,8 +158,6 @@ export interface Round {
     payload: unknown;
     media_url?: string | null;
   };
-  text_prompt?: string;   // backward compat
-  media_url?: string;     // backward compat
 }
 
 export interface Submission {

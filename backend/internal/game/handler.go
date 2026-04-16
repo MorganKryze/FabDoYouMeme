@@ -21,10 +21,14 @@ type Round struct {
 }
 
 // Submission is a player's answer for a round.
+// AuthorUsername is populated by the hub before BuildVoteResultsPayload is
+// called so the handler can include the display name in the reveal payload
+// without a separate lookup. It is not used during submission or vote validation.
 type Submission struct {
-	ID      uuid.UUID
-	UserID  uuid.UUID
-	Payload json.RawMessage
+	ID             uuid.UUID
+	UserID         uuid.UUID
+	Payload        json.RawMessage
+	AuthorUsername string
 }
 
 // Vote is a player's vote for a submission.
@@ -67,9 +71,12 @@ type GameTypeHandler interface {
 	// CalculateRoundScores aggregates votes into per-user point awards.
 	CalculateRoundScores(submissions []Submission, votes []Vote) map[uuid.UUID]int
 
-	// BuildSubmissionsShownPayload returns data for the {slug}:submissions_shown event.
+	// BuildSubmissionsShownPayload returns the anonymous display blob embedded in
+	// submissions_closed.data.submissions_shown. Must omit all author identity.
 	BuildSubmissionsShownPayload(submissions []Submission) (json.RawMessage, error)
 
-	// BuildVoteResultsPayload returns data for the {slug}:vote_results event.
+	// BuildVoteResultsPayload returns the author-reveal blob embedded in
+	// vote_results.data.results. The hub populates Submission.AuthorUsername
+	// before this call so display names are available to the handler.
 	BuildVoteResultsPayload(submissions []Submission, votes []Vote, scores map[uuid.UUID]int) (json.RawMessage, error)
 }

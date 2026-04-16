@@ -14,7 +14,7 @@ import (
 )
 
 func newHandler() *memecaption.Handler {
-	return memecaption.New()
+	return memecaption.New(12)
 }
 
 func TestSlug(t *testing.T) {

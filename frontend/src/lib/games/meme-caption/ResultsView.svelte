@@ -10,11 +10,14 @@
     submissions,
     leaderboard,
     isHost,
+    hostPaced,
     onNextRound,
   }: {
     submissions: Submission[];
     leaderboard: LeaderboardEntry[];
     isHost: boolean;
+    /** When true the host manually advances to the next round; when false the server auto-advances. */
+    hostPaced: boolean;
     onNextRound: () => void;
   } = $props();
 </script>
@@ -62,26 +65,28 @@
             class="flex items-center gap-3 rounded-full border-[2.5px] border-brand-border bg-brand-white px-4 py-2.5 text-sm"
           >
             <span class="w-5 text-right font-bold text-brand-text-muted">{i + 1}.</span>
-            <span class="flex-1 font-bold">{entry.username}</span>
-            <span class="font-bold tabular-nums">{entry.total_score} pts</span>
+            <span class="flex-1 font-bold">{entry.display_name}</span>
+            <span class="font-bold tabular-nums">{entry.score} pts</span>
           </li>
         {/each}
       </ol>
     </div>
   </div>
 
-  {#if isHost}
-    <button
-      use:pressPhysics={'primary'}
-      use:hoverEffect={'rainbow'}
-      type="button"
-      onclick={onNextRound}
-      class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text font-bold cursor-pointer inline-flex items-center justify-center gap-2"
-    >
-      <ArrowRight size={18} strokeWidth={2.5} />
-      Next Round
-    </button>
-  {:else}
-    <p class="text-center text-sm font-bold text-brand-text-muted">Waiting for host to continue…</p>
+  {#if hostPaced}
+    {#if isHost}
+      <button
+        use:pressPhysics={'primary'}
+        use:hoverEffect={'rainbow'}
+        type="button"
+        onclick={onNextRound}
+        class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text font-bold cursor-pointer inline-flex items-center justify-center gap-2"
+      >
+        <ArrowRight size={18} strokeWidth={2.5} />
+        Next Round
+      </button>
+    {:else}
+      <p class="text-center text-sm font-bold text-brand-text-muted">Waiting for host to continue…</p>
+    {/if}
   {/if}
 </div>

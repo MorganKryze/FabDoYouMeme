@@ -53,6 +53,7 @@ type hubEnvOpts struct {
 	reconnectGrace        time.Duration // hub cfg: ReconnectGraceWindow
 	packItemCount         int           // item versions seeded in the pack so runRounds can pick one
 	clk                   clock.Clock   // optional clock.Fake — required for tests that need sub-DB-minimum round timings
+	hostPaced             bool          // room config: host_paced — host manually advances rounds
 	// skipPreCreate omits the manager.GetOrCreate() call in the helper so the
 	// WSHandler must lazy-create the hub on first connect. P1.1 acceptance
 	// test uses this to reproduce the production 404 bug.
@@ -152,8 +153,8 @@ func newHubEnvWith(t *testing.T, opts hubEnvOpts) *hubEnv {
 
 	code := hubCode()
 	roomConfig := fmt.Sprintf(
-		`{"round_count":%d,"round_duration_seconds":%d,"voting_duration_seconds":%d}`,
-		opts.roundCount, opts.roundDurationSeconds, opts.votingDurationSeconds,
+		`{"round_count":%d,"round_duration_seconds":%d,"voting_duration_seconds":%d,"host_paced":%t}`,
+		opts.roundCount, opts.roundDurationSeconds, opts.votingDurationSeconds, opts.hostPaced,
 	)
 	room, err := q.CreateRoom(ctx, db.CreateRoomParams{
 		Code:       code,
@@ -174,7 +175,7 @@ func newHubEnvWith(t *testing.T, opts hubEnvOpts) *hubEnv {
 		WSReadLimitBytes:     4096,
 	}
 	registry := game.NewRegistry()
-	registry.Register(memecaption.New())
+	registry.Register(memecaption.New(12))
 	clk := opts.clk
 	if clk == nil {
 		clk = clock.Real{}
@@ -507,57 +508,37 @@ func TestHub_Disconnect_GraceExpired_BroadcastsPlayerLeft(t *testing.T) {
 	}
 }
 
-// TestHub_Rematch_NonHost_ReturnsError verifies only the host can initiate
-// a rematch — non-hosts get a not_host error code.
-func TestHub_Rematch_NonHost_ReturnsError(t *testing.T) {
-	env := newHubEnv(t)
-
-	nonHostID := "00000000-0000-0000-0000-000000000066"
-	conn := dial(t, env, nonHostID, "nothost")
-	defer conn.Close()
-	readUntilType(t, conn, "player_joined")
-
-	sendMsg(t, conn, "rematch_request", nil)
-
-	m := readUntilType(t, conn, "error")
-	data, _ := m["data"].(map[string]any)
-	if data["code"] != "not_host" {
-		t.Errorf("want code=not_host, got %v", data["code"])
-	}
-}
-
-// TestHub_Rematch_BeforeGameEnd_ReturnsError verifies the host cannot
-// resurrect a room that has not finished — rematch_not_available.
-func TestHub_Rematch_BeforeGameEnd_ReturnsError(t *testing.T) {
+// TestE2E_PackExhausted_GameEndedReason verifies that when the pack has no
+// unplayed items, the game ends with reason "pack_exhausted".
+func TestE2E_PackExhausted_GameEndedReason(t *testing.T) {
+	// packItemCount defaults to 0: runRounds immediately fails to fetch items.
 	env := newHubEnv(t)
 
 	conn := dial(t, env, env.hostID, "host")
 	defer conn.Close()
 	readUntilType(t, conn, "player_joined")
 
-	sendMsg(t, conn, "rematch_request", nil)
+	sendMsg(t, conn, "start", nil)
+	readUntilType(t, conn, "game_started")
 
-	m := readUntilType(t, conn, "error")
+	m := readUntilType(t, conn, "game_ended")
 	data, _ := m["data"].(map[string]any)
-	if data["code"] != "rematch_not_available" {
-		t.Errorf("want code=rematch_not_available, got %v", data["code"])
+	if reason, _ := data["reason"].(string); reason != "pack_exhausted" {
+		t.Fatalf("want game_ended.reason=pack_exhausted, got %v", data["reason"])
 	}
 }
 
-// TestE2E_Rematch_FullCycle drives a room through to game_ended via the
-// host-disconnect shortcut (same fake-clock rig as TestE2E_HostDisconnectFinishesGame),
-// then the host reconnects and sends rematch_request. The hub should broadcast
-// rematch_started with a fresh room_state that still includes the surviving
-// player — proving in-memory state was reset and the DB transition happened.
-func TestE2E_Rematch_FullCycle(t *testing.T) {
+// TestE2E_AllGrace_Ceiling_EndsGame verifies that when every player is in the
+// reconnect grace window for longer than the ceiling, the game ends and the hub
+// transitions to HubFinished. A late-connecting viewer sees state="finished".
+func TestE2E_AllGrace_Ceiling_EndsGame(t *testing.T) {
 	fake := clock.NewFake(time.Now().UTC())
-
 	env := newHubEnvWith(t, hubEnvOpts{
-		roundCount:            3,
+		roundCount:            1,
 		roundDurationSeconds:  15,
 		votingDurationSeconds: 10,
-		reconnectGrace:        500 * time.Millisecond,
-		packItemCount:         3,
+		reconnectGrace:        1 * time.Second,
+		packItemCount:         1,
 		clk:                   fake,
 	})
 
@@ -565,7 +546,7 @@ func TestE2E_Rematch_FullCycle(t *testing.T) {
 	defer hostConn.Close()
 	readUntilType(t, hostConn, "player_joined")
 
-	p2ID := "00000000-0000-0000-0000-000000000044"
+	p2ID := "00000000-0000-0000-0000-000000000061"
 	p2Conn := dial(t, env, p2ID, "player2")
 	defer p2Conn.Close()
 	readUntilType(t, hostConn, "player_joined")
@@ -574,39 +555,192 @@ func TestE2E_Rematch_FullCycle(t *testing.T) {
 	sendMsg(t, hostConn, "start", nil)
 	readUntilType(t, hostConn, "game_started")
 	readUntilType(t, p2Conn, "game_started")
+	readUntilType(t, hostConn, "round_started")
 	readUntilType(t, p2Conn, "round_started")
 
-	// Kill the host and age past the grace window to finish the room.
+	// Disconnect host; p2 confirms the hub processed it.
 	hostConn.Close()
 	readUntilType(t, p2Conn, "reconnecting")
-	fake.Advance(501 * time.Millisecond)
-	readUntilType(t, p2Conn, "player_left")
 
-	gameEnded := readUntilType(t, p2Conn, "game_ended")
-	endData, _ := gameEnded["data"].(map[string]any)
-	if _, ok := endData["rematch_window_expires_at"].(string); !ok {
-		t.Fatalf("want game_ended.rematch_window_expires_at to be a string, got %v", endData["rematch_window_expires_at"])
-	}
+	// Disconnect p2 — all players are now in the grace window.
+	p2Conn.Close()
+	// Allow the hub to process p2's unregister and queue the inGrace=true
+	// signal so waitPhase records pauseStart before we advance the clock.
+	time.Sleep(80 * time.Millisecond)
 
-	// Host reconnects — GetOrLoad hits the fast path because the hub is still
-	// alive, and handleRegister accepts the new connection even though the
-	// hub is in HubFinished state (reconnect logic looks up by player ID).
-	hostReconnect := dial(t, env, env.hostID, "host")
-	defer hostReconnect.Close()
-	// Drain any immediate room_state / player_joined echoes.
-	readUntilType(t, hostReconnect, "player_joined")
+	// Advance past reconnectGrace (1s) ceiling. waitPhase detects all-in-grace
+	// for ≥1s and ends the game with "all_players_disconnected".
+	fake.Advance(2 * time.Second)
 
-	sendMsg(t, hostReconnect, "rematch_request", nil)
+	// Allow hub goroutines to drain roundCtrlEndGame and call finishRoom.
+	time.Sleep(200 * time.Millisecond)
 
-	// Both the host and the surviving player should see rematch_started.
-	rematched := readUntilType(t, p2Conn, "rematch_started")
-	rmData, _ := rematched["data"].(map[string]any)
-	roomState, _ := rmData["room_state"].(map[string]any)
-	if roomState["state"] != "lobby" {
-		t.Errorf("want rematch_started.room_state.state=lobby, got %v", roomState["state"])
-	}
-	players, _ := roomState["players"].([]any)
-	if len(players) < 1 {
-		t.Errorf("want at least 1 player in rematch_started room_state, got %d", len(players))
+	// A late viewer should see the room is finished.
+	viewerConn := dial(t, env, env.hostID, "host")
+	defer viewerConn.Close()
+	m := readUntilType(t, viewerConn, "room_state")
+	roomData, _ := m["data"].(map[string]any)
+	if state := roomData["state"]; state != "finished" {
+		t.Fatalf("want room state=finished after all-disconnected ceiling, got %v", state)
 	}
 }
+
+// TestE2E_AllGrace_Reconnect_TimerResumes verifies that when all players
+// disconnect and one reconnects within the grace ceiling, the round timer
+// resumes (round_resumed broadcast) and the round eventually closes.
+func TestE2E_AllGrace_Reconnect_TimerResumes(t *testing.T) {
+	fake := clock.NewFake(time.Now().UTC())
+	env := newHubEnvWith(t, hubEnvOpts{
+		roundCount:            1,
+		roundDurationSeconds:  15,
+		votingDurationSeconds: 10,
+		reconnectGrace:        2 * time.Second,
+		packItemCount:         1,
+		clk:                   fake,
+	})
+
+	hostConn := dial(t, env, env.hostID, "host")
+	defer hostConn.Close()
+	readUntilType(t, hostConn, "player_joined")
+
+	p2ID := "00000000-0000-0000-0000-000000000062"
+	p2Conn := dial(t, env, p2ID, "player2")
+	defer p2Conn.Close()
+	readUntilType(t, hostConn, "player_joined")
+	readUntilType(t, p2Conn, "player_joined")
+
+	sendMsg(t, hostConn, "start", nil)
+	readUntilType(t, hostConn, "game_started")
+	readUntilType(t, p2Conn, "game_started")
+	readUntilType(t, hostConn, "round_started")
+	readUntilType(t, p2Conn, "round_started")
+
+	// Disconnect host; p2 confirms hub processed it.
+	hostConn.Close()
+	readUntilType(t, p2Conn, "reconnecting")
+
+	// Disconnect p2 — all players now in grace; timer pauses.
+	p2Conn.Close()
+	time.Sleep(80 * time.Millisecond)
+
+	// Reconnect host within the grace window. waitPhase receives inGrace=false
+	// and resumes the timer, broadcasting round_resumed.
+	newHostConn := dial(t, env, env.hostID, "host")
+	defer newHostConn.Close()
+
+	readUntilType(t, newHostConn, "round_resumed")
+
+	// Advance past the remaining round duration (15s, none elapsed).
+	// Zero submissions → voting skipped → vote_results broadcast directly.
+	fake.Advance(16 * time.Second)
+	readUntilType(t, newHostConn, "vote_results")
+}
+
+// TestE2E_ZeroSubmissions_SkipsVotingPhase verifies that when nobody submits
+// during a round, the voting phase is skipped and vote_results is broadcast
+// with empty data rather than the hub waiting for votes that never arrive.
+func TestE2E_ZeroSubmissions_SkipsVotingPhase(t *testing.T) {
+	fake := clock.NewFake(time.Now().UTC())
+	env := newHubEnvWith(t, hubEnvOpts{
+		roundCount:            1,
+		roundDurationSeconds:  15,
+		votingDurationSeconds: 10,
+		reconnectGrace:        300 * time.Millisecond,
+		packItemCount:         1,
+		clk:                   fake,
+	})
+
+	hostConn := dial(t, env, env.hostID, "host")
+	defer hostConn.Close()
+	readUntilType(t, hostConn, "player_joined")
+
+	p2ID := "00000000-0000-0000-0000-000000000063"
+	p2Conn := dial(t, env, p2ID, "player2")
+	defer p2Conn.Close()
+	readUntilType(t, hostConn, "player_joined")
+	readUntilType(t, p2Conn, "player_joined")
+
+	sendMsg(t, hostConn, "start", nil)
+	readUntilType(t, hostConn, "game_started")
+	readUntilType(t, hostConn, "round_started")
+
+	// Nobody submits. Advance past the submission window.
+	fake.Advance(16 * time.Second)
+
+	// vote_results should arrive without any prior submissions_closed
+	// (voting phase is skipped when there are no submissions).
+	m := readUntilType(t, hostConn, "vote_results")
+	data, _ := m["data"].(map[string]any)
+	// results may be nil (empty payload) or contain an empty submissions list.
+	if results, ok := data["results"].(map[string]any); ok {
+		if subs, ok := results["submissions"].([]any); ok && len(subs) != 0 {
+			t.Errorf("want empty submissions in vote_results, got %v", subs)
+		}
+	}
+
+	// Advance past the 3-second inter-round delay; game ends (1 round configured).
+	fake.Advance(4 * time.Second)
+	readUntilType(t, hostConn, "game_ended")
+}
+
+// TestHub_Reconnect_MidRound_SnapshotContainsPhase verifies that a player
+// who refreshes during an active round receives enough state in the
+// room_state snapshot to render the in-flight phase. Without phase, item,
+// and ends_at, the frontend render tree has no matching branch and the
+// page appears blank until the next round-lifecycle broadcast arrives.
+func TestHub_Reconnect_MidRound_SnapshotContainsPhase(t *testing.T) {
+	env := newHubEnvWith(t, hubEnvOpts{
+		roundCount:            1,
+		roundDurationSeconds:  60,
+		votingDurationSeconds: 30,
+		reconnectGrace:        2 * time.Second,
+		packItemCount:         1,
+	})
+
+	hostConn := dial(t, env, env.hostID, "host")
+	defer hostConn.Close()
+	readUntilType(t, hostConn, "player_joined")
+
+	p2ID := "00000000-0000-0000-0000-000000000071"
+	p2Conn := dial(t, env, p2ID, "player2")
+	defer p2Conn.Close()
+	readUntilType(t, hostConn, "player_joined")
+	readUntilType(t, p2Conn, "player_joined")
+
+	sendMsg(t, hostConn, "start", nil)
+	readUntilType(t, hostConn, "game_started")
+	readUntilType(t, hostConn, "round_started")
+	readUntilType(t, p2Conn, "round_started")
+
+	// Force a reconnect within the grace window. readPump on the server will
+	// observe the Close and call unregister, marking the player reconnecting.
+	hostConn.Close()
+	time.Sleep(80 * time.Millisecond)
+
+	hostConn2 := dial(t, env, env.hostID, "host")
+	defer hostConn2.Close()
+
+	m := readUntilType(t, hostConn2, "room_state")
+	data, _ := m["data"].(map[string]any)
+
+	if phase := data["phase"]; phase != "submitting" {
+		t.Fatalf("want phase=submitting in reconnect snapshot, got %v", phase)
+	}
+	if rn, _ := data["round_number"].(float64); rn != 1 {
+		t.Errorf("want round_number=1, got %v", data["round_number"])
+	}
+	if _, ok := data["ends_at"].(string); !ok {
+		t.Errorf("want ends_at string in reconnect snapshot, got %v", data["ends_at"])
+	}
+	if _, ok := data["duration_seconds"].(float64); !ok {
+		t.Errorf("want duration_seconds number, got %v", data["duration_seconds"])
+	}
+	item, ok := data["item"].(map[string]any)
+	if !ok {
+		t.Fatalf("want item object in reconnect snapshot, got %v", data["item"])
+	}
+	if _, ok := item["payload"]; !ok {
+		t.Errorf("want item.payload in reconnect snapshot")
+	}
+}
+

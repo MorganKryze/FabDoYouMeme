@@ -1,9 +1,11 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { ws } from '$lib/state/ws.svelte';
+  import { room } from '$lib/state/room.svelte';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { Send } from '$lib/icons';
+  import { mediaSrc } from '$lib/api/media';
   import type { Round } from '$lib/api/types';
 
   let { round }: { round: Round } = $props();
@@ -22,6 +24,7 @@
   $effect(() => {
     if (mountedExpired) return;
     const tick = () => {
+      if (room.roundPaused) return; // timer frozen while all players are reconnecting
       timerMs = Math.max(0, deadline - Date.now());
       if (timerMs > 0) requestAnimationFrame(tick);
     };
@@ -34,7 +37,8 @@
 
   function submit() {
     if (submitted || isExpired || caption.trim().length === 0) return;
-    ws.send('meme-caption:submit', { caption: caption.trim() });
+    const trimmed = caption.trim();
+    ws.send('meme-caption:submit', { caption: trimmed });
     submitted = true;
   }
 </script>
@@ -49,6 +53,14 @@
       Submission window has closed.
     </div>
   {:else}
+    {#if room.roundPaused}
+      <div
+        class="rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 py-2 text-xs font-bold text-brand-text-muted text-center w-fit mx-auto"
+        style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
+      >
+        Everyone dropped — timer paused
+      </div>
+    {/if}
     <div class="flex flex-col items-center gap-3">
       <!-- Brand timer pill -->
       <div
@@ -57,7 +69,7 @@
       >
         <span
           class="h-3 w-3 rounded-full"
-          style="background: var(--brand-accent); animation: pulse-dot 1.5s ease-in-out infinite;"
+          style="background: var(--brand-accent); animation: {room.roundPaused ? 'none' : 'pulse-dot 1.5s ease-in-out infinite'};"
         ></span>
         <span
           class="text-[2.4rem] font-bold tabular-nums leading-none tracking-wide"
@@ -74,16 +86,16 @@
   {/if}
 
   <!-- Media prompt (if present) -->
-  {#if round.item?.media_url ?? round.media_url}
+  {#if round.item?.media_url}
     <img
-      src={round.item?.media_url ?? round.media_url}
+      src={mediaSrc(round.item.media_url, room.code)}
       alt="Round prompt"
-      class="w-full aspect-video object-cover rounded-[22px] border-[2.5px] border-brand-border-heavy"
+      class="w-full max-h-48 object-contain rounded-[22px] border-[2.5px] border-brand-border-heavy"
     />
   {/if}
 
-  {#if round.text_prompt}
-    <p class="text-center text-brand-text-mid font-semibold italic">"{round.text_prompt}"</p>
+  {#if (round.item?.payload as { prompt?: string } | undefined)?.prompt}
+    <p class="text-center text-brand-text-mid font-semibold italic">"{(round.item.payload as { prompt?: string }).prompt}"</p>
   {/if}
 
   <!-- Caption input -->

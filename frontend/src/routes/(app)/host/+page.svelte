@@ -16,6 +16,7 @@
   let selectedGameTypeId = $state(untrack(() => data.preselectedId));
   let selectedPackId = $state('');
   let isSolo = $state(false);
+  let hostPacedToggle = $state(false);
   let packs = $state<Pack[]>([]);
   let loadingPacks = $state(false);
   let step = $state<Step>(untrack(() => (data.preselectedId ? 'pack' : 'game')));
@@ -119,6 +120,7 @@
         <input type="hidden" name="game_type_id" value={selectedGameTypeId} />
         <input type="hidden" name="pack_id" value={selectedPackId} />
         <input type="hidden" name="is_solo" value={String(isSolo)} />
+        <input type="hidden" name="host_paced" value={String(hostPacedToggle)} />
 
         <div class="flex items-center justify-between">
           <p class="text-sm font-semibold text-brand-text-muted uppercase tracking-[0.2em]">Pick a pack</p>
@@ -206,6 +208,12 @@
             <span class="text-sm font-semibold">Solo mode</span>
           </label>
         {/if}
+
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" bind:checked={hostPacedToggle} class="h-4 w-4 rounded border-brand-border-heavy" />
+          <span class="text-sm font-semibold">Host controls pacing</span>
+          <span class="text-xs text-brand-text-muted font-semibold">(you advance each round manually)</span>
+        </label>
 
         <button
           use:pressPhysics={'dark'}

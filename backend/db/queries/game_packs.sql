@@ -84,3 +84,21 @@ SELECT EXISTS (
       OR (gp.visibility = 'public' AND gp.status = 'active')
     )
 ) AS allowed;
+
+-- name: CanGuestDownloadMedia :one
+-- Authorization predicate for guest reads of /api/assets/media. Guests have no
+-- session and cannot own packs, so the user-side rules in CanUserDownloadMedia
+-- don't apply. Instead we scope visibility to "items the guest could plausibly
+-- have seen in the room they joined" — a version is readable iff it belongs to
+-- an item that was actually used in a round of a room the guest is currently a
+-- player of. Narrower than "any media in the pack backing the room" so a guest
+-- can't enumerate unshown items via media_key guessing.
+SELECT EXISTS (
+  SELECT 1
+  FROM game_item_versions giv
+  JOIN rounds rd ON rd.item_id = giv.item_id
+  JOIN room_players rp ON rp.room_id = rd.room_id
+  WHERE giv.media_key = sqlc.arg(media_key)
+    AND giv.deleted_at IS NULL
+    AND rp.guest_player_id = sqlc.arg(guest_player_id)::uuid
+) AS allowed;

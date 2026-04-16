@@ -106,7 +106,7 @@ describe('RoomState.handleMessage', () => {
       data: {
         reason: 'normal',
         leaderboard: [
-          { user_id: 'u1', username: 'alice', total_score: 10, rank: 1 }
+          { player_id: 'u1', display_name: 'alice', is_guest: false, score: 10, rank: 1 }
         ]
       }
     });

@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -109,7 +110,32 @@ func main() {
 
 	// ── Game registry ─────────────────────────────────────────────────────────
 	registry := game.NewRegistry()
-	registry.Register(memecaption.New())
+
+	// Fetch the meme-caption game type row so we can read operator-tunable
+	// config values (e.g. max_players) rather than relying on compile-time
+	// constants. When a config field is NULL the handler falls back to its
+	// own default so existing deployments are not silently changed.
+	const memeCaptionDefaultMaxPlayers = 12
+	memeCaptionMaxPlayers := memeCaptionDefaultMaxPlayers
+	if gtRow, err := queries.GetGameTypeBySlug(context.Background(), "meme-caption"); err != nil {
+		logger.Warn("meme-caption: could not read game type config, using default max_players",
+			"default", memeCaptionDefaultMaxPlayers, "error", err)
+	} else {
+		var gtCfg struct {
+			MaxPlayers *int `json:"max_players"`
+		}
+		if jsonErr := json.Unmarshal(gtRow.Config, &gtCfg); jsonErr != nil {
+			logger.Warn("meme-caption: could not parse game type config, using default max_players",
+				"default", memeCaptionDefaultMaxPlayers, "error", jsonErr)
+		} else if gtCfg.MaxPlayers != nil {
+			memeCaptionMaxPlayers = *gtCfg.MaxPlayers
+		}
+		// nil means NULL in the DB → unbounded per schema contract, but we keep
+		// the compile-time default (12) so a fresh deployment that hasn't tuned
+		// the value still gets a sensible cap. Operators who want unbounded
+		// joins can set max_players to 0 explicitly in the DB row.
+	}
+	registry.Register(memecaption.New(memeCaptionMaxPlayers))
 
 	// ── Game manager ──────────────────────────────────────────────────────────
 	// context.Background() is the correct parent: hubs outlive individual
@@ -248,11 +274,20 @@ func main() {
 	})
 
 	// Assets
-	r.With(mw.RequireAuth).Route("/api/assets", func(r chi.Router) {
-		r.With(uploadLimiter.Middleware).Post("/upload-url", assetHandler.UploadURL)
-		r.With(uploadLimiter.Middleware).Post("/upload", assetHandler.UploadDirect)
-		r.Post("/download-url", assetHandler.DownloadURL)
+	r.Route("/api/assets", func(r chi.Router) {
+		// GET /media is intentionally *not* gated by RequireAuth. The handler
+		// resolves identity itself (session cookie OR ?guest_token=) so that
+		// in-game <img> tags work for guests — who have no session — while
+		// still enforcing the per-identity authz predicate. See
+		// AssetHandler.GetMedia for the rule set.
 		r.Get("/media", assetHandler.GetMedia)
+
+		r.Group(func(r chi.Router) {
+			r.Use(mw.RequireAuth)
+			r.With(uploadLimiter.Middleware).Post("/upload-url", assetHandler.UploadURL)
+			r.With(uploadLimiter.Middleware).Post("/upload", assetHandler.UploadDirect)
+			r.Post("/download-url", assetHandler.DownloadURL)
+		})
 	})
 
 	// Rooms

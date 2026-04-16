@@ -77,8 +77,14 @@ func TestAPI_EndRoom_HostDuringPlaying_Succeeds(t *testing.T) {
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("want 204, got %d — body: %s", rec.Code, rec.Body.String())
 	}
-	if _, err := q.GetRoomByCode(context.Background(), room.Code); !errors.Is(err, pgx.ErrNoRows) {
-		t.Fatalf("want pgx.ErrNoRows after cancel, got %v", err)
+	// Playing rooms are preserved as finished so gameplay data (rounds,
+	// submissions, votes) survives for post-game history and leaderboard queries.
+	got, err := q.GetRoomByCode(context.Background(), room.Code)
+	if err != nil {
+		t.Fatalf("playing room must still exist after End, got err: %v", err)
+	}
+	if got.State != "finished" {
+		t.Fatalf("want state=finished, got %q", got.State)
 	}
 }
 

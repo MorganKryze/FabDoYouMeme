@@ -1,17 +1,23 @@
 <script lang="ts">
   import { room } from '$lib/state/room.svelte';
-  import { ws } from '$lib/state/ws.svelte';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { reveal } from '$lib/actions/reveal';
   import { hoverEffect } from '$lib/actions/hoverEffect';
-  import { Play, LogOut, Trophy, PartyPopper, Clock } from '$lib/icons';
+  import { Play, LogOut, Trophy, PartyPopper } from '$lib/icons';
   import type { LeaderboardEntry } from '$lib/api/types';
 
-  interface Props {
-    isHost: boolean;
-  }
+  const END_REASONS: Record<string, { headline: string; subtext: string | null }> = {
+    game_complete:             { headline: 'Game over!',          subtext: 'All rounds played.' },
+    pack_exhausted:            { headline: 'Pack ran out',        subtext: 'Add more items to this pack to play longer.' },
+    all_players_disconnected:  { headline: 'Everyone dropped',   subtext: 'The room ended because all players disconnected.' },
+    host_disconnected:         { headline: 'Host dropped',        subtext: 'The host disconnected; the room closed.' },
+  };
 
-  let { isHost }: Props = $props();
+  const endInfo = $derived(
+    room.endReason && END_REASONS[room.endReason]
+      ? END_REASONS[room.endReason]
+      : { headline: 'Game over', subtext: null }
+  );
 
   // Match the lobby's per-player color palette so avatars stay visually
   // consistent from the waiting room through to the final scoreboard.
@@ -26,17 +32,8 @@
     return name.slice(0, 2).toUpperCase();
   }
 
-  // Rematch countdown driven by server-provided ISO timestamp.
-  let now = $state(Date.now());
-  let tickHandle: ReturnType<typeof setInterval> | null = null;
-
-  $effect(() => {
-    tickHandle = setInterval(() => { now = Date.now(); }, 1000);
-    return () => { if (tickHandle) clearInterval(tickHandle); };
-  });
-
   // Confetti lifecycle: full burst for 30s, thinned for the next 30s, then
-  // completely removed so the stage calms down for the rematch window.
+  // completely removed so the stage calms down.
   let confettiPhase = $state<'full' | 'reduced' | 'none'>('full');
 
   $effect(() => {
@@ -59,25 +56,6 @@
     drift: `${((i % 7) - 3) * 18}px`,
   }));
 
-  const windowExpiresMs = $derived(
-    room.rematchWindowExpiresAt ? new Date(room.rematchWindowExpiresAt).getTime() : null
-  );
-  const secondsLeft = $derived(
-    windowExpiresMs !== null ? Math.max(0, Math.floor((windowExpiresMs - now) / 1000)) : null
-  );
-  const windowExpired = $derived(secondsLeft !== null && secondsLeft <= 0);
-
-  const mmss = $derived.by(() => {
-    if (secondsLeft === null) return '';
-    const m = Math.floor(secondsLeft / 60);
-    const s = secondsLeft % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  });
-
-  const hostName = $derived(
-    room.players.find((p) => p.is_host)?.username ?? 'the host'
-  );
-
   const winner = $derived<LeaderboardEntry | null>(room.leaderboard[0] ?? null);
   const rest = $derived(room.leaderboard.slice(3));
 
@@ -95,9 +73,7 @@
     });
   });
 
-  function requestRematch() {
-    ws.send('rematch_request', {});
-  }
+
 </script>
 
 <div class="relative w-full max-w-5xl mx-auto px-6 py-4 flex flex-col gap-8" use:reveal>
@@ -116,7 +92,7 @@
   {/if}
 
   <!-- ═══════════════════════════════════════════════════════════════
-       HEADER — "Game over" chip + winner hero.
+       HEADER — reason chip + winner hero.
        ═══════════════════════════════════════════════════════════════ -->
   <div class="flex flex-col items-center gap-3 text-center relative z-[1]">
     <span
@@ -124,22 +100,25 @@
       style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
     >
       <PartyPopper size={14} strokeWidth={2.5} />
-      Game over
+      {endInfo.headline}
     </span>
+
+    {#if endInfo.subtext}
+      <p class="text-xs text-brand-text-muted max-w-xs">{endInfo.subtext}</p>
+    {/if}
 
     {#if winner}
       <h1
-        class="inline-flex flex-wrap items-baseline justify-center gap-x-3 text-brand-text"
-        style="font-size: clamp(2.5rem, 7vw, 5rem); font-weight: 800; line-height: 1; letter-spacing: -0.03em;"
+        class="inline-flex flex-wrap items-baseline justify-center gap-x-3 text-brand-text text-6xl sm:text-7xl md:text-8xl font-extrabold leading-none tracking-tight"
       >
-        <span>{winner.username}</span>
+        <span>{winner.display_name}</span>
         <span class="wins-gradient">wins!</span>
       </h1>
       <p class="text-sm font-semibold text-brand-text-muted">
-        with <span class="font-bold text-brand-text tabular-nums">{winner.total_score} pts</span>
+        with <span class="font-bold text-brand-text tabular-nums">{winner.score} pts</span>
       </p>
     {:else}
-      <h1 style="font-size: clamp(2.5rem, 7vw, 5rem); font-weight: 800; line-height: 1; letter-spacing: -0.03em;">
+      <h1 class="text-6xl sm:text-7xl md:text-8xl font-extrabold leading-none tracking-tight">
         Final scores
       </h1>
     {/if}
@@ -156,9 +135,9 @@
             <div class="relative">
               <span
                 class="h-16 w-16 sm:h-20 sm:w-20 shrink-0 rounded-full border-[2.5px] border-brand-border-heavy flex items-center justify-center text-sm sm:text-base font-bold text-white"
-                style="background: {colorFor(slot.entry.user_id)}; box-shadow: 0 5px 0 rgba(0,0,0,0.14);"
+                style="background: {colorFor(slot.entry.player_id)}; box-shadow: 0 5px 0 rgba(0,0,0,0.14);"
               >
-                {initials(slot.entry.username)}
+                {initials(slot.entry.display_name)}
               </span>
               <span class="absolute -top-2 -right-2 text-2xl leading-none select-none" aria-hidden="true">
                 {slot.medal}
@@ -172,10 +151,10 @@
                 #{slot.rank}
               </span>
               <span class="font-bold text-brand-text text-center truncate max-w-full px-1">
-                {slot.entry.username}
+                {slot.entry.display_name}
               </span>
               <span class="font-bold tabular-nums text-brand-text-mid text-sm">
-                {slot.entry.total_score} pts
+                {slot.entry.score} pts
               </span>
             </div>
           </div>
@@ -200,20 +179,20 @@
         Final standings
       </h2>
       <ol class="flex flex-col gap-2">
-        {#each rest as entry, i (entry.user_id)}
+        {#each rest as entry, i (entry.player_id)}
           <li class="flex items-center gap-3 rounded-full border-[2.5px] border-brand-border bg-brand-white px-3 py-2 text-sm">
             <span class="w-6 text-right font-bold text-brand-text-muted tabular-nums">
               {i + 4}.
             </span>
             <span
               class="h-8 w-8 shrink-0 rounded-full border-[2px] border-brand-border-heavy flex items-center justify-center text-[0.6rem] font-bold text-white"
-              style="background: {colorFor(entry.user_id)};"
+              style="background: {colorFor(entry.player_id)};"
             >
-              {initials(entry.username)}
+              {initials(entry.display_name)}
             </span>
-            <span class="flex-1 text-left font-bold truncate">{entry.username}</span>
+            <span class="flex-1 text-left font-bold truncate">{entry.display_name}</span>
             <span class="font-bold tabular-nums text-brand-text-mid">
-              {entry.total_score} pts
+              {entry.score} pts
             </span>
           </li>
         {/each}
@@ -222,39 +201,19 @@
   {/if}
 
   <!-- ═══════════════════════════════════════════════════════════════
-       REMATCH + LEAVE — chunky CTA pair matching the lobby's Start.
+       ACTIONS — new game or leave.
        ═══════════════════════════════════════════════════════════════ -->
   <div class="flex flex-col items-center gap-3 w-full max-w-xs mx-auto relative z-[1]" use:reveal={{ delay: 4 }}>
-    {#if !windowExpired}
-      {#if isHost}
-        <button
-          use:pressPhysics={'dark'}
-          use:hoverEffect={'gradient'}
-          type="button"
-          onclick={requestRematch}
-          class="w-full h-14 px-10 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold text-lg cursor-pointer inline-flex items-center justify-center gap-2"
-          style="box-shadow: 0 5px 0 rgba(0,0,0,0.22);"
-        >
-          <Play size={20} strokeWidth={2.5} />
-          Rematch
-        </button>
-      {:else}
-        <p class="text-sm font-semibold text-brand-text-muted text-center">
-          Waiting for <span class="font-bold text-brand-text">{hostName}</span> to start a rematch…
-        </p>
-      {/if}
-
-      {#if mmss}
-        <p class="inline-flex items-center gap-1.5 text-[0.7rem] font-bold text-brand-text-muted">
-          <Clock size={12} strokeWidth={2.5} />
-          Rematch window: <span class="tabular-nums">{mmss}</span> remaining
-        </p>
-      {/if}
-    {:else}
-      <p class="text-xs font-bold text-brand-text-muted text-center">
-        Rematch window expired — host a new game instead.
-      </p>
-    {/if}
+    <a
+      href="/"
+      use:pressPhysics={'dark'}
+      use:hoverEffect={'gradient'}
+      class="w-full h-14 px-10 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold text-lg cursor-pointer inline-flex items-center justify-center gap-2"
+      style="box-shadow: 0 5px 0 rgba(0,0,0,0.22);"
+    >
+      <Play size={20} strokeWidth={2.5} />
+      New Game
+    </a>
 
     <a
       href="/"

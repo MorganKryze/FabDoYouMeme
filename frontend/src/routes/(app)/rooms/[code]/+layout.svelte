@@ -2,6 +2,8 @@
   import { onMount, onDestroy } from 'svelte';
   import { ws } from '$lib/state/ws.svelte';
   import { room } from '$lib/state/room.svelte';
+  import { user } from '$lib/state/user.svelte';
+  import EndRoomButton from '$lib/components/room/EndRoomButton.svelte';
   import type { WsMessage } from '$lib/api/types';
   import type { LayoutData } from './$types';
 
@@ -43,6 +45,10 @@
         <div class="text-xs font-bold animate-pulse" style="color: var(--brand-accent);">
           Reconnecting… (attempt {ws.retryCount} / 10)
         </div>
+      {/if}
+
+      {#if room.state === 'playing' && (user.id !== null && room.hostUserId === user.id)}
+        <EndRoomButton compact />
       {/if}
     </div>
   {/if}
