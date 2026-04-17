@@ -277,23 +277,21 @@
     -->
     <section
       out:fade={{ duration: 200 }}
-      class="w-full flex-1 flex items-end justify-center pb-8"
+      class="w-full flex-1 flex items-end justify-center pb-10"
     >
       <button
         type="button"
         onclick={revealRest}
         use:pressPhysics={'ghost'}
-        use:hoverEffect={'swap'}
-        class="inline-flex items-center gap-2.5 pl-4 pr-2 py-2 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-surface cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
-        style="box-shadow: 0 3px 0 rgba(0,0,0,0.08);"
+        class="scroll-pill group inline-flex items-center gap-2.5 px-5 py-2.5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-surface cursor-pointer transition-transform duration-200 ease-out hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+        style="box-shadow: 0 2px 0 rgba(0,0,0,0.06);"
         aria-label="Scroll to see the rest of the page"
       >
-        <span class="text-xs font-bold">Scroll to see why</span>
-        <span
-          class="scroll-cue inline-flex h-6 w-6 items-center justify-center rounded-full border-[2px] border-brand-border-heavy bg-brand-white text-brand-text"
-          style="box-shadow: 0 2px 0 rgba(0,0,0,0.06);"
-        >
-          <ChevronDown size={14} strokeWidth={2.5} />
+        <span class="text-xs font-semibold tracking-tight text-brand-text-mid transition-colors duration-200 group-hover:text-brand-text">
+          Scroll to see why
+        </span>
+        <span class="scroll-chevron inline-flex items-center text-brand-text-mid transition-colors duration-200 group-hover:text-brand-text">
+          <ChevronDown size={14} strokeWidth={2} />
         </span>
       </button>
     </section>
@@ -399,14 +397,16 @@
 </div>
 
 <style>
-  @keyframes scroll-cue-bounce {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(4px); }
+  /* Slow, smooth downward drift. A ~3px travel over 2.4s with standard-curve
+     easing reads as "breathing" rather than the prior 4px/1.6s jitter. */
+  @keyframes scroll-float {
+    0%, 100% { transform: translateY(-1px); }
+    50% { transform: translateY(2px); }
   }
-  .scroll-cue {
-    animation: scroll-cue-bounce 1.6s ease-in-out infinite;
+  .scroll-chevron {
+    animation: scroll-float 2.4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
   }
   @media (prefers-reduced-motion: reduce) {
-    .scroll-cue { animation: none; }
+    .scroll-chevron { animation: none; }
   }
 </style>
