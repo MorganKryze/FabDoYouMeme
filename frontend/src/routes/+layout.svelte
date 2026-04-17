@@ -2,6 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import favicon from '$lib/assets/favicon.svg';
 	import TimeBackground from '$lib/components/TimeBackground.svelte';
+	import BackgroundMusic from '$lib/components/room/BackgroundMusic.svelte';
 	import { installPageTransitions } from '$lib/motion/navigation';
 	import { theme } from '$lib/state/theme.svelte';
 
@@ -25,4 +26,5 @@
 </svelte:head>
 
 <TimeBackground />
+<BackgroundMusic />
 {@render children()}

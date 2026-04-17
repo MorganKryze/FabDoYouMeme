@@ -72,6 +72,10 @@ export {
   IdCard,
   AlertTriangle,
 
+  // --- Audio ---
+  Volume2,
+  VolumeX,
+
   // --- Theme ---
   Sun,
   Sunrise,

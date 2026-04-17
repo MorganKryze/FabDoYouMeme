@@ -14,6 +14,7 @@ const config = {
         'style-src': ['self'],
         'font-src': ['self'],
         'img-src': ['self', 'data:', 'blob:'],
+        'media-src': ['self'],
         'connect-src': ['self', 'wss:', 'ws:'],
         'frame-ancestors': ['none']
       }
