@@ -4,6 +4,7 @@
   import { room } from '$lib/state/room.svelte';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { hoverEffect } from '$lib/actions/hoverEffect';
+  import { dealCard } from '$lib/actions/dealCard';
   import { Send } from '$lib/icons';
   import { mediaSrc } from '$lib/api/media';
   import type { Round } from '$lib/api/types';
@@ -13,7 +14,7 @@
   let caption = $state('');
   let submitted = $state(false);
 
-  const MAX_CHARS = 300;
+  const MAX_CHARS = 200;
   const deadline = $derived(Date.parse(round.ends_at));
   const totalMs = $derived(round.duration_seconds * 1000);
   const mountedExpired = $derived(deadline <= Date.now());
@@ -85,38 +86,66 @@
     </div>
   {/if}
 
-  <!-- Media prompt (if present) -->
-  {#if round.item?.media_url}
-    <img
-      src={mediaSrc(round.item.media_url, room.code)}
-      alt="Round prompt"
-      class="w-full max-h-48 object-contain rounded-[22px] border-[2.5px] border-brand-border-heavy"
-    />
-  {/if}
-
-  {#if (round.item?.payload as { prompt?: string } | undefined)?.prompt}
-    <p class="text-center text-brand-text-mid font-semibold italic">"{(round.item.payload as { prompt?: string }).prompt}"</p>
-  {/if}
-
-  <!-- Caption input -->
-  {#if submitted}
+  <!-- Pokémon-style card: image + caption slot live inside one bordered frame.
+       Narrow max-width keeps it feeling like a held card, not a banner. -->
+  <div class="w-full max-w-md mx-auto flex flex-col gap-3">
     <div
-      class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-5 text-center text-sm font-bold text-brand-text-mid"
-      style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
+      use:dealCard={{ delay: 80, rotate: -2 }}
+      class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-3"
+      style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
     >
-      Submitted — waiting for others…
+      <!-- Image slot -->
+      {#if round.item?.media_url}
+        <div
+          class="w-full rounded-[14px] overflow-hidden border-[2.5px] border-brand-border-heavy bg-brand-white flex items-center justify-center"
+          style="box-shadow: inset 0 2px 0 rgba(0,0,0,0.04);"
+        >
+          <img
+            src={mediaSrc(round.item.media_url, room.code)}
+            alt="Round prompt"
+            class="block w-full max-h-72 object-contain"
+          />
+        </div>
+      {/if}
+
+      {#if (round.item?.payload as { prompt?: string } | undefined)?.prompt}
+        <p class="text-center text-brand-text-mid font-semibold italic text-sm">
+          "{(round.item.payload as { prompt?: string }).prompt}"
+        </p>
+      {/if}
+
+      <!-- Caption slot — dashed while empty so it reads as a fillable field -->
+      {#if submitted}
+        <div
+          class="w-full rounded-[12px] border-[2.5px] border-brand-border-heavy bg-brand-white px-3 py-2 text-sm font-semibold text-brand-text text-center"
+          style="box-shadow: 0 2px 0 rgba(0,0,0,0.04);"
+        >
+          {caption.trim()}
+        </div>
+      {:else}
+        <textarea
+          bind:value={caption}
+          disabled={isExpired}
+          maxlength={MAX_CHARS}
+          rows={3}
+          placeholder="Write your caption…"
+          onkeydown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              submit();
+            }
+          }}
+          class="w-full rounded-[12px] border-[2.5px] border-dashed border-brand-border-heavy bg-brand-white/70 px-3 py-3 text-sm font-semibold text-center resize-none focus:outline-none focus:border-solid focus:bg-brand-white transition-colors disabled:opacity-50"
+        ></textarea>
+      {/if}
     </div>
-  {:else}
-    <div class="flex flex-col gap-2">
-      <textarea
-        bind:value={caption}
-        disabled={isExpired}
-        maxlength={MAX_CHARS}
-        rows={3}
-        placeholder="Write your caption…"
-        class="w-full rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white p-4 text-sm font-semibold resize-none focus:outline-none focus:border-brand-text transition-colors disabled:opacity-50"
-        style="box-shadow: 0 4px 0 rgba(0,0,0,0.06);"
-      ></textarea>
+
+    <!-- Counter + submit live below the card so the card stays the subject. -->
+    {#if submitted}
+      <p class="text-center text-xs font-bold text-brand-text-mid">
+        Submitted — waiting for others…
+      </p>
+    {:else}
       <div class="flex items-center justify-between">
         <span class="text-xs font-semibold text-brand-text-muted">{caption.length}/{MAX_CHARS}</span>
         <button
@@ -131,6 +160,6 @@
           Submit
         </button>
       </div>
-    </div>
-  {/if}
+    {/if}
+  </div>
 </div>

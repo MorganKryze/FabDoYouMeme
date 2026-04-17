@@ -41,11 +41,11 @@ func TestSupportedPayloadVersions(t *testing.T) {
 
 func TestValidateSubmission_TooLong(t *testing.T) {
 	h := newHandler()
-	long := strings.Repeat("a", 301)
+	long := strings.Repeat("a", 201)
 	payload, _ := json.Marshal(map[string]string{"caption": long})
 	err := h.ValidateSubmission(game.Round{}, payload)
 	if err == nil {
-		t.Error("expected error for caption > 300 chars")
+		t.Error("expected error for caption > 200 chars")
 	}
 }
 

@@ -64,7 +64,7 @@ Sent to the originating connection as `{ "type": "error", "data": { "code": "...
 | ---------------------- | ---------------------------- | ------------------------------------------------------------------------------------------ |
 | `not_host`             | Hub                          | Sender attempted a host-only action (`start`, `next_round`, kick) but is not the room host |
 | `game_already_started` | Hub                          | `join` received when room state is not `lobby`                                             |
-| `invalid_submission`   | Handler `ValidateSubmission` | Submission payload is invalid for this game type (e.g. caption exceeds 300 chars)          |
+| `invalid_submission`   | Handler `ValidateSubmission` | Submission payload is invalid for this game type (e.g. caption exceeds 200 chars)          |
 | `invalid_vote`         | Handler `ValidateVote`       | Vote payload is invalid for this game type                                                 |
 | `cannot_vote_for_self` | Handler `ValidateVote`       | `voterID == submission.UserID`                                                             |
 | `submission_closed`    | Hub                          | Submit message received after the submission window closed                                 |

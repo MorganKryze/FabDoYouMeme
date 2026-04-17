@@ -52,7 +52,7 @@ type submitPayload struct {
 	Caption string `json:"caption"`
 }
 
-// ValidateSubmission checks caption is non-empty and ≤300 chars.
+// ValidateSubmission checks caption is non-empty and ≤200 chars.
 func (h *Handler) ValidateSubmission(_ game.Round, raw json.RawMessage) error {
 	var p submitPayload
 	if err := json.Unmarshal(raw, &p); err != nil {
@@ -62,8 +62,8 @@ func (h *Handler) ValidateSubmission(_ game.Round, raw json.RawMessage) error {
 	if p.Caption == "" {
 		return fmt.Errorf("caption cannot be empty")
 	}
-	if len([]rune(p.Caption)) > 300 {
-		return fmt.Errorf("caption exceeds 300 characters")
+	if len([]rune(p.Caption)) > 200 {
+		return fmt.Errorf("caption exceeds 200 characters")
 	}
 	return nil
 }

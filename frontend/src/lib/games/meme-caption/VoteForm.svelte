@@ -4,6 +4,7 @@
   import { physCard } from '$lib/actions/physCard';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { hoverEffect } from '$lib/actions/hoverEffect';
+  import { dealCard } from '$lib/actions/dealCard';
   import { Heart } from '$lib/icons';
   import { mediaSrc } from '$lib/api/media';
   import type { Round, Submission } from '$lib/api/types';
@@ -59,39 +60,62 @@
     </div>
   </div>
 
-  {#if round?.item?.media_url}
-    <img
-      src={mediaSrc(round.item.media_url, room.code)}
-      alt="Round prompt"
-      class="w-full max-h-48 object-contain rounded-[22px] border-[2.5px] border-brand-border-heavy"
-    />
+  {#if (round?.item?.payload as { prompt?: string } | undefined)?.prompt}
+    <p class="text-center text-brand-text-mid font-semibold italic text-sm">
+      "{(round!.item!.payload as { prompt?: string }).prompt}"
+    </p>
   {/if}
 
-  <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-    {#each submissions as sub}
+  <div class="w-full max-w-3xl mx-auto grid grid-cols-1 sm:grid-cols-2 gap-5">
+    {#each submissions as sub, i}
       {@const isOwn = sub.id === room.ownSubmissionId}
+      {@const isSelected = selectedId === sub.id}
       <button
+        use:dealCard={{ delay: 80 + i * 90, rotate: i % 2 === 0 ? -2 : 2, smooth: submissions.length > 3 }}
         use:physCard
         type="button"
-        onclick={() => { if (!voted) selectedId = sub.id; }}
+        onclick={() => { if (!voted && !isOwn) selectedId = sub.id; }}
         disabled={voted || isOwn}
-        class="relative rounded-[22px] border-[2.5px] p-5 text-left transition-colors cursor-pointer
-          {selectedId === sub.id
+        class="relative rounded-[22px] border-[2.5px] p-4 flex flex-col gap-3 text-left transition-colors
+          {isSelected
             ? 'border-brand-text bg-brand-white'
-            : 'border-brand-border-heavy bg-brand-surface hover:bg-brand-white'}
-          {isOwn ? 'cursor-default' : ''}
-          disabled:opacity-70"
-        style="box-shadow: {selectedId === sub.id ? '0 5px 0 var(--brand-text)' : '0 5px 0 rgba(0,0,0,0.08)'};"
+            : 'border-brand-border-heavy bg-brand-surface'}
+          {isOwn ? 'cursor-default opacity-70' : 'cursor-pointer'}"
+        style="box-shadow: {isSelected ? '0 6px 0 var(--brand-text)' : '0 6px 0 rgba(0,0,0,0.12)'};"
       >
         {#if isOwn}
-          <span class="absolute top-3 right-3 text-[0.7rem] font-bold px-3 py-1 rounded-full bg-brand-surface text-brand-text-muted">
+          <span class="absolute top-2 right-2 text-[0.65rem] font-bold uppercase tracking-[0.15em] px-2.5 py-1 rounded-full bg-brand-white border-[2px] border-brand-border-heavy text-brand-text-muted z-10">
             You
           </span>
         {/if}
-        {#if selectedId === sub.id}
-          <span class="absolute top-3 left-3 font-bold text-brand-text">{'\u2713'}</span>
+        {#if isSelected}
+          <span
+            class="absolute top-2 left-2 h-7 w-7 rounded-full bg-brand-text text-brand-white text-sm font-bold inline-flex items-center justify-center border-[2px] border-brand-border-heavy z-10"
+            aria-hidden="true"
+          >
+            {'\u2713'}
+          </span>
         {/if}
-        <p class="text-sm font-bold leading-relaxed pr-8">{sub.caption}</p>
+
+        {#if round?.item?.media_url}
+          <div
+            class="w-full rounded-[14px] overflow-hidden border-[2.5px] border-brand-border-heavy bg-brand-white flex items-center justify-center"
+            style="box-shadow: inset 0 2px 0 rgba(0,0,0,0.04);"
+          >
+            <img
+              src={mediaSrc(round.item.media_url, room.code)}
+              alt="Round prompt"
+              class="block w-full max-h-48 object-contain"
+            />
+          </div>
+        {/if}
+
+        <div
+          class="w-full rounded-[12px] border-[2.5px] border-brand-border-heavy bg-brand-white px-3 py-2 text-sm font-bold text-brand-text text-center leading-snug"
+          style="box-shadow: 0 2px 0 rgba(0,0,0,0.04);"
+        >
+          {sub.caption}
+        </div>
       </button>
     {/each}
   </div>

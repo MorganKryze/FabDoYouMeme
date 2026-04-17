@@ -324,7 +324,7 @@ Everything else — DB sync, PATCH merging, validation error codes — is alread
 The launch game type. Gameplay per round:
 
 1. All players see the same image with a prompt
-2. Each writes a caption (max 300 characters) — sent as `meme-caption:submit`
+2. Each writes a caption (max 200 characters, Enter submits) — sent as `meme-caption:submit`
 3. Submissions close when time runs out or all players submit
 4. All captions are shown anonymously — players vote for the funniest with `meme-caption:vote`
 5. Voting closes when time runs out or all players vote
