@@ -60,6 +60,13 @@ type GameTypeHandler interface {
 	// absolute maximum; runtime config should tighten it further if needed.
 	MaxPlayers() int
 
+	// Manifest returns the handler's parsed manifest.yaml. The API layer
+	// uses it to validate room config writes (POST /api/rooms and every
+	// PATCH /api/rooms/{code}/config), and the startup sync uses it to
+	// upsert the game_types DB row. Handlers must return a non-nil value
+	// validated at init time — see game.LoadManifest.
+	Manifest() *Manifest
+
 	// ValidateSubmission checks that the submission payload is valid for this game type and round.
 	ValidateSubmission(round Round, payload json.RawMessage) error
 

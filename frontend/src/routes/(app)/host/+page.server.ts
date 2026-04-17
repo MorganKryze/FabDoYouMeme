@@ -28,11 +28,9 @@ export const actions: Actions = {
     const game_type_id = data.get('game_type_id') as string;
     const pack_id = data.get('pack_id') as string;
     const is_solo = data.get('is_solo') === 'true';
-    const host_paced = data.get('host_paced') === 'true';
 
-    // Defaults are placeholders — host tunes rounds/durations inside the
-    // room's waiting stage (F3). Server still accepts a config because
-    // /api/rooms expects one; these match the meme_caption defaults.
+    // Defaults only — host tunes rounds/durations/host_paced inside the
+    // room's staging area (WaitingStage) via PATCH /api/rooms/{code}/config.
     const res = await fetch(`${API_BASE}/api/rooms`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -44,7 +42,7 @@ export const actions: Actions = {
           round_count: 5,
           round_duration_seconds: 60,
           voting_duration_seconds: 30,
-          host_paced
+          host_paced: false
         }
       })
     });

@@ -83,7 +83,7 @@ docker compose -p fabyoumeme-dev -f docker/compose.base.yml -f docker/compose.de
 # DB
 migrate -path ./backend/db/migrations -database "$DATABASE_URL" up
 migrate -path ./backend/db/migrations -database "$DATABASE_URL" down 1
-cd backend && sqlc generate   # after any change in db/queries/
+cd backend && ~/go/bin/sqlc generate   # after any change in db/queries/ (sqlc not on PATH)
 
 # Backend
 cd backend && go build ./... && go vet ./... && go test -race -count=1 ./...

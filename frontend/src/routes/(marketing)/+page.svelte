@@ -18,6 +18,8 @@
     Play,
     Hash,
     Plus,
+    Sliders,
+    Code2,
   } from '$lib/icons';
 
   let { data }: { data: PageData } = $props();
@@ -51,23 +53,33 @@
 
   const advantages = [
     {
-      title: 'Self-hosted',
-      body: 'Runs on your own server via Docker Compose. One machine is enough.',
+      title: 'Open source',
+      body: 'Free forever, fully open. Read the code, run your own copy, change whatever you want. Nothing locked away.',
+      Icon: Code2,
+    },
+    {
+      title: 'Ships in one command',
+      body: 'Runs on any small server or old computer. One setup script brings the whole app to life. No cloud bills, no vendor lock-in.',
       Icon: Server,
     },
     {
       title: 'Invite-only',
-      body: 'No strangers signing up. Admins issue invite tokens — nobody else gets in.',
+      body: 'No strangers signing up. You decide who gets in by handing out invite codes.',
       Icon: Lock,
     },
     {
       title: 'GDPR-first',
-      body: 'Explicit consent, magic-link auth (no passwords), 2-year retention, full data export. Deletion wipes your trace.',
+      body: 'No passwords, no ads, no tracking. You can export your data anytime, or wipe every trace of it in one click.',
       Icon: Shield,
     },
     {
-      title: 'Multi-game',
-      body: 'One engine, many games. Adding a new game type is a handler, not a migration.',
+      title: 'Widely configurable',
+      body: 'Change round length, player limits, how many rounds, and more. Tweak a setting, restart the app, you are good to go.',
+      Icon: Sliders,
+    },
+    {
+      title: 'Built for many games',
+      body: 'More games are on the way. The platform is built so new ones drop in without breaking the ones you already love.',
       Icon: Gamepad2,
     },
   ] as const;
@@ -87,13 +99,13 @@
     },
     {
       title: 'Communities & clubs',
-      body: 'Guilds, book clubs, improv troupes — bring your own content, your own rules.',
+      body: 'Guilds, book clubs, improv troupes. Bring your own content, your own rules.',
     },
   ] as const;
 </script>
 
 <svelte:head>
-  <title>FabDoYouMeme — a private, self-hosted party meme game</title>
+  <title>FabDoYouMeme: a private, self-hosted party meme game</title>
   <meta
     name="description"
     content="A party meme game for you and your people. Self-hosted, invite-only, GDPR-first. Host a room, share the code, caption, vote, laugh."
@@ -101,7 +113,7 @@
 
   <!-- Open Graph / link unfurl (Discord, Slack, iMessage) -->
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="FabDoYouMeme — a private, self-hosted party meme game" />
+  <meta property="og:title" content="FabDoYouMeme: a private, self-hosted party meme game" />
   <meta
     property="og:description"
     content="A party meme game for you and your people. Self-hosted, invite-only, GDPR-first."
@@ -110,7 +122,7 @@
   <meta property="og:image" content="/og-card.png" />
   <meta name="twitter:card" content="summary_large_image" /> -->
   <meta name="twitter:card" content="summary" />
-  <meta name="twitter:title" content="FabDoYouMeme — a private, self-hosted party meme game" />
+  <meta name="twitter:title" content="FabDoYouMeme: a private, self-hosted party meme game" />
   <meta
     name="twitter:description"
     content="A party meme game for you and your people. Self-hosted, invite-only, GDPR-first."
@@ -354,7 +366,7 @@
       </div>
 
       <p class="text-xs font-semibold text-brand-text-mid">
-        {data.user ? 'You are signed in — host or join, your call.' : 'Hosting requires an account. Joining with a code does not.'}
+        {data.user ? 'You are signed in. Host or join, your call.' : 'Hosting requires an account. Joining with a code does not.'}
       </p>
     </div>
   </section>

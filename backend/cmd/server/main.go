@@ -3,7 +3,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -109,33 +108,17 @@ func main() {
 	}
 
 	// ── Game registry ─────────────────────────────────────────────────────────
+	// Handlers carry their own manifest (see each handler's manifest.yaml).
+	// SyncGameTypes reconciles the game_types DB rows from those manifests
+	// on every boot, so changing a bound means editing one YAML and
+	// restarting — no migration needed.
 	registry := game.NewRegistry()
+	registry.Register(memecaption.New())
 
-	// Fetch the meme-caption game type row so we can read operator-tunable
-	// config values (e.g. max_players) rather than relying on compile-time
-	// constants. When a config field is NULL the handler falls back to its
-	// own default so existing deployments are not silently changed.
-	const memeCaptionDefaultMaxPlayers = 12
-	memeCaptionMaxPlayers := memeCaptionDefaultMaxPlayers
-	if gtRow, err := queries.GetGameTypeBySlug(context.Background(), "meme-caption"); err != nil {
-		logger.Warn("meme-caption: could not read game type config, using default max_players",
-			"default", memeCaptionDefaultMaxPlayers, "error", err)
-	} else {
-		var gtCfg struct {
-			MaxPlayers *int `json:"max_players"`
-		}
-		if jsonErr := json.Unmarshal(gtRow.Config, &gtCfg); jsonErr != nil {
-			logger.Warn("meme-caption: could not parse game type config, using default max_players",
-				"default", memeCaptionDefaultMaxPlayers, "error", jsonErr)
-		} else if gtCfg.MaxPlayers != nil {
-			memeCaptionMaxPlayers = *gtCfg.MaxPlayers
-		}
-		// nil means NULL in the DB → unbounded per schema contract, but we keep
-		// the compile-time default (12) so a fresh deployment that hasn't tuned
-		// the value still gets a sensible cap. Operators who want unbounded
-		// joins can set max_players to 0 explicitly in the DB row.
+	if err := game.SyncGameTypes(context.Background(), queries, registry, logger); err != nil {
+		logger.Error("game type sync failed", "error", err)
+		os.Exit(1)
 	}
-	registry.Register(memecaption.New(memeCaptionMaxPlayers))
 
 	// ── Game manager ──────────────────────────────────────────────────────────
 	// context.Background() is the correct parent: hubs outlive individual

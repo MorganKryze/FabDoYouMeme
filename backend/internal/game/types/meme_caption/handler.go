@@ -2,6 +2,7 @@
 package memecaption
 
 import (
+	_ "embed"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,28 +16,37 @@ import (
 // ErrSelfVote is returned when a player tries to vote for their own submission.
 var ErrSelfVote = errors.New("cannot_vote_for_self")
 
+//go:embed manifest.yaml
+var manifestYAML []byte
+
+// manifest is loaded once at package init. A malformed manifest fails the
+// init — the binary will not start, which is the behavior we want: a
+// broken manifest can silently corrupt every room it touches.
+var manifest = func() *game.Manifest {
+	m, err := game.LoadManifest(manifestYAML)
+	if err != nil {
+		panic(fmt.Sprintf("meme_caption: load manifest: %v", err))
+	}
+	return m
+}()
+
 // Handler implements game.GameTypeHandler for the meme-caption game type.
-type Handler struct {
-	// maxPlayers is the per-room join cap, read from game_types.config at
-	// registration time. 0 means unbounded (hub treats 0 as "no explicit cap").
-	maxPlayers int
-}
+// All identity/config metadata is delegated to the embedded manifest so
+// there is a single source of truth for bounds and defaults (see
+// manifest.yaml in this package).
+type Handler struct{}
 
-// New creates a Handler with the given player cap. Pass 0 for unbounded.
-// In main.go, derive maxPlayers from game_types.config.max_players; when
-// that field is NULL, pass the compile-time default (12) as a fallback so
-// existing deployments that have not tuned the DB value keep their cap.
-func New(maxPlayers int) *Handler { return &Handler{maxPlayers: maxPlayers} }
+// New creates a Handler. Identity and caps are read from the embedded
+// manifest; there is no runtime-tunable knob here on purpose — deploying
+// a changed bound means rebuilding the binary with the edited manifest,
+// which keeps game_types.config and the shipped handler code in lock-step.
+func New() *Handler { return &Handler{} }
 
-func (h *Handler) Slug() string                    { return "meme-caption" }
-func (h *Handler) SupportedPayloadVersions() []int { return []int{1} }
-func (h *Handler) SupportsSolo() bool              { return false }
-
-// MaxPlayers returns the configured per-room player cap.
-// 0 means unbounded — the hub skips the cap check when MaxPlayers returns 0.
-// The value is set at registration time from game_types.config.max_players;
-// NULL in the DB falls back to the compile-time default of 12.
-func (h *Handler) MaxPlayers() int { return h.maxPlayers }
+func (h *Handler) Slug() string                    { return manifest.Slug }
+func (h *Handler) SupportedPayloadVersions() []int { return manifest.PayloadVersions }
+func (h *Handler) SupportsSolo() bool              { return manifest.SupportsSolo }
+func (h *Handler) MaxPlayers() int                 { return manifest.MaxPlayersOrDefault() }
+func (h *Handler) Manifest() *game.Manifest        { return manifest }
 
 type submitPayload struct {
 	Caption string `json:"caption"`

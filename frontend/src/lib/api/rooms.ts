@@ -12,7 +12,7 @@ export const roomsApi = {
   get: (code: string) => api.get<Room>(`/api/rooms/${code}`),
 
   updateConfig: (code: string, config: Partial<RoomConfig>) =>
-    api.patch<Room>(`/api/rooms/${code}/config`, config),
+    api.patch<Room>(`/api/rooms/${code}/config`, { config }),
 
   leave: (code: string) => api.post<void>(`/api/rooms/${code}/leave`),
 

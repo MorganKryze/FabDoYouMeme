@@ -18,6 +18,7 @@ require (
 	github.com/wneessen/go-mail v0.7.2
 	golang.org/x/image v0.39.0
 	golang.org/x/time v0.15.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -101,5 +102,4 @@ require (
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

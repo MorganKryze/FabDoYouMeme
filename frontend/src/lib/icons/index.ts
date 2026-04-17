@@ -55,6 +55,7 @@ export {
   Lock,
   Server,
   Gamepad2,
+  Code2,
 
   // --- Status & info ---
   Info,

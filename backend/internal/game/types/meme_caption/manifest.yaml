@@ -1,0 +1,41 @@
+# Meme Caption — handler manifest.
+#
+# This file is the single source of truth for the game type's identity,
+# capabilities, and tunable config bounds. It is embedded into the Go
+# binary at build time (see handler.go) and upserted into the
+# `game_types` DB row at every server startup (see internal/game/sync.go).
+#
+# To change a bound — e.g. lower the max round duration — edit the value
+# below and restart the backend. No DB migration required. The frontend
+# reads these bounds via GET /api/game-types and uses them to constrain
+# the Room Settings inputs; the API layer enforces them on Create and
+# every PATCH /api/rooms/{code}/config.
+
+slug: meme-caption
+name: Meme Caption
+description: Write the funniest caption for an image. Others vote for their favourite.
+version: "1.0.0"
+supports_solo: false
+payload_versions: [1]
+
+config:
+  # Per-round submit phase.
+  min_round_duration_seconds: 15
+  max_round_duration_seconds: 300
+  default_round_duration_seconds: 60
+
+  # Per-round voting phase.
+  min_voting_duration_seconds: 10
+  max_voting_duration_seconds: 120
+  default_voting_duration_seconds: 30
+
+  # Rounds in a single game.
+  min_round_count: 1
+  max_round_count: 50
+  default_round_count: 10
+
+  # Simultaneous players in a room.
+  # max_players: null means the hub imposes no cap; leave a concrete
+  # number unless you have a specific reason to allow unbounded joins.
+  min_players: 2
+  max_players: 12

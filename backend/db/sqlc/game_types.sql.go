@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/google/uuid"
 )
@@ -84,4 +85,52 @@ func (q *Queries) ListGameTypes(ctx context.Context) ([]GameType, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const upsertGameType = `-- name: UpsertGameType :one
+INSERT INTO game_types (slug, name, description, version, supports_solo, config)
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (slug) DO UPDATE SET
+  name          = EXCLUDED.name,
+  description   = EXCLUDED.description,
+  version       = EXCLUDED.version,
+  supports_solo = EXCLUDED.supports_solo,
+  config        = EXCLUDED.config
+RETURNING id, slug, name, description, version, supports_solo, config, created_at
+`
+
+type UpsertGameTypeParams struct {
+	Slug         string          `json:"slug"`
+	Name         string          `json:"name"`
+	Description  *string         `json:"description"`
+	Version      string          `json:"version"`
+	SupportsSolo bool            `json:"supports_solo"`
+	Config       json.RawMessage `json:"config"`
+}
+
+// Idempotent upsert used at startup to sync game_types rows from each
+// handler's manifest.yaml. Slug is the natural key; the row's UUID (id)
+// is preserved across upserts so existing rooms.game_type_id references
+// remain valid.
+func (q *Queries) UpsertGameType(ctx context.Context, arg UpsertGameTypeParams) (GameType, error) {
+	row := q.db.QueryRow(ctx, upsertGameType,
+		arg.Slug,
+		arg.Name,
+		arg.Description,
+		arg.Version,
+		arg.SupportsSolo,
+		arg.Config,
+	)
+	var i GameType
+	err := row.Scan(
+		&i.ID,
+		&i.Slug,
+		&i.Name,
+		&i.Description,
+		&i.Version,
+		&i.SupportsSolo,
+		&i.Config,
+		&i.CreatedAt,
+	)
+	return i, err
 }

@@ -27,7 +27,7 @@ func newRoomHandler(t *testing.T) (*api.RoomHandler, *db.Queries) {
 	t.Helper()
 	pool := testutil.Pool()
 	registry := game.NewRegistry()
-	registry.Register(memecaption.New(12))
+	registry.Register(memecaption.New())
 	q := db.New(pool)
 	cfg := &config.Config{}
 	manager := game.NewManager(context.Background(), registry, q, cfg, slog.Default(), clock.Real{})

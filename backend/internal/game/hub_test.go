@@ -175,7 +175,7 @@ func newHubEnvWith(t *testing.T, opts hubEnvOpts) *hubEnv {
 		WSReadLimitBytes:     4096,
 	}
 	registry := game.NewRegistry()
-	registry.Register(memecaption.New(12))
+	registry.Register(memecaption.New())
 	clk := opts.clk
 	if clk == nil {
 		clk = clock.Real{}

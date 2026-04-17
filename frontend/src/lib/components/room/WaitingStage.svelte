@@ -1,10 +1,12 @@
 <script lang="ts">
   import { page } from '$app/stores';
+  import { invalidateAll } from '$app/navigation';
   import { room } from '$lib/state/room.svelte';
   import { ws } from '$lib/state/ws.svelte';
   import { toast } from '$lib/state/toast.svelte';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { reveal } from '$lib/actions/reveal';
+  import { roomsApi } from '$lib/api/rooms';
   import {
     Play,
     Clock,
@@ -13,9 +15,10 @@
     Link2,
     CheckCircle,
     Users,
-    Sparkles
+    Sparkles,
+    Settings
   } from '$lib/icons';
-  import type { GameType, Room } from '$lib/api/types';
+  import type { GameType, Room, RoomConfig } from '$lib/api/types';
   import EndRoomButton from './EndRoomButton.svelte';
 
   interface Props {
@@ -117,6 +120,80 @@
   const emptySlots = $derived(
     Array.from({ length: Math.max(0, slotsToShow - playerCount) })
   );
+
+  // ─── Host-only room settings ────────────────────────────────────────
+  // Backed by PATCH /api/rooms/{code}/config (lobby only, host only).
+  // Inputs hold a local draft that re-syncs from the server room on every
+  // load/invalidate — the effect below is the single source of truth for
+  // "what the server currently thinks the config is".
+  let settingsRoundCount = $state(0);
+  let settingsSubmitDuration = $state(0);
+  let settingsVoteDuration = $state(0);
+  let settingsHostPaced = $state(false);
+  let settingsSaving = $state(false);
+
+  $effect(() => {
+    settingsRoundCount = roundCount;
+    settingsSubmitDuration = submitDuration;
+    settingsVoteDuration = voteDuration;
+    settingsHostPaced = pageRoom?.config.host_paced ?? false;
+  });
+
+  // Bounds come from the game type manifest (backend/internal/game/types/
+  // <slug>/manifest.yaml), exposed here via gameType.config. We never
+  // hardcode these in the UI — a host editing meme-caption sees meme
+  // bounds, match-the-meme sees match bounds, etc. The server enforces
+  // the same bounds on every PATCH, so the clamps below are just UX.
+  const roundCountMin = $derived(gameType?.config.min_round_count ?? 1);
+  const roundCountMax = $derived(gameType?.config.max_round_count ?? 50);
+  const submitMin = $derived(gameType?.config.min_round_duration_seconds ?? 15);
+  const submitMax = $derived(gameType?.config.max_round_duration_seconds ?? 300);
+  const voteMin = $derived(gameType?.config.min_voting_duration_seconds ?? 10);
+  const voteMax = $derived(gameType?.config.max_voting_duration_seconds ?? 120);
+
+  // The server merges this partial patch over the room's current config
+  // and re-validates against the manifest bounds, so we only send the
+  // field that changed.
+  async function saveSettings(patch: Partial<RoomConfig>) {
+    if (!room.code) return;
+    settingsSaving = true;
+    try {
+      await roomsApi.updateConfig(room.code, patch);
+      await invalidateAll();
+    } catch {
+      toast.show('Could not save settings', 'error');
+    } finally {
+      settingsSaving = false;
+    }
+  }
+
+  function clamp(v: number, lo: number, hi: number): number {
+    return Math.max(lo, Math.min(hi, Math.round(v || 0)));
+  }
+
+  function commitRoundCount() {
+    const v = clamp(settingsRoundCount, roundCountMin, roundCountMax);
+    settingsRoundCount = v;
+    if (v !== roundCount) void saveSettings({ round_count: v });
+  }
+
+  function commitSubmitDuration() {
+    const v = clamp(settingsSubmitDuration, submitMin, submitMax);
+    settingsSubmitDuration = v;
+    if (v !== submitDuration) void saveSettings({ round_duration_seconds: v });
+  }
+
+  function commitVoteDuration() {
+    const v = clamp(settingsVoteDuration, voteMin, voteMax);
+    settingsVoteDuration = v;
+    if (v !== voteDuration) void saveSettings({ voting_duration_seconds: v });
+  }
+
+  function toggleHostPaced(e: Event) {
+    const checked = (e.currentTarget as HTMLInputElement).checked;
+    settingsHostPaced = checked;
+    void saveSettings({ host_paced: checked });
+  }
 </script>
 
 <div
@@ -198,6 +275,100 @@
       </p>
     {/if}
   </div>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       ROOM SETTINGS — host-only. Edits apply via PATCH /rooms/{code}/config
+       while the room is still in lobby. Future settings get added here.
+       ═══════════════════════════════════════════════════════════════ -->
+  {#if isHost}
+    <section
+      class="rounded-3xl border-[2.5px] border-brand-border-heavy bg-brand-surface px-5 py-5 flex flex-col gap-4"
+      style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
+    >
+      <div class="flex items-center justify-between gap-3">
+        <div class="inline-flex items-center gap-2">
+          <Settings size={16} strokeWidth={2.5} />
+          <h2 class="text-[0.7rem] font-bold uppercase tracking-[0.2em] text-brand-text-mid">
+            Room settings
+          </h2>
+        </div>
+        {#if settingsSaving}
+          <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+            Saving…
+          </span>
+        {/if}
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <label class="flex flex-col gap-1.5">
+          <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+            Rounds
+          </span>
+          <input
+            type="number"
+            min={roundCountMin}
+            max={roundCountMax}
+            bind:value={settingsRoundCount}
+            onblur={commitRoundCount}
+            onchange={commitRoundCount}
+            class="h-11 px-4 rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white text-sm font-bold tabular-nums"
+          />
+          <span class="text-[0.6rem] font-semibold text-brand-text-muted tabular-nums">
+            {roundCountMin}–{roundCountMax}
+          </span>
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+            Submit time (s)
+          </span>
+          <input
+            type="number"
+            min={submitMin}
+            max={submitMax}
+            bind:value={settingsSubmitDuration}
+            onblur={commitSubmitDuration}
+            onchange={commitSubmitDuration}
+            class="h-11 px-4 rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white text-sm font-bold tabular-nums"
+          />
+          <span class="text-[0.6rem] font-semibold text-brand-text-muted tabular-nums">
+            {submitMin}–{submitMax}s
+          </span>
+        </label>
+        <label class="flex flex-col gap-1.5">
+          <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+            Vote time (s)
+          </span>
+          <input
+            type="number"
+            min={voteMin}
+            max={voteMax}
+            bind:value={settingsVoteDuration}
+            onblur={commitVoteDuration}
+            onchange={commitVoteDuration}
+            class="h-11 px-4 rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white text-sm font-bold tabular-nums"
+          />
+          <span class="text-[0.6rem] font-semibold text-brand-text-muted tabular-nums">
+            {voteMin}–{voteMax}s
+          </span>
+        </label>
+      </div>
+
+      <label class="flex items-start gap-3 cursor-pointer rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white px-4 py-3">
+        <input
+          type="checkbox"
+          checked={settingsHostPaced}
+          onchange={toggleHostPaced}
+          class="mt-0.5 h-4 w-4 rounded border-brand-border-heavy"
+        />
+        <span class="flex flex-col gap-0.5">
+          <span class="text-sm font-bold text-brand-text">Host-paced rounds</span>
+          <span class="text-xs font-semibold text-brand-text-muted">
+            You advance each round manually instead of auto-advancing.
+          </span>
+        </span>
+      </label>
+    </section>
+  {/if}
 
   <!-- ═══════════════════════════════════════════════════════════════
        MAIN BODY — two columns on lg+: left = code share, right = players.

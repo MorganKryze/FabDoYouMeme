@@ -17,6 +17,9 @@ func (s *stubHandler) Slug() string                    { return s.slug }
 func (s *stubHandler) SupportedPayloadVersions() []int { return []int{1} }
 func (s *stubHandler) SupportsSolo() bool              { return false }
 func (s *stubHandler) MaxPlayers() int                 { return 0 }
+func (s *stubHandler) Manifest() *game.Manifest {
+	return &game.Manifest{Slug: s.slug, Name: s.slug, Version: "1.0.0", PayloadVersions: []int{1}}
+}
 func (s *stubHandler) ValidateSubmission(_ game.Round, _ json.RawMessage) error { return nil }
 func (s *stubHandler) ValidateVote(_ game.Round, _ game.Submission, _ uuid.UUID, _ json.RawMessage) error {
 	return nil

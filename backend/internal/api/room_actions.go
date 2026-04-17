@@ -3,6 +3,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -10,10 +11,17 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
+	"github.com/MorganKryze/FabDoYouMeme/backend/internal/game"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
 )
 
 // UpdateConfig handles PATCH /api/rooms/{code}/config.
+//
+// Request body is a *partial* config — clients send only the fields they
+// changed. The server merges the patch over the current DB config, then
+// validates the result against the handler's manifest bounds, which
+// guarantees rooms.config is always canonical and in-range regardless of
+// what the client sent.
 func (h *RoomHandler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.GetSessionUser(r)
 	if !ok {
@@ -25,9 +33,18 @@ func (h *RoomHandler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, "not_found", "Room not found")
 		return
 	}
+	if room.State != "lobby" {
+		writeError(w, r, http.StatusConflict, "room_not_in_lobby", "Room config can only be updated while in lobby state")
+		return
+	}
 	hostID, _ := uuid.Parse(u.UserID)
 	if u.Role != "admin" && (!room.HostID.Valid || room.HostID.Bytes != hostID) {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Only the host can update config")
+		return
+	}
+	handler, ok := h.manager.Registry().Get(room.GameTypeSlug)
+	if !ok {
+		writeError(w, r, http.StatusUnprocessableEntity, "unknown_game_type", "Game type handler not registered")
 		return
 	}
 	var req struct {
@@ -41,9 +58,24 @@ func (h *RoomHandler) UpdateConfig(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "config is required")
 		return
 	}
+	merged, err := game.MergeJSON(room.Config, req.Config)
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid config patch")
+		return
+	}
+	normalized, err := handler.Manifest().Config.ValidateAndFill(merged)
+	if err != nil {
+		var verr *game.ValidationError
+		if errors.As(err, &verr) {
+			writeError(w, r, http.StatusUnprocessableEntity, "invalid_config", verr.Error())
+			return
+		}
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid config JSON")
+		return
+	}
 	updated, err := h.db.UpdateRoomConfig(r.Context(), db.UpdateRoomConfigParams{
 		ID:     room.ID,
-		Config: req.Config,
+		Config: normalized,
 	})
 	if err != nil {
 		writeError(w, r, http.StatusConflict, "room_not_in_lobby", "Room config can only be updated while in lobby state")

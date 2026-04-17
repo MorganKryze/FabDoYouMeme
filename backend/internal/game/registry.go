@@ -26,3 +26,14 @@ func (r *Registry) Get(slug string) (GameTypeHandler, bool) {
 	h, ok := r.handlers[slug]
 	return h, ok
 }
+
+// All returns every registered handler. Order is unspecified — callers
+// that need a stable ordering (e.g. for deterministic startup logs)
+// should sort the result by Slug().
+func (r *Registry) All() []GameTypeHandler {
+	out := make([]GameTypeHandler, 0, len(r.handlers))
+	for _, h := range r.handlers {
+		out = append(out, h)
+	}
+	return out
+}

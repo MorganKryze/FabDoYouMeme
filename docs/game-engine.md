@@ -92,36 +92,103 @@ The client sends a `ping` every `WS_PING_INTERVAL` (default 25 seconds). The ser
 
 Game types are registered handler units. The entire backend game logic is contained behind a single Go interface: `game.GameTypeHandler` (defined in `backend/internal/game/handler.go`). Each game type implements this interface and is added to the process-wide registry at startup.
 
-### Registration at startup
+### Per-handler manifest — single source of truth
 
-A `*game.Registry` is constructed in `main.go`, and each handler is added via `registry.Register(handler)`. The slug is taken from the handler itself (`h.Slug()`) — there is no separate slug argument. Duplicate slugs panic at startup rather than failing silently at runtime, so a misconfiguration is caught on the first boot.
+Every game type ships a `manifest.yaml` embedded next to its Go handler (`backend/internal/game/types/{slug}/manifest.yaml`). The manifest is the **single source of truth** for the game type's identity, capabilities, and tunable bounds:
 
-Before registering, `main.go` fetches the game type's DB row and reads operator-tunable values from `game_types.config` (e.g. `max_players`), then passes them to the handler constructor. If the DB row is missing or a field is `NULL`, the constructor falls back to a compile-time default so a freshly-deployed instance stays functional without manual DB tuning.
+```yaml
+# backend/internal/game/types/meme_caption/manifest.yaml
+slug: meme-caption
+name: Meme Caption
+description: Write the funniest caption for an image. Others vote for their favourite.
+version: "1.0.0"
+supports_solo: false
+payload_versions: [1]
+
+config:
+  min_round_duration_seconds: 15
+  max_round_duration_seconds: 300
+  default_round_duration_seconds: 60
+  min_voting_duration_seconds: 10
+  max_voting_duration_seconds: 120
+  default_voting_duration_seconds: 30
+  min_round_count: 1
+  max_round_count: 50
+  default_round_count: 10
+  min_players: 2
+  max_players: 12        # null = no cap
+```
+
+The file is embedded into the Go binary at build time via `//go:embed manifest.yaml` in the handler package. Parsing and validation happen at package init; a malformed manifest (missing slug, default outside min/max, min > max, etc.) **panics at startup** so a broken handler cannot silently corrupt running rooms.
+
+```go
+// backend/internal/game/types/meme_caption/handler.go
+//go:embed manifest.yaml
+var manifestYAML []byte
+
+var manifest = func() *game.Manifest {
+    m, err := game.LoadManifest(manifestYAML)
+    if err != nil { panic(fmt.Sprintf("meme_caption: load manifest: %v", err)) }
+    return m
+}()
+
+type Handler struct{}
+func New() *Handler                          { return &Handler{} }
+func (h *Handler) Slug() string              { return manifest.Slug }
+func (h *Handler) SupportsSolo() bool        { return manifest.SupportsSolo }
+func (h *Handler) MaxPlayers() int           { return manifest.MaxPlayersOrDefault() }
+func (h *Handler) Manifest() *game.Manifest  { return manifest }
+// ... game-specific methods below ...
+```
+
+### Registration and DB sync at startup
+
+`main.go` builds the registry and calls `game.SyncGameTypes(ctx, queries, registry, logger)`. That helper iterates every registered handler, reads its manifest, and upserts the `game_types` row with `slug` as the natural key (the row's UUID is preserved across upserts so `rooms.game_type_id` FKs stay valid across restarts).
 
 ```go
 // backend/cmd/server/main.go
 registry := game.NewRegistry()
-// Fetch meme-caption config from DB; fall back to compile-time default (12) when max_players is NULL.
-gtRow, _ := queries.GetGameTypeBySlug(ctx, "meme-caption")
-// ... parse gtRow.Config.max_players ...
-registry.Register(memecaption.New(maxPlayers))
-// registry.Register(trivia.New(triaMaxPlayers))   // future game types added here
+registry.Register(memecaption.New())
+// registry.Register(trivia.New())   // future game types added here
+
+if err := game.SyncGameTypes(ctx, queries, registry, logger); err != nil {
+    logger.Error("game type sync failed", "error", err)
+    os.Exit(1)
+}
 ```
 
-The registry is then passed to the game manager and the `GameTypeHandler` HTTP handler, which are the only components that resolve slugs back to handlers (`registry.Get(slug)`).
+Effect: editing `manifest.yaml` and restarting the backend is all it takes to lower `max_round_duration_seconds` from 300 to 180 or bump `max_players` from 12 to 16. No migration, no manual DB edit, no frontend change — the frontend reads the same bounds via `GET /api/game-types`.
+
+Migration `002_seed_game_types.up.sql` still seeds the initial `meme-caption` row on a fresh DB so the UUID is stable from first boot. Every subsequent field (name, description, version, `supports_solo`, `config`) is reconciled from the in-binary manifest on every startup — the migration is a first-boot seed, not an ongoing source of truth.
+
+### Authoritative bounds enforcement
+
+`Bounds.ValidateAndFill(raw json.RawMessage)` (in `backend/internal/game/manifest.go`) is the single server-side choke point for room config:
+
+- Missing fields are populated from the manifest's `default_*` values
+- Out-of-range fields return a typed `*game.ValidationError{Field, Reason}` so the API layer can emit a stable `invalid_config` error code per field
+- Output is always a fully-populated canonical `RoomConfig` JSON, safe to store verbatim in `rooms.config`
+
+Both write paths funnel through it:
+
+- `POST /api/rooms` (create) — validates the initial config
+- `PATCH /api/rooms/{code}/config` (edit in lobby) — accepts a **partial patch**, calls `game.MergeJSON(room.Config, req.Config)`, then `ValidateAndFill` on the merged result. Clients only send the field they changed; the server refuses to overwrite the others with zeros.
+
+The frontend never enforces bounds as a contract — it reads them from `gameType.config` and reflects them in `min`/`max` attributes for UX only. The server is always the source of truth.
 
 ### The `GameTypeHandler` interface
 
-The interface defines nine methods. The hub calls them during gameplay and never knows which game type it is running.
+The interface defines ten methods. The hub calls them during gameplay and never knows which game type it is running.
 
 **Event naming convention:** phase-transition events (`round_started`, `submissions_closed`, `vote_results`, `game_ended`) are **universal** — every game type uses the same event names. Incoming game-specific messages are slug-prefixed (`meme-caption:submit`, `meme-caption:vote`). The handler-produced blobs are embedded inside the universal events: `submissions_closed.data.submissions_shown` and `vote_results.data.results`.
 
 | Method                           | Purpose                                                                                        |
 | -------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `Slug()`                         | Matches `game_types.slug` in the DB (e.g. `"meme-caption"`); also the registry key             |
-| `SupportedPayloadVersions()`     | Declares which item payload versions this handler can process                                  |
-| `SupportsSolo()`                 | Whether the handler permits single-player rooms                                                |
-| `MaxPlayers()`                   | Per-room cap read from `game_types.config.max_players` at startup; `0` means no cap. `NULL` in the DB → handler falls back to its compile-time default. Checked in `handleRegister` before allocating state. |
+| `Slug()`                         | Matches `game_types.slug` in the DB (e.g. `"meme-caption"`); also the registry key. Read from `manifest.yaml`. |
+| `SupportedPayloadVersions()`     | Item payload versions this handler can process. Read from `manifest.yaml`.                     |
+| `SupportsSolo()`                 | Whether the handler permits single-player rooms. Read from `manifest.yaml`.                    |
+| `MaxPlayers()`                   | Per-room cap from `manifest.config.max_players`; `0` means no cap (manifest value `null`). Checked in `handleRegister` before allocating state. |
+| `Manifest()`                     | Returns the embedded `*game.Manifest` so the registry can sync bounds to `game_types.config` at startup and the API layer can call `Manifest().Config.ValidateAndFill` on every config write. |
 | `ValidateSubmission()`           | Validates a player's submission payload                                                        |
 | `ValidateVote()`                 | Validates a vote (self-vote check; hub has already verified phase + duplicate)                 |
 | `CalculateRoundScores()`         | Computes per-player points from votes                                                          |
@@ -130,24 +197,125 @@ The interface defines nine methods. The hub calls them during gameplay and never
 
 Implementations must be safe to call from a single hub goroutine — the hub is single-threaded per room, so no additional locking is needed.
 
-### Two places the slug must match
-
-A game type has two halves that must agree on the slug:
-
-1. **DB row** in `game_types` — holds the operator-tunable metadata: name, description, `supports_solo`, and the `config` JSONB with round/voting duration bounds, player bounds, and round count bounds. Seeded via a migration in `backend/db/migrations/`.
-2. **Go handler** in `backend/internal/game/types/{slug}/` — holds the behaviour (validation, scoring, payload builders). `MaxPlayers()` returns the value read from the DB config at startup, not a hardcoded constant.
-
-If either half is missing, the game type is unusable: a missing handler means `registry.Get(slug)` returns `false` and room creation is rejected; a missing DB row means there is nothing for the UI to list under `/api/game-types` even though the handler is registered.
-
 ### Adding a new game type
 
-1. **Migration** — add `backend/db/migrations/NNN_seed_{slug}.up.sql` (and a matching `.down.sql`) inserting a row into `game_types` with the slug, name, description, `supports_solo`, and the config JSONB (min/max/default for round duration, voting duration, player count, round count). Use `002_seed_game_types.up.sql` as the template.
-2. **Handler package** — create `backend/internal/game/types/{slug}/handler.go` implementing every method on `game.GameTypeHandler`. Add a compile-time assertion at the bottom of the file: `var _ game.GameTypeHandler = (*Handler)(nil)`. This turns a missing method into a build error instead of a runtime panic.
-3. **Register at startup** — in `backend/cmd/server/main.go`, fetch the game type's DB row, parse `max_players` from its `config` JSONB (fall back to a sensible default when `NULL`), then call `registry.Register(yourpkg.New(maxPlayers))` alongside the existing `memecaption` block.
-4. **Frontend plugin** — create `frontend/src/lib/games/{slug}/` with `SubmitForm.svelte`, `VoteForm.svelte`, `ResultsView.svelte`, and `GameRules.svelte`, plus an `index.ts` that re-exports them. The room page selects the bundle by slug at runtime.
-5. **Optional frontend routes** — only if the game needs views that do not fit the default room layout.
+Adding a game type is a **three-directory edit**. You do not touch the schema, the WebSocket protocol, existing game types, or any other handler's code. Most of the work is the game's own logic (scoring, payload shape) — the platform scaffolding is minimal by design.
 
-No database schema changes. No WebSocket protocol changes. No changes to existing game types.
+#### 1. Create the handler package — `backend/internal/game/types/{slug}/`
+
+Drop three files in a new directory:
+
+**`manifest.yaml`** — the single source of truth for identity and bounds. Copy `meme_caption/manifest.yaml` as a starting point and tune the numbers:
+
+```yaml
+slug: trivia
+name: Trivia
+description: Answer questions fastest for the most points.
+version: "1.0.0"
+supports_solo: true
+payload_versions: [1]
+
+config:
+  min_round_duration_seconds: 10
+  max_round_duration_seconds: 60
+  default_round_duration_seconds: 20
+  min_voting_duration_seconds: 0       # trivia has no voting phase
+  max_voting_duration_seconds: 0
+  default_voting_duration_seconds: 0
+  min_round_count: 5
+  max_round_count: 30
+  default_round_count: 10
+  min_players: 1
+  max_players: 20
+```
+
+Self-checks in `game.LoadManifest` refuse to boot on malformed values (default outside min/max, min > max, `max_players < min_players`, missing required fields). You get a clean startup error at the first boot instead of a silent corruption later.
+
+**`handler.go`** — embed the manifest, implement the `GameTypeHandler` interface. The identity methods are four one-liners delegating to the manifest; the rest is your game's logic (validation, scoring, reveal payload):
+
+```go
+package trivia
+
+import (
+    _ "embed"
+    "fmt"
+
+    "github.com/MorganKryze/FabDoYouMeme/backend/internal/game"
+)
+
+//go:embed manifest.yaml
+var manifestYAML []byte
+
+var manifest = func() *game.Manifest {
+    m, err := game.LoadManifest(manifestYAML)
+    if err != nil { panic(fmt.Sprintf("trivia: load manifest: %v", err)) }
+    return m
+}()
+
+type Handler struct{}
+func New() *Handler                          { return &Handler{} }
+func (h *Handler) Slug() string              { return manifest.Slug }
+func (h *Handler) SupportedPayloadVersions() []int { return manifest.PayloadVersions }
+func (h *Handler) SupportsSolo() bool        { return manifest.SupportsSolo }
+func (h *Handler) MaxPlayers() int           { return manifest.MaxPlayersOrDefault() }
+func (h *Handler) Manifest() *game.Manifest  { return manifest }
+
+// ... game-specific methods: ValidateSubmission, ValidateVote,
+// CalculateRoundScores, BuildSubmissionsShownPayload, BuildVoteResultsPayload ...
+
+var _ game.GameTypeHandler = (*Handler)(nil) // compile-time interface check
+```
+
+**`handler_test.go`** (recommended) — unit-test the scoring and payload builders. The hub is single-threaded per room, so no concurrency scaffolding is needed.
+
+#### 2. Register at startup — one line in `backend/cmd/server/main.go`
+
+```go
+registry := game.NewRegistry()
+registry.Register(memecaption.New())
+registry.Register(trivia.New())         // ← new line
+
+if err := game.SyncGameTypes(ctx, queries, registry, logger); err != nil { ... }
+```
+
+That's it for the backend. `SyncGameTypes` will upsert the `game_types` row on the next boot using the manifest's slug as the natural key. No migration is required for the new game type — the row appears automatically. (You *may* add a `NNN_seed_{slug}.up.sql` migration if you want the UUID to be deterministic from a fresh DB, but it is optional; the startup upsert creates the row either way.)
+
+#### 3. Create the frontend plugin — `frontend/src/lib/games/{slug}/`
+
+Four Svelte components plus a barrel:
+
+- `SubmitForm.svelte` — what the player sees during the submit phase
+- `VoteForm.svelte` — what the player sees during the voting phase (can be a no-op for games without voting)
+- `ResultsView.svelte` — the post-round reveal
+- `GameRules.svelte` — rules shown in the lobby
+- `index.ts` — re-exports the four components
+
+The room page resolves the bundle by slug at runtime; no router config, no registry entry on the frontend. The Room Settings inputs automatically pick up the manifest's bounds via `GET /api/game-types` — you don't wire the new game's bounds into the UI; they flow in from the YAML.
+
+#### What you do *not* touch
+
+- No database migrations for the game type itself (startup upsert handles it)
+- No changes to `rooms`, `submissions`, `votes`, or any other schema
+- No WebSocket protocol changes — phase events are universal (`round_started`, `submissions_closed`, `vote_results`, `game_ended`); your game-specific messages are namespaced (`{slug}:submit`, `{slug}:vote`)
+- No edits to existing handlers, the hub, the API layer, or the frontend room shell
+- No hardcoded bounds anywhere — frontend reads them from the manifest via the API
+
+### Tuning an existing game type
+
+Lowering a bound, raising a cap, bumping the default round count — all one-file edits:
+
+1. Edit `backend/internal/game/types/{slug}/manifest.yaml`
+2. Rebuild the backend binary and restart
+
+On the next boot `SyncGameTypes` upserts the new values into `game_types.config`, the frontend picks them up on its next `/api/game-types` fetch, and every subsequent `POST /api/rooms` or `PATCH /api/rooms/{code}/config` validates against them. Existing rooms in the lobby continue to use whatever config they were created with; the new bounds apply to future writes.
+
+If you ever need a bound that isn't already in `Bounds` (e.g. a new per-round setting), the extension pattern is three files:
+
+1. Add the fields to `Bounds` (manifest shape) and `RoomConfig` (canonical runtime shape) in `backend/internal/game/manifest.go`; extend `ValidateAndFill` to enforce the new bound
+2. Add the `min_* / max_* / default_*` entries to each handler's `manifest.yaml`
+3. Bind the new control in `frontend/src/lib/components/room/WaitingStage.svelte`, reading its bounds from `gameType.config`
+
+Everything else — DB sync, PATCH merging, validation error codes — is already wired.
 
 ---
 

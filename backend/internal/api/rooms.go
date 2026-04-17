@@ -61,19 +61,6 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid pack_id")
 		return
 	}
-	// Validate config JSON structure if provided
-	var roomCfgValidate struct {
-		RoundCount            int `json:"round_count"`
-		RoundDurationSeconds  int `json:"round_duration_seconds"`
-		VotingDurationSeconds int `json:"voting_duration_seconds"`
-	}
-	if req.Config != nil {
-		if err := json.Unmarshal(req.Config, &roomCfgValidate); err != nil {
-			writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid room config JSON")
-			return
-		}
-	}
-
 	// Validate mode
 	switch req.Mode {
 	case "":
@@ -102,6 +89,21 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Normalize and validate the room config against the handler's manifest
+	// bounds. ValidateAndFill fills any missing fields from the manifest
+	// defaults and rejects out-of-range values, so the shape stored in
+	// rooms.config is always canonical and within bounds.
+	roomConfig, err := handler.Manifest().Config.ValidateAndFill(req.Config)
+	if err != nil {
+		var verr *game.ValidationError
+		if errors.As(err, &verr) {
+			writeError(w, r, http.StatusUnprocessableEntity, "invalid_config", verr.Error())
+			return
+		}
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid room config JSON")
+		return
+	}
+
 	// Validate pack compatibility
 	versions := handler.SupportedPayloadVersions()
 	count, err := h.db.CountCompatibleItems(r.Context(), db.CountCompatibleItemsParams{
@@ -112,15 +114,13 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse config to get round_count for minimum check
-	var roomCfg struct{ RoundCount int `json:"round_count"` }
-	if req.Config != nil {
-		json.Unmarshal(req.Config, &roomCfg)
+	// Pack must carry enough items to cover the normalized round count.
+	var normalized game.RoomConfig
+	if err := json.Unmarshal(roomConfig, &normalized); err != nil {
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to parse normalized config")
+		return
 	}
-	if roomCfg.RoundCount == 0 {
-		roomCfg.RoundCount = 10
-	}
-	if int64(roomCfg.RoundCount) > count {
+	if int64(normalized.RoundCount) > count {
 		writeError(w, r, http.StatusUnprocessableEntity, "pack_insufficient_items", "Pack does not have enough items for the requested round count")
 		return
 	}
@@ -140,11 +140,6 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if !errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to check active room")
 		return
-	}
-
-	roomConfig := req.Config
-	if roomConfig == nil {
-		roomConfig = json.RawMessage(`{"round_duration_seconds":60,"voting_duration_seconds":30,"round_count":10}`)
 	}
 	room, err := h.db.CreateRoom(r.Context(), db.CreateRoomParams{
 		Code:       generateRoomCode(),
