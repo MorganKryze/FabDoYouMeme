@@ -6,6 +6,7 @@
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { reveal } from '$lib/actions/reveal';
   import { physCard } from '$lib/actions/physCard';
+  import { dealCard } from '$lib/actions/dealCard';
   import RoomCodeInput from '$lib/components/RoomCodeInput.svelte';
   import type { PageData } from './$types';
   import {
@@ -78,6 +79,11 @@
       Icon: PartyPopper,
     },
   ] as const;
+
+  // Per-card tilt for the dealt-from-deck animation. Alternating signs +
+  // uneven magnitudes read as "hand-dealt" rather than mechanical.
+  const stepTilts = [-8, 3, -5] as const;
+  const advantageTilts = [-7, 5, -4, 6, -9, 3] as const;
 
   const advantages = [
     {
@@ -212,7 +218,7 @@
     <ol class="grid grid-cols-1 md:grid-cols-3 gap-5">
       {#each steps as step, i}
         <li
-          use:reveal={{ delay: i + 1 }}
+          use:dealCard={{ delay: 120 + i * 160, rotate: stepTilts[i] }}
           use:physCard
           class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-6 flex flex-col gap-3"
           style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
@@ -250,7 +256,7 @@
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
         {#each advantages as adv, i}
           <div
-            use:reveal={{ delay: i + 1 }}
+            use:dealCard={{ delay: 100 + i * 110, rotate: advantageTilts[i], smooth: true }}
             use:physCard
             class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-6 flex gap-4"
             style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
