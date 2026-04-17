@@ -45,19 +45,39 @@
     };
   });
 
-  // Stable particle set — 42 pieces spread across the whole viewport with
-  // varied colors, shapes, drift, and timing. Generated once at mount.
-  const CONFETTI_PARTICLES = Array.from({ length: 42 }, (_, i) => ({
-    left: `${(i * 13 + 7) % 100}%`,
-    delay: `${(i % 14) * 0.45}s`,
-    duration: `${4.5 + (i % 5) * 0.6}s`,
-    color: AVATAR_COLORS[i % AVATAR_COLORS.length],
-    shape: i % 3,
-    drift: `${((i % 7) - 3) * 18}px`,
+  // Stable particle set — spread across the whole viewport with varied
+  // colors, shapes, drift, and timing. Generated once at mount.
+  // A deterministic pseudo-random hash per index avoids the visible
+  // "pairing" and wave patterns that integer modulo produces.
+  const rnd = (i: number, salt: number) => {
+    const x = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453;
+    return x - Math.floor(x);
+  };
+
+  const CONFETTI_PARTICLES = Array.from({ length: 180 }, (_, i) => ({
+    left: `${rnd(i, 1) * 100}%`,
+    delay: `${rnd(i, 2) * 7}s`,
+    duration: `${3.8 + rnd(i, 3) * 3.2}s`,
+    color: AVATAR_COLORS[Math.floor(rnd(i, 4) * AVATAR_COLORS.length)],
+    shape: Math.floor(rnd(i, 5) * 3),
+    drift: `${Math.round((rnd(i, 6) - 0.5) * 260)}px`,
   }));
 
   const winner = $derived<LeaderboardEntry | null>(room.leaderboard[0] ?? null);
   const rest = $derived(room.leaderboard.slice(3));
+
+  // Portal: move the confetti layer to <body> so its `position: fixed`
+  // attaches to the viewport. An ancestor with any non-`none` transform
+  // (e.g. `.stage-wrap` on the page wrapper) would otherwise re-scope
+  // the fixed positioning to that element's box.
+  function portalToBody(node: HTMLElement) {
+    document.body.appendChild(node);
+    return {
+      destroy() {
+        node.remove();
+      },
+    };
+  }
 
   // Podium order: 2nd, 1st, 3rd — classic stepped silhouette with the
   // champion in the middle at the tallest height.
@@ -76,20 +96,21 @@
 
 </script>
 
-<div class="relative w-full max-w-5xl mx-auto px-6 py-4 flex flex-col gap-8" use:reveal>
+<!-- Viewport-wide confetti — rendered OUTSIDE the reveal-wrapped
+     container so its `position: fixed` attaches to the viewport. A
+     transformed ancestor would re-scope it to that element's box. -->
+{#if confettiPhase !== 'none'}
+  <div use:portalToBody class="confetti" class:reduced={confettiPhase === 'reduced'} aria-hidden="true">
+    {#each CONFETTI_PARTICLES as p, i (i)}
+      <span
+        class="p{p.shape}"
+        style="left: {p.left}; background: {p.color}; animation-delay: {p.delay}; animation-duration: {p.duration}; --drift: {p.drift};"
+      ></span>
+    {/each}
+  </div>
+{/if}
 
-  <!-- Viewport-wide confetti — fixed-positioned so it rains across the
-       whole screen, tapers at 30s, and disappears at 60s. -->
-  {#if confettiPhase !== 'none'}
-    <div class="confetti" class:reduced={confettiPhase === 'reduced'} aria-hidden="true">
-      {#each CONFETTI_PARTICLES as p, i (i)}
-        <span
-          class="p{p.shape}"
-          style="left: {p.left}; background: {p.color}; animation-delay: {p.delay}; animation-duration: {p.duration}; --drift: {p.drift};"
-        ></span>
-      {/each}
-    </div>
-  {/if}
+<div class="relative w-full max-w-5xl mx-auto px-6 py-4 flex flex-col gap-8" use:reveal>
 
   <!-- ═══════════════════════════════════════════════════════════════
        HEADER — reason chip + winner hero.
@@ -263,7 +284,10 @@
     100% { transform: translate3d(var(--drift, 0), 110vh, 0) rotate(720deg); opacity: 0; }
   }
 
-  /* "wins!" — gradient text tied to the live time-of-day palette. */
+  /* "wins!" — gradient text tied to the live time-of-day palette.
+     `paint-order: stroke fill` draws the dark outline first so the
+     gradient fill sits on top; the stepped drop-shadow mirrors the
+     `box-shadow: 0 5px 0` language used across the stage. */
   .wins-gradient {
     background: linear-gradient(
       135deg,
@@ -276,6 +300,9 @@
     background-clip: text;
     -webkit-background-clip: text;
     color: transparent;
+    -webkit-text-stroke: 3px var(--brand-text);
+    paint-order: stroke fill;
+    filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.22));
     animation: winsFlow 4s ease-in-out infinite;
   }
   @keyframes winsFlow {
