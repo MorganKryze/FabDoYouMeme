@@ -73,9 +73,10 @@
   }
 
   // Fade audioEl.volume toward `to`. Cosine ease-in-out — linear volume
-  // ramps sound unnatural at the ends.
+  // ramps sound unnatural at the ends. `to` may be a getter so fade-ins
+  // track the current level even if the user clicks a new bar mid-fade.
   let fadeRaf: number | null = null;
-  function fadeTo(to: number, duration: number, onDone?: () => void) {
+  function fadeTo(to: number | (() => number), duration: number, onDone?: () => void) {
     if (!audioEl) return;
     if (fadeRaf !== null) cancelAnimationFrame(fadeRaf);
     const from = audioEl.volume;
@@ -84,7 +85,8 @@
       if (!audioEl) return;
       const t = Math.min(1, (now - start) / duration);
       const eased = 0.5 - 0.5 * Math.cos(Math.PI * t);
-      audioEl.volume = Math.max(0, Math.min(1, from + (to - from) * eased));
+      const target = typeof to === 'function' ? to() : to;
+      audioEl.volume = Math.max(0, Math.min(1, from + (target - from) * eased));
       if (t < 1) {
         fadeRaf = requestAnimationFrame(step);
       } else {
@@ -103,7 +105,7 @@
     audioEl.muted = false;
     audioEl.volume = 0;
     audioEl.play()
-      .then(() => fadeTo(volumeFor(level), fadeMs))
+      .then(() => fadeTo(() => volumeFor(level), fadeMs))
       .catch((err) => {
         if (err?.name === 'NotAllowedError') {
           if (!audioEl) return;
@@ -165,13 +167,13 @@
       if (audioEl.paused) {
         audioEl.volume = 0;
         audioEl.play()
-          .then(() => fadeTo(volumeFor(level), FADE_MS))
+          .then(() => fadeTo(() => volumeFor(level), FADE_MS))
           .catch((err) => {
             error = `Audio: ${err?.message ?? err}`;
             console.warn('[bg-music] play() rejected after gesture', err);
           });
       } else {
-        fadeTo(volumeFor(level), FADE_MS);
+        fadeTo(() => volumeFor(level), FADE_MS);
       }
       cleanup();
     };
@@ -225,11 +227,7 @@
 ></audio>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-  class="fixed bottom-6 right-6 z-40 flex flex-col items-center gap-2"
-  onmouseenter={() => (showSlider = true)}
-  onmouseleave={() => (showSlider = false)}
->
+<div class="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">
   {#if error}
     <div
       class="bg-brand-white border-[2.5px] border-red-400 rounded-2xl px-3 py-2 text-xs font-semibold text-red-600 max-w-xs"
@@ -239,43 +237,58 @@
     </div>
   {/if}
 
-  {#if showSlider && playing}
-    <div
-      class="bg-brand-white border-[2.5px] border-brand-border-heavy rounded-2xl p-2 flex flex-col-reverse gap-1"
-      style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
-      role="group"
-      aria-label="Music volume"
-    >
-      {#each Array(LEVELS) as _, i (i)}
-        {@const n = i + 1}
-        {@const active = level >= n}
-        <button
-          type="button"
-          onclick={() => setLevel(n)}
-          class="w-8 rounded-sm transition-colors cursor-pointer {active ? 'bg-brand-accent' : 'bg-brand-border'}"
-          style="height: {6 + i * 3}px;"
-          aria-label="Volume level {n}"
-          aria-pressed={level === n}
-        ></button>
-      {/each}
-    </div>
-  {/if}
-
-  <button
-    use:pressPhysics={'ghost'}
-    type="button"
-    onclick={toggle}
-    onfocus={() => (showSlider = true)}
-    onblur={() => (showSlider = false)}
-    class="h-11 w-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text-mid hover:text-brand-accent inline-flex items-center justify-center cursor-pointer transition-colors"
-    title={playing ? 'Mute music' : 'Play music'}
-    aria-label={playing ? 'Mute background music' : 'Play background music'}
-    aria-pressed={playing}
+  <!--
+    w-11 locks the hover column to button width so the slider (which is
+    naturally wider thanks to its padding) overflows symmetrically on both
+    sides instead of shoving the button leftward when it appears.
+  -->
+  <div
+    class="w-11 flex flex-col items-center gap-2"
+    onmouseenter={() => (showSlider = true)}
+    onmouseleave={() => (showSlider = false)}
+    onfocusin={() => (showSlider = true)}
+    onfocusout={() => (showSlider = false)}
   >
-    {#if playing}
-      <Volume2 size={18} strokeWidth={2.5} />
-    {:else}
-      <VolumeX size={18} strokeWidth={2.5} />
+    {#if showSlider && playing}
+      <div
+        class="bg-brand-white border-[2.5px] border-brand-border-heavy rounded-2xl p-2 flex flex-col-reverse"
+        style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
+        role="group"
+        aria-label="Music volume"
+      >
+        {#each Array(LEVELS) as _, i (i)}
+          {@const n = i + 1}
+          {@const active = level >= n}
+          <button
+            type="button"
+            onclick={() => setLevel(n)}
+            class="w-8 h-6 flex items-end justify-center cursor-pointer"
+            aria-label="Volume level {n}"
+            aria-pressed={level === n}
+          >
+            <span
+              class="block w-full rounded-sm transition-colors {active ? 'bg-brand-accent' : 'bg-brand-border'}"
+              style="height: {6 + i * 3}px;"
+            ></span>
+          </button>
+        {/each}
+      </div>
     {/if}
-  </button>
+
+    <button
+      use:pressPhysics={'ghost'}
+      type="button"
+      onclick={toggle}
+      class="h-11 w-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text-mid hover:text-brand-accent inline-flex items-center justify-center cursor-pointer transition-colors"
+      title={playing ? 'Mute music' : 'Play music'}
+      aria-label={playing ? 'Mute background music' : 'Play background music'}
+      aria-pressed={playing}
+    >
+      {#if playing}
+        <Volume2 size={18} strokeWidth={2.5} />
+      {:else}
+        <VolumeX size={18} strokeWidth={2.5} />
+      {/if}
+    </button>
+  </div>
 </div>

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { fade } from 'svelte/transition';
   import { goto } from '$app/navigation';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { hoverEffect } from '$lib/actions/hoverEffect';
@@ -20,15 +22,41 @@
     Plus,
     Sliders,
     Code2,
+    ChevronDown,
   } from '$lib/icons';
 
   let { data }: { data: PageData } = $props();
   let joinCode = $state('');
+  let hasScrolled = $state(false);
 
   function join(next: string) {
     if (next.length !== 4) return;
     goto(`/join/${next}`);
   }
+
+  function revealRest() {
+    hasScrolled = true;
+    // Give Svelte a tick to render the section before scrolling to it.
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: window.innerHeight * 0.9, behavior: 'smooth' });
+    });
+  }
+
+  onMount(() => {
+    // If the browser restores a non-zero scroll position (e.g. back-nav), skip the gate.
+    if (window.scrollY > 24) {
+      hasScrolled = true;
+      return;
+    }
+    const onScroll = () => {
+      if (window.scrollY > 24) {
+        hasScrolled = true;
+        window.removeEventListener('scroll', onScroll);
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  });
 
   const steps = [
     {
@@ -84,24 +112,6 @@
     },
   ] as const;
 
-  const audiences = [
-    {
-      title: 'Friend groups',
-      body: 'Your 10-person Discord deserves a private playground. Nothing leaves your circle.',
-    },
-    {
-      title: 'Families',
-      body: 'Game night without ads or random content. Curate your own meme packs, kid-safe if you want.',
-    },
-    {
-      title: 'Remote teams',
-      body: 'A 20-minute icebreaker where the data never leaves your infrastructure.',
-    },
-    {
-      title: 'Communities & clubs',
-      body: 'Guilds, book clubs, improv troupes. Bring your own content, your own rules.',
-    },
-  ] as const;
 </script>
 
 <svelte:head>
@@ -129,7 +139,8 @@
   />
 </svelte:head>
 
-<div class="flex-1 flex flex-col items-center px-6">
+<!-- min-h keeps the page at least one viewport tall so the layout's footer stays below the fold until content (or scrolling) pushes it down. -->
+<div class="flex-1 flex flex-col items-center px-6 min-h-[calc(100vh-3.5rem)]">
   <!-- ─── Hero ────────────────────────────────────────────────── -->
   <section use:reveal class="w-full max-w-4xl flex flex-col items-center text-center gap-6 pt-20 pb-24">
     <h1 class="hero">FabDoYouMeme</h1>
@@ -168,6 +179,16 @@
       {/if}
       <a
         href="#join"
+        onclick={(e) => {
+          if (!hasScrolled) {
+            // Target is gated behind hasScrolled — reveal it, then scroll once Svelte has rendered it.
+            e.preventDefault();
+            hasScrolled = true;
+            requestAnimationFrame(() => {
+              document.getElementById('join')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+          }
+        }}
         use:pressPhysics={'ghost'}
         use:hoverEffect={'swap'}
         class="inline-flex items-center justify-center gap-2 px-6 h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white font-bold no-underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
@@ -212,71 +233,75 @@
     </ol>
   </section>
 
-  <!-- ─── Advantages ─────────────────────────────────────────── -->
-  <section class="w-full max-w-5xl pb-24">
-    <div use:reveal class="text-center mb-12">
-      <div class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid mb-2">
-        Why this exists
+  <!-- ─── Below-the-fold (gated behind first scroll) ──────────── -->
+  {#if hasScrolled}
+    <section in:fade={{ duration: 400 }} class="w-full max-w-5xl pb-24">
+      <div use:reveal class="text-center mb-12">
+        <div class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid mb-2">
+          Why this exists
+        </div>
+        <h2 class="text-4xl font-bold">Yours. Not theirs.</h2>
+        <p class="text-sm font-semibold text-brand-text-mid mt-2 max-w-xl mx-auto">
+          Most party game platforms turn your laughter into someone else's
+          training data. This one doesn't.
+        </p>
       </div>
-      <h2 class="text-4xl font-bold">Yours. Not theirs.</h2>
-      <p class="text-sm font-semibold text-brand-text-mid mt-2 max-w-xl mx-auto">
-        Most party game platforms turn your laughter into someone else's
-        training data. This one doesn't.
-      </p>
-    </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-      {#each advantages as adv, i}
-        <div
-          use:reveal={{ delay: i + 1 }}
-          use:physCard
-          class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-6 flex gap-4"
-          style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
-        >
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        {#each advantages as adv, i}
           <div
-            class="shrink-0 inline-flex h-12 w-12 items-center justify-center rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white"
-            style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
+            use:reveal={{ delay: i + 1 }}
+            use:physCard
+            class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-6 flex gap-4"
+            style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
           >
-            <adv.Icon size={22} strokeWidth={2.5} />
+            <div
+              class="shrink-0 inline-flex h-12 w-12 items-center justify-center rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white"
+              style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
+            >
+              <adv.Icon size={22} strokeWidth={2.5} />
+            </div>
+            <div class="flex flex-col gap-1">
+              <h3 class="text-xl font-bold">{adv.title}</h3>
+              <p class="text-sm font-semibold text-brand-text-mid">{adv.body}</p>
+            </div>
           </div>
-          <div class="flex flex-col gap-1">
-            <h3 class="text-xl font-bold">{adv.title}</h3>
-            <p class="text-sm font-semibold text-brand-text-mid">{adv.body}</p>
-          </div>
-        </div>
-      {/each}
-    </div>
-  </section>
-
-  <!-- ─── Audiences ──────────────────────────────────────────── -->
-  <section class="w-full max-w-5xl pb-24">
-    <div use:reveal class="text-center mb-12">
-      <div class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid mb-2">
-        Who it's for
+        {/each}
       </div>
-      <h2 class="text-4xl font-bold">Bring your circle.</h2>
-    </div>
-
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-      {#each audiences as aud, i}
-        <div
-          use:reveal={{ delay: i + 1 }}
-          use:physCard
-          class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-5 flex flex-col gap-2"
-          style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
+    </section>
+  {:else}
+    <!--
+      Scroll-invite pill: small, pushed to the bottom of the initial viewport.
+      flex-1 eats remaining vertical space so the button sits low rather than
+      hugging the steps section above.
+    -->
+    <section
+      out:fade={{ duration: 200 }}
+      class="w-full flex-1 flex items-end justify-center pb-8"
+    >
+      <button
+        type="button"
+        onclick={revealRest}
+        use:pressPhysics={'ghost'}
+        use:hoverEffect={'swap'}
+        class="inline-flex items-center gap-2.5 pl-4 pr-2 py-2 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-surface cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+        style="box-shadow: 0 3px 0 rgba(0,0,0,0.08);"
+        aria-label="Scroll to see the rest of the page"
+      >
+        <span class="text-xs font-bold">Scroll to see why</span>
+        <span
+          class="scroll-cue inline-flex h-6 w-6 items-center justify-center rounded-full border-[2px] border-brand-border-heavy bg-brand-white text-brand-text"
+          style="box-shadow: 0 2px 0 rgba(0,0,0,0.06);"
         >
-          <div class="inline-flex items-center gap-2 text-sm font-bold">
-            <Sparkles size={16} strokeWidth={2.5} />
-            {aud.title}
-          </div>
-          <p class="text-sm font-semibold text-brand-text-mid leading-relaxed">{aud.body}</p>
-        </div>
-      {/each}
-    </div>
-  </section>
+          <ChevronDown size={14} strokeWidth={2.5} />
+        </span>
+      </button>
+    </section>
+  {/if}
 
-  <!-- ─── Final CTA ──────────────────────────────────────────── -->
-  <section id="join" use:reveal class="w-full max-w-3xl pb-20 scroll-mt-24">
+  <!-- ─── Final CTA (also gated so initial view stays minimal) ── -->
+  {#if hasScrolled}
+  <section id="join" in:fade={{ duration: 400 }} use:reveal class="w-full max-w-3xl pb-20 scroll-mt-24">
     <div
       class="rounded-[28px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-8 sm:p-10 flex flex-col items-center gap-8 text-center"
       style="box-shadow: 0 6px 0 rgba(0,0,0,0.08);"
@@ -370,4 +395,18 @@
       </p>
     </div>
   </section>
+  {/if}
 </div>
+
+<style>
+  @keyframes scroll-cue-bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(4px); }
+  }
+  .scroll-cue {
+    animation: scroll-cue-bounce 1.6s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .scroll-cue { animation: none; }
+  }
+</style>
