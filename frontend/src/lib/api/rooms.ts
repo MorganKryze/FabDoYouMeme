@@ -16,8 +16,15 @@ export const roomsApi = {
 
   leave: (code: string) => api.post<void>(`/api/rooms/${code}/leave`),
 
-  kick: (code: string, userId: string) =>
-    api.post<void>(`/api/rooms/${code}/kick`, { user_id: userId }),
+  kick: (
+    code: string,
+    target: { userId?: string; guestPlayerId?: string }
+  ) => {
+    const body: Record<string, string> = {};
+    if (target.userId) body.user_id = target.userId;
+    if (target.guestPlayerId) body.guest_player_id = target.guestPlayerId;
+    return api.post<void>(`/api/rooms/${code}/kick`, body);
+  },
 
   end: (code: string) => api.post<void>(`/api/rooms/${code}/end`),
 

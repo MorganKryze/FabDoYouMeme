@@ -560,9 +560,13 @@ func (h *Hub) handleMessage(ctx context.Context, msg playerMessage) {
 			return
 		}
 		if p, ok := h.players[d.TargetUserID]; ok {
-			h.safeSend(p, buildMessage("player_kicked", map[string]string{"user_id": d.TargetUserID}))
+			kickPayload := map[string]string{
+				"user_id": d.TargetUserID,
+				"reason":  "kicked_by_host",
+			}
+			h.safeSend(p, buildMessage("player_kicked", kickPayload))
 			delete(h.players, d.TargetUserID)
-			h.broadcast(buildMessage("player_kicked", map[string]string{"user_id": d.TargetUserID}))
+			h.broadcast(buildMessage("player_kicked", kickPayload))
 		}
 
 	case "system:end_room":

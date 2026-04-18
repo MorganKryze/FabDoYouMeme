@@ -90,7 +90,7 @@ func Load() (*Config, error) {
 		RustFSEndpoint:   os.Getenv("RUSTFS_ENDPOINT"),
 		RustFSAccessKey:  os.Getenv("RUSTFS_ACCESS_KEY"),
 		RustFSSecretKey:  os.Getenv("RUSTFS_SECRET_KEY"),
-		RustFSBucket:     getEnv("RUSTFS_BUCKET", "fabyoumeme-assets"),
+		RustFSBucket:     getEnv("RUSTFS_BUCKET", "fabdoyoumeme-assets"),
 		SMTPHost:         os.Getenv("SMTP_HOST"),
 		SMTPUsername:     os.Getenv("SMTP_USERNAME"),
 		SMTPPassword:     os.Getenv("SMTP_PASSWORD"),

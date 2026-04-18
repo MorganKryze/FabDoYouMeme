@@ -66,7 +66,7 @@ Layout: `backend/` (`cmd/server`, `internal/{auth,game,storage,email,middleware,
 ## Commands
 
 ```bash
-# Dev stack — isolated per stage (project name fabyoumeme-{dev,preprod,prod})
+# Dev stack — isolated per stage (project name fabdoyoumeme-{dev,preprod,prod})
 make dev            # up --build -d
 make dev-down       # keep DB volume
 make dev-clean      # wipe DB volume (destructive)
@@ -78,7 +78,7 @@ make env-diff       # per-variable diff
 make env-migrate    # interactive append + bootstrap
 
 # Logs
-docker compose -p fabyoumeme-dev -f docker/compose.base.yml -f docker/compose.dev.yml logs -f backend
+docker compose -p fabdoyoumeme-dev -f docker/compose.base.yml -f docker/compose.dev.yml logs -f backend
 
 # DB
 migrate -path ./backend/db/migrations -database "$DATABASE_URL" up

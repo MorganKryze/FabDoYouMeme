@@ -201,4 +201,4 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Docker build
-        run: docker build -t fabyoumeme-backend:ci ./backend
+        run: docker build -t fabdoyoumeme-backend:ci ./backend

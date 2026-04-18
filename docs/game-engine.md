@@ -31,6 +31,8 @@ A room has a short code (4 uppercase letters) used by players to join. Codes are
 
 Players join the lobby via WebSocket. The host can configure the room, kick players, or leave. If the host leaves during the lobby, the room closes. Once the host sends `start`, the room transitions to `playing` and no new players can join.
 
+Lobby kick (`POST /api/rooms/{code}/kick`) removes the player and writes a `room_bans` row. The WS handshake gates against this table on every connect, so the ban survives reconnects and server restarts. Bans are room-scoped and die with the room (`ON DELETE CASCADE`).
+
 ### Playing phase
 
 The backend hub drives the round lifecycle autonomously once `start` is received:

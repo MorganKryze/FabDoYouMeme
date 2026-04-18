@@ -44,7 +44,7 @@ Requires session.
 | `GET`   | `/api/rooms/:code`             | Get room info — state, players, config, game type         |
 | `PATCH` | `/api/rooms/:code/config`      | Update room config (host only, lobby state only). Accepts a **partial patch** — send only the fields you changed. `joker_count` must satisfy `0 ≤ joker_count ≤ round_count`; violations return `422 invalid_config` |
 | `POST`  | `/api/rooms/:code/leave`       | Leave the room (lobby only; host leaving closes the room) |
-| `POST`  | `/api/rooms/:code/kick`        | Kick a player by `user_id` (host only, lobby or playing)  |
+| `POST`  | `/api/rooms/:code/kick`        | Remove a player (host or admin, **lobby only**). Body: exactly one of `{ "user_id": "<uuid>" }` or `{ "guest_player_id": "<uuid>" }`. Writes a `room_bans` row so the player cannot rejoin (WS handshake returns `409 banned_from_room`). Errors: `403 forbidden`, `409 room_not_in_lobby`, `409 cannot_kick_self` (host used `/end` instead), `400 bad_request` (neither or both id fields supplied) |
 | `POST`  | `/api/rooms/:code/end`         | End the room (host or admin): lobby→hard-delete, playing→persist as finished |
 | `GET`   | `/api/rooms/:code/leaderboard` | Final leaderboard (finished rooms only)                   |
 

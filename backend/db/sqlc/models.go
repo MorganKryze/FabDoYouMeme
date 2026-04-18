@@ -120,6 +120,15 @@ type Room struct {
 	RematchWindowExpiresAt pgtype.Timestamptz `json:"rematch_window_expires_at"`
 }
 
+type RoomBan struct {
+	ID            uuid.UUID   `json:"id"`
+	RoomID        uuid.UUID   `json:"room_id"`
+	UserID        pgtype.UUID `json:"user_id"`
+	GuestPlayerID pgtype.UUID `json:"guest_player_id"`
+	BannedBy      pgtype.UUID `json:"banned_by"`
+	BannedAt      time.Time   `json:"banned_at"`
+}
+
 type RoomPlayer struct {
 	RoomID        uuid.UUID   `json:"room_id"`
 	UserID        pgtype.UUID `json:"user_id"`

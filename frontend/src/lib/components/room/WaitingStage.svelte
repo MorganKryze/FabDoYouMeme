@@ -16,9 +16,12 @@
     CheckCircle,
     Users,
     Sparkles,
-    Settings
+    Settings,
+    X
   } from '$lib/icons';
-  import type { GameType, Room, RoomConfig } from '$lib/api/types';
+  import type { GameType, Player, Room, RoomConfig } from '$lib/api/types';
+  import { fade, scale } from 'svelte/transition';
+  import { backOut } from 'svelte/easing';
   import EndRoomButton from './EndRoomButton.svelte';
 
   interface Props {
@@ -211,6 +214,46 @@
     const checked = (e.currentTarget as HTMLInputElement).checked;
     settingsAllowSkipVote = checked;
     void saveSettings({ allow_skip_vote: checked });
+  }
+
+  // ─── Kick flow (host-only, lobby-only) ──────────────────────────────
+  let kickTarget = $state<{ id: string; name: string; isGuest: boolean } | null>(null);
+  let kickPending = $state(false);
+  let kickError = $state<string | null>(null);
+
+  function openKick(player: Player) {
+    kickTarget = { id: player.user_id, name: player.username, isGuest: !!player.is_guest };
+    kickError = null;
+  }
+
+  function closeKick() {
+    if (kickPending) return;
+    kickTarget = null;
+  }
+
+  async function confirmKick() {
+    if (!room.code || !kickTarget || kickPending) return;
+    kickPending = true;
+    kickError = null;
+    try {
+      await roomsApi.kick(
+        room.code,
+        kickTarget.isGuest ? { guestPlayerId: kickTarget.id } : { userId: kickTarget.id }
+      );
+      toast.show(`${kickTarget.name} was removed`, 'success');
+      kickTarget = null;
+      await invalidateAll();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not remove player';
+      kickError = message;
+      toast.show(message, 'error');
+    } finally {
+      kickPending = false;
+    }
+  }
+
+  function handleKickKey(e: KeyboardEvent) {
+    if (kickTarget && e.key === 'Escape') closeKick();
   }
 </script>
 
@@ -772,7 +815,7 @@
         {#each room.players as player, i (player.user_id)}
           {@const isOnline = player.connected ?? true}
           <li
-            class="flex items-center gap-3 rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white px-3 py-3"
+            class="relative flex items-center gap-3 rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white px-3 py-3"
             style="box-shadow: 0 4px 0 rgba(0,0,0,0.1);"
           >
             <span
@@ -807,6 +850,19 @@
               <span class="status-dot"></span>
               {isOnline ? 'Online' : 'Away'}
             </span>
+            {#if isHost && !player.is_host}
+              <button
+                type="button"
+                use:pressPhysics={'ghost'}
+                onclick={() => openKick(player)}
+                aria-label={`Remove ${player.username}`}
+                title={`Remove ${player.username}`}
+                class="absolute -top-2 -right-2 h-7 w-7 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text-mid hover:text-red-600 hover:border-red-600 inline-flex items-center justify-center cursor-pointer transition-colors"
+                style="box-shadow: 0 2px 0 rgba(0,0,0,0.1);"
+              >
+                <X size={12} strokeWidth={3} />
+              </button>
+            {/if}
           </li>
         {/each}
 
@@ -827,3 +883,59 @@
   </div>
 
 </div>
+
+<svelte:window onkeydown={handleKickKey} />
+
+{#if kickTarget}
+  <div
+    class="fixed inset-0 z-50 bg-black/0"
+    aria-hidden="true"
+    transition:fade={{ duration: 120 }}
+  >
+    <button
+      type="button"
+      aria-label="Close dialog"
+      class="absolute inset-0 w-full h-full cursor-default"
+      onclick={closeKick}
+    ></button>
+    <div class="absolute inset-0 flex items-center justify-center p-4 pointer-events-none">
+      <div
+        class="w-[min(26rem,100%)] bg-brand-white border-[2.5px] border-brand-border-heavy rounded-3xl p-6 flex flex-col gap-4 pointer-events-auto"
+        style="box-shadow: 0 10px 0 rgba(0,0,0,0.15);"
+        role="dialog"
+        tabindex="-1"
+        aria-modal="true"
+        aria-labelledby="kick-title"
+        transition:scale={{ duration: 180, start: 0.85, easing: backOut }}
+      >
+        <h2 id="kick-title" class="text-xl font-bold">Remove {kickTarget.name}?</h2>
+        <p class="text-sm font-semibold text-brand-text-mid">
+          They'll be disconnected immediately and won't be able to rejoin this room.
+        </p>
+        {#if kickError}
+          <p class="text-sm font-semibold text-red-600">{kickError}</p>
+        {/if}
+        <div class="flex gap-3 justify-end mt-2">
+          <button
+            use:pressPhysics={'ghost'}
+            type="button"
+            onclick={closeKick}
+            disabled={kickPending}
+            class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-sm font-bold disabled:opacity-50 cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            use:pressPhysics={'dark'}
+            type="button"
+            onclick={confirmKick}
+            disabled={kickPending}
+            class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-red-600 text-white text-sm font-bold disabled:opacity-50 cursor-pointer"
+          >
+            {kickPending ? 'Removing…' : 'Remove player'}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}

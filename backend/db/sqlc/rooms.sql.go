@@ -87,6 +87,27 @@ func (q *Queries) CountFinishedRooms(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const createGuestRoomBan = `-- name: CreateGuestRoomBan :exec
+INSERT INTO room_bans (room_id, guest_player_id, banned_by)
+VALUES ($1, $2, $3)
+ON CONFLICT (room_id, guest_player_id) WHERE guest_player_id IS NOT NULL DO NOTHING
+`
+
+type CreateGuestRoomBanParams struct {
+	RoomID        uuid.UUID   `json:"room_id"`
+	GuestPlayerID pgtype.UUID `json:"guest_player_id"`
+	BannedBy      pgtype.UUID `json:"banned_by"`
+}
+
+// Records a guest's ban in this room, keyed by guest_player_id. The guest's
+// existing token becomes useless for this room; a fresh guest-join with a
+// new display name mints a new guest_player_id and is not blocked
+// (accepted limitation — see spec non-goals).
+func (q *Queries) CreateGuestRoomBan(ctx context.Context, arg CreateGuestRoomBanParams) error {
+	_, err := q.db.Exec(ctx, createGuestRoomBan, arg.RoomID, arg.GuestPlayerID, arg.BannedBy)
+	return err
+}
+
 const createGuestSubmission = `-- name: CreateGuestSubmission :one
 INSERT INTO submissions (round_id, guest_player_id, payload) VALUES ($1, $2, $3) RETURNING id, round_id, user_id, payload, created_at, guest_player_id
 `
@@ -225,6 +246,26 @@ func (q *Queries) CreateSubmission(ctx context.Context, arg CreateSubmissionPara
 		&i.GuestPlayerID,
 	)
 	return i, err
+}
+
+const createUserRoomBan = `-- name: CreateUserRoomBan :exec
+INSERT INTO room_bans (room_id, user_id, banned_by)
+VALUES ($1, $2, $3)
+ON CONFLICT (room_id, user_id) WHERE user_id IS NOT NULL DO NOTHING
+`
+
+type CreateUserRoomBanParams struct {
+	RoomID   uuid.UUID   `json:"room_id"`
+	UserID   pgtype.UUID `json:"user_id"`
+	BannedBy pgtype.UUID `json:"banned_by"`
+}
+
+// Records a registered user's ban in this room. Idempotent: a duplicate
+// kick is a no-op. Caller provides banned_by = session user ID (or admin
+// acting on the room). See docs/superpowers/specs/2026-04-18-lobby-kick-and-ban-design.md.
+func (q *Queries) CreateUserRoomBan(ctx context.Context, arg CreateUserRoomBanParams) error {
+	_, err := q.db.Exec(ctx, createUserRoomBan, arg.RoomID, arg.UserID, arg.BannedBy)
+	return err
 }
 
 const createVote = `-- name: CreateVote :one
@@ -648,6 +689,44 @@ func (q *Queries) GetVotesForRound(ctx context.Context, roundID uuid.UUID) ([]Vo
 		return nil, err
 	}
 	return items, nil
+}
+
+const isGuestBannedFromRoom = `-- name: IsGuestBannedFromRoom :one
+SELECT EXISTS(
+  SELECT 1 FROM room_bans WHERE room_id = $1 AND guest_player_id = $2
+)
+`
+
+type IsGuestBannedFromRoomParams struct {
+	RoomID        uuid.UUID   `json:"room_id"`
+	GuestPlayerID pgtype.UUID `json:"guest_player_id"`
+}
+
+// Used by the WS handshake after a guest token resolves to a guest_player_id.
+func (q *Queries) IsGuestBannedFromRoom(ctx context.Context, arg IsGuestBannedFromRoomParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isGuestBannedFromRoom, arg.RoomID, arg.GuestPlayerID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const isUserBannedFromRoom = `-- name: IsUserBannedFromRoom :one
+SELECT EXISTS(
+  SELECT 1 FROM room_bans WHERE room_id = $1 AND user_id = $2
+)
+`
+
+type IsUserBannedFromRoomParams struct {
+	RoomID uuid.UUID   `json:"room_id"`
+	UserID pgtype.UUID `json:"user_id"`
+}
+
+// Used by the WS handshake to reject a registered user's (re)join.
+func (q *Queries) IsUserBannedFromRoom(ctx context.Context, arg IsUserBannedFromRoomParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isUserBannedFromRoom, arg.RoomID, arg.UserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const listRoomPlayers = `-- name: ListRoomPlayers :many

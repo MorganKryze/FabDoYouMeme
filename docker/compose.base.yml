@@ -1,16 +1,16 @@
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: fabyoumeme-${STAGE:-dev}-postgres
+    container_name: fabdoyoumeme-${STAGE:-dev}-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: fabyoumeme
-      POSTGRES_USER: fabyoumeme
+      POSTGRES_DB: fabdoyoumeme
+      POSTGRES_USER: fabdoyoumeme
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U fabyoumeme']
+      test: ['CMD-SHELL', 'pg_isready -U fabdoyoumeme']
       interval: 5s
       retries: 5
     expose:
@@ -24,7 +24,7 @@ services:
         max-file: '5'
 
   backend:
-    container_name: fabyoumeme-${STAGE:-dev}-backend
+    container_name: fabdoyoumeme-${STAGE:-dev}-backend
     restart: unless-stopped
     depends_on:
       postgres:
@@ -35,13 +35,13 @@ services:
       retries: 10
       start_period: 10s
     environment:
-      DATABASE_URL: postgres://fabyoumeme:${POSTGRES_PASSWORD}@postgres:5432/fabyoumeme
+      DATABASE_URL: postgres://fabdoyoumeme:${POSTGRES_PASSWORD}@postgres:5432/fabdoyoumeme
       FRONTEND_URL: ${FRONTEND_URL}
       BACKEND_URL: ${BACKEND_URL}
       RUSTFS_ENDPOINT: ${RUSTFS_ENDPOINT}
       RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
       RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
-      RUSTFS_BUCKET: ${RUSTFS_BUCKET:-fabyoumeme-assets}
+      RUSTFS_BUCKET: ${RUSTFS_BUCKET:-fabdoyoumeme-assets}
       ALLOWED_ORIGIN: ${FRONTEND_URL}
       SMTP_HOST: ${SMTP_HOST}
       SMTP_PORT: ${SMTP_PORT:-587}
@@ -81,7 +81,7 @@ services:
         max-file: '5'
 
   frontend:
-    container_name: fabyoumeme-${STAGE:-dev}-frontend
+    container_name: fabdoyoumeme-${STAGE:-dev}-frontend
     restart: unless-stopped
     depends_on:
       backend:

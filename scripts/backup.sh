@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # scripts/backup.sh
 # Run nightly via host cron: 0 2 * * * /path/to/FabDoYouMeme/scripts/backup.sh
-# Requires: BACKUP_DIR env var (or defaults to /var/backups/fabyoumeme)
+# Requires: BACKUP_DIR env var (or defaults to /var/backups/fabdoyoumeme)
 #           COMPOSE_FILE env var pointing to docker compose base file location
 
 set -euo pipefail
 
 COMPOSE_FILE="${COMPOSE_FILE:-$(dirname "$0")/../docker/compose.base.yml}"
-BACKUP_DIR="${BACKUP_DIR:-/var/backups/fabyoumeme}"
+BACKUP_DIR="${BACKUP_DIR:-/var/backups/fabdoyoumeme}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="$BACKUP_DIR/postgres_$TIMESTAMP.sql.gz"
 
@@ -16,7 +16,7 @@ mkdir -p "$BACKUP_DIR"
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Starting backup → $BACKUP_FILE"
 
 docker compose -f "$COMPOSE_FILE" exec -T postgres \
-  pg_dump -U fabyoumeme fabyoumeme \
+  pg_dump -U fabdoyoumeme fabdoyoumeme \
   | gzip > "$BACKUP_FILE"
 
 echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Backup complete: $(du -sh "$BACKUP_FILE" | cut -f1)"

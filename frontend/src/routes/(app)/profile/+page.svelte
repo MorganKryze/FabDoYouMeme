@@ -70,7 +70,7 @@
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'my-fabyoumeme-data.json';
+      a.download = 'my-fabdoyoumeme-data.json';
       a.click();
       URL.revokeObjectURL(url);
       toast.show('Your data export is ready.', 'success');

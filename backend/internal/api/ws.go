@@ -87,6 +87,41 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Ban gate. Runs after identity resolution and the single-room check so a
+	// banned identity sees the same "you can't be here" signal as a legitimate
+	// mismatch would. Placed BEFORE the upgrade so the JSON error reaches the
+	// join form (mirrors the already_in_active_room pattern above).
+	if h.queries != nil {
+		banRoom, bErr := h.queries.GetRoomByCode(r.Context(), roomCode)
+		if bErr == nil {
+			if ident.IsGuest {
+				if gpUUID, perr := uuid.Parse(ident.ID); perr == nil {
+					banned, berr := h.queries.IsGuestBannedFromRoom(r.Context(), db.IsGuestBannedFromRoomParams{
+						RoomID:        banRoom.ID,
+						GuestPlayerID: pgtype.UUID{Bytes: gpUUID, Valid: true},
+					})
+					if berr == nil && banned {
+						writeError(w, r, http.StatusConflict, "banned_from_room",
+							"You were removed from this room")
+						return
+					}
+				}
+			} else {
+				if uUUID, perr := uuid.Parse(ident.ID); perr == nil {
+					banned, berr := h.queries.IsUserBannedFromRoom(r.Context(), db.IsUserBannedFromRoomParams{
+						RoomID: banRoom.ID,
+						UserID: pgtype.UUID{Bytes: uUUID, Valid: true},
+					})
+					if berr == nil && banned {
+						writeError(w, r, http.StatusConflict, "banned_from_room",
+							"You were removed from this room")
+						return
+					}
+				}
+			}
+		}
+	}
+
 	hub, err := h.manager.GetOrLoad(r.Context(), roomCode)
 	if err != nil {
 		// Room lookup failed OR the room exists but is finished. Both map to

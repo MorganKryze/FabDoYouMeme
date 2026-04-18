@@ -1,9 +1,9 @@
 services:
   backend:
-    image: ghcr.io/morgankryze/fabyoumeme-backend:latest
+    image: ghcr.io/morgankryze/fabdoyoumeme-backend:stable
 
   frontend:
-    image: ghcr.io/morgankryze/fabyoumeme-frontend:latest
+    image: ghcr.io/morgankryze/fabdoyoumeme-frontend:stable
     networks:
       - project_network
       - pangolin

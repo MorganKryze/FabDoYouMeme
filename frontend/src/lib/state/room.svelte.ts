@@ -102,10 +102,25 @@ export class RoomState {
         );
         break;
       }
-      case 'player_left':
-      case 'player_kicked': {
+      case 'player_left': {
         const d = msg.data as Player;
         this.players = this.players.filter(p => p.user_id !== d.user_id);
+        break;
+      }
+      case 'player_kicked': {
+        const d = msg.data as Player & { reason?: string };
+        this.players = this.players.filter(p => p.user_id !== d.user_id);
+        // If this frame targets us, notify and leave. ownUserId is seeded
+        // from the room_state snapshot (both users and guests use it as the
+        // universal player identifier) so one comparison covers both kinds.
+        if (this.ownUserId && this.ownUserId === d.user_id) {
+          toast.show('You were removed from the room', 'error');
+          ws.disconnect();
+          this.reset();
+          if (typeof window !== 'undefined') {
+            window.location.assign('/home');
+          }
+        }
         break;
       }
       case 'game_started':

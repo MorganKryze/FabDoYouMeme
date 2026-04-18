@@ -106,7 +106,7 @@ All variables come from `.env`. Never commit this file.
 | `RUSTFS_ENDPOINT`   | yes      | —                   | RustFS base URL, e.g. `https://rustfs.example.com`                          |
 | `RUSTFS_ACCESS_KEY` | yes      | —                   | RustFS access key                                                           |
 | `RUSTFS_SECRET_KEY` | yes      | —                   | RustFS secret key                                                           |
-| `RUSTFS_BUCKET`     | no       | `fabyoumeme-assets` | S3 bucket name                                                              |
+| `RUSTFS_BUCKET`     | no       | `fabdoyoumeme-assets` | S3 bucket name                                                              |
 
 ### Stage gate
 

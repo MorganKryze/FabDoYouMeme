@@ -4,9 +4,9 @@
 # volumes, container names, and networks are isolated per stage. Without
 # `-p`, Compose derives the project from the CWD basename and all three
 # stacks collide on a shared `postgres_data` volume.
-DEV_PROJECT     := fabyoumeme-dev
-PREPROD_PROJECT := fabyoumeme-preprod
-PROD_PROJECT    := fabyoumeme-prod
+DEV_PROJECT     := fabdoyoumeme-dev
+PREPROD_PROJECT := fabdoyoumeme-preprod
+PROD_PROJECT    := fabdoyoumeme-prod
 
 dev:
 	STAGE=dev docker compose -p $(DEV_PROJECT) -f docker/compose.base.yml -f docker/compose.dev.yml --env-file .env.dev up --build -d

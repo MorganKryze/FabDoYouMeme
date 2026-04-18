@@ -6,6 +6,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,12 +17,25 @@ import (
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/testutil"
 )
 
+// countingEmail is a test double for the email sender. MagicLink dispatches
+// the SMTP call in a detached goroutine (see sendMagicLinkToUserAsync), so
+// SendMagicLinkLogin is invoked from a goroutine the test does not own;
+// the mutex keeps reads and writes of `sends` race-free under -race.
 type countingEmail struct {
+	mu    sync.Mutex
 	sends int
 }
 
+func (s *countingEmail) count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.sends
+}
+
 func (s *countingEmail) SendMagicLinkLogin(_ context.Context, _ string, _ auth.LoginEmailData) error {
+	s.mu.Lock()
 	s.sends++
+	s.mu.Unlock()
 	return nil
 }
 func (s *countingEmail) SendMagicLinkEmailChange(_ context.Context, _ string, _ auth.EmailChangeData) error {
@@ -106,16 +120,34 @@ func TestMagicLink_Cooldown(t *testing.T) {
 		}
 	}
 
-	// First send — should go through.
-	send()
-	if sender.sends != 1 {
-		t.Errorf("after first send: want 1 email sent, got %d", sender.sends)
+	// MagicLink dispatches SMTP in a goroutine (sendMagicLinkToUserAsync),
+	// so the handler returns before the counter is incremented. waitFor
+	// polls with a bounded deadline; the timeout is generous for CI load.
+	waitFor := func(want int) {
+		t.Helper()
+		deadline := time.Now().Add(2 * time.Second)
+		for time.Now().Before(deadline) {
+			if sender.count() >= want {
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
 	}
 
-	// Second send immediately — cooldown active, email suppressed.
+	// First send — should go through.
 	send()
-	if sender.sends != 1 {
-		t.Errorf("during cooldown: want 1 email sent, got %d", sender.sends)
+	waitFor(1)
+	if got := sender.count(); got != 1 {
+		t.Fatalf("after first send: want 1 email sent, got %d", got)
+	}
+
+	// Second send immediately — cooldown active, no goroutine is dispatched
+	// on this path, so any increment would be a bug. Sleep long enough that
+	// a spuriously dispatched goroutine would have completed, then assert.
+	send()
+	time.Sleep(50 * time.Millisecond)
+	if got := sender.count(); got != 1 {
+		t.Fatalf("during cooldown: want 1 email sent, got %d", got)
 	}
 
 	// Advance past cooldown.
@@ -123,7 +155,8 @@ func TestMagicLink_Cooldown(t *testing.T) {
 
 	// Third send — cooldown expired, email goes through.
 	send()
-	if sender.sends != 2 {
-		t.Errorf("after cooldown: want 2 emails sent, got %d", sender.sends)
+	waitFor(2)
+	if got := sender.count(); got != 2 {
+		t.Fatalf("after cooldown: want 2 emails sent, got %d", got)
 	}
 }

@@ -133,6 +133,12 @@ func (h *RoomHandler) Leave(w http.ResponseWriter, r *http.Request) {
 }
 
 // Kick handles POST /api/rooms/{code}/kick.
+//
+// Body: exactly one of {user_id} or {guest_player_id}.
+// State gate: lobby only (409 room_not_in_lobby otherwise).
+// Self-kick is rejected (409 cannot_kick_self); the host uses /end instead.
+// On success: (1) ban row inserted (ON CONFLICT no-op), (2) player removed,
+// (3) hub informed best-effort, (4) audit entry written. 204 No Content.
 func (h *RoomHandler) Kick(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.GetSessionUser(r)
 	if !ok {
@@ -144,40 +150,99 @@ func (h *RoomHandler) Kick(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, "not_found", "Room not found")
 		return
 	}
-	hostID, _ := uuid.Parse(u.UserID)
-	if u.Role != "admin" && (!room.HostID.Valid || room.HostID.Bytes != hostID) {
+	if room.State != "lobby" {
+		writeError(w, r, http.StatusConflict, "room_not_in_lobby",
+			"Kick is only available while the room is in lobby state")
+		return
+	}
+	actorID, _ := uuid.Parse(u.UserID)
+	if u.Role != "admin" && (!room.HostID.Valid || room.HostID.Bytes != actorID) {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Only the host can kick players")
 		return
 	}
+
 	var req struct {
-		UserID string `json:"user_id"`
+		UserID        string `json:"user_id"`
+		GuestPlayerID string `json:"guest_player_id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.UserID == "" {
-		writeError(w, r, http.StatusBadRequest, "bad_request", "user_id is required")
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid JSON")
 		return
 	}
-	targetID, err := uuid.Parse(req.UserID)
-	if err != nil {
-		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid user ID")
+	hasUser := req.UserID != ""
+	hasGuest := req.GuestPlayerID != ""
+	if hasUser == hasGuest { // both or neither
+		writeError(w, r, http.StatusBadRequest, "bad_request",
+			"Exactly one of user_id or guest_player_id is required")
 		return
 	}
-	if err := h.db.RemoveRoomPlayer(r.Context(), db.RemoveRoomPlayerParams{
-		RoomID: room.ID,
-		UserID: pgtype.UUID{Bytes: targetID, Valid: true},
-	}); err != nil {
-		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to kick player")
-		return
-	}
-	// Notify connected WS clients. The DB row was already removed above, so
-	// failure to enqueue here is recoverable — the player will be treated as
-	// a non-member on their next WS message. We still bound the send with
-	// the request context to avoid stalling the HTTP goroutine on a saturated
-	// hub (finding 4.B).
-	if hub, ok := h.manager.Get(room.Code); ok {
-		if err := hub.KickPlayer(r.Context(), req.UserID); err != nil && h.log != nil {
-			h.log.Warn("kick did not reach hub", "room", room.Code, "user_id", req.UserID, "err", err)
+
+	actorUUID := pgtype.UUID{Bytes: actorID, Valid: true}
+	var targetID string
+
+	if hasUser {
+		targetID = req.UserID
+		targetUUID, err := uuid.Parse(req.UserID)
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid user_id")
+			return
+		}
+		if targetUUID == actorID {
+			writeError(w, r, http.StatusConflict, "cannot_kick_self",
+				"Use POST /rooms/{code}/end to close your own room")
+			return
+		}
+		if err := h.db.CreateUserRoomBan(r.Context(), db.CreateUserRoomBanParams{
+			RoomID:   room.ID,
+			UserID:   pgtype.UUID{Bytes: targetUUID, Valid: true},
+			BannedBy: actorUUID,
+		}); err != nil {
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to record ban")
+			return
+		}
+		if err := h.db.RemoveRoomPlayer(r.Context(), db.RemoveRoomPlayerParams{
+			RoomID: room.ID,
+			UserID: pgtype.UUID{Bytes: targetUUID, Valid: true},
+		}); err != nil {
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to remove player")
+			return
+		}
+	} else {
+		targetID = req.GuestPlayerID
+		targetUUID, err := uuid.Parse(req.GuestPlayerID)
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid guest_player_id")
+			return
+		}
+		if err := h.db.CreateGuestRoomBan(r.Context(), db.CreateGuestRoomBanParams{
+			RoomID:        room.ID,
+			GuestPlayerID: pgtype.UUID{Bytes: targetUUID, Valid: true},
+			BannedBy:      actorUUID,
+		}); err != nil {
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to record ban")
+			return
+		}
+		if err := h.db.RemoveGuestRoomPlayer(r.Context(), db.RemoveGuestRoomPlayerParams{
+			RoomID:        room.ID,
+			GuestPlayerID: pgtype.UUID{Bytes: targetUUID, Valid: true},
+		}); err != nil {
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to remove guest")
+			return
 		}
 	}
+
+	// Best-effort hub notification. Bounded by the request context (finding 4.B).
+	if hub, ok := h.manager.Get(room.Code); ok {
+		if err := hub.KickPlayer(r.Context(), targetID); err != nil && h.log != nil {
+			h.log.Warn("kick did not reach hub", "room", room.Code, "target_id", targetID, "err", err)
+		}
+	}
+
+	// Audit. Best-effort per the shared helper in admin.go.
+	writeAuditLog(r.Context(), h.db, u.UserID, "room.kick",
+		"room:"+room.ID.String(),
+		map[string]any{"target_id": targetID, "target_kind": map[bool]string{true: "user", false: "guest"}[hasUser]})
+
 	w.WriteHeader(http.StatusNoContent)
 }
 

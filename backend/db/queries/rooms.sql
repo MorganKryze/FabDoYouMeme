@@ -192,3 +192,32 @@ WHERE rp.user_id = $1
   AND r.created_at > now() - interval '30 days'
 ORDER BY r.created_at DESC
 LIMIT $2;
+
+-- name: CreateUserRoomBan :exec
+-- Records a registered user's ban in this room. Idempotent: a duplicate
+-- kick is a no-op. Caller provides banned_by = session user ID (or admin
+-- acting on the room). See docs/superpowers/specs/2026-04-18-lobby-kick-and-ban-design.md.
+INSERT INTO room_bans (room_id, user_id, banned_by)
+VALUES ($1, $2, $3)
+ON CONFLICT (room_id, user_id) WHERE user_id IS NOT NULL DO NOTHING;
+
+-- name: CreateGuestRoomBan :exec
+-- Records a guest's ban in this room, keyed by guest_player_id. The guest's
+-- existing token becomes useless for this room; a fresh guest-join with a
+-- new display name mints a new guest_player_id and is not blocked
+-- (accepted limitation — see spec non-goals).
+INSERT INTO room_bans (room_id, guest_player_id, banned_by)
+VALUES ($1, $2, $3)
+ON CONFLICT (room_id, guest_player_id) WHERE guest_player_id IS NOT NULL DO NOTHING;
+
+-- name: IsUserBannedFromRoom :one
+-- Used by the WS handshake to reject a registered user's (re)join.
+SELECT EXISTS(
+  SELECT 1 FROM room_bans WHERE room_id = $1 AND user_id = $2
+);
+
+-- name: IsGuestBannedFromRoom :one
+-- Used by the WS handshake after a guest token resolves to a guest_player_id.
+SELECT EXISTS(
+  SELECT 1 FROM room_bans WHERE room_id = $1 AND guest_player_id = $2
+);

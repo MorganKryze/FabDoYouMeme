@@ -46,6 +46,15 @@ func TestRateLimit_StopCancelsEvictLoop(t *testing.T) {
 
 	rl := middleware.NewRateLimiter(1, 60, clock.Real{}, nil)
 
+	// `go rl.evictLoop()` does not guarantee the goroutine has begun
+	// executing by the time NewRateLimiter returns — under load (race
+	// detector, parallel packages) the scheduler can delay the first run
+	// long enough for the stack dump to miss the frame. Spin until the
+	// dump observes it, same shape as the post-Stop wait below.
+	startDeadline := time.Now().Add(200 * time.Millisecond)
+	for time.Now().Before(startDeadline) && countEvictLoops() != before+1 {
+		time.Sleep(5 * time.Millisecond)
+	}
 	if got := countEvictLoops(); got != before+1 {
 		t.Fatalf("precondition: want %d evictLoop goroutines after NewRateLimiter, got %d", before+1, got)
 	}

@@ -53,4 +53,4 @@ jobs:
         run: npm audit --audit-level=high
 
       - name: Docker build smoke test
-        run: docker build -t fabyoumeme-frontend:ci ./frontend
+        run: docker build -t fabdoyoumeme-frontend:ci ./frontend

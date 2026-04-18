@@ -35,7 +35,11 @@
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        error = body.message ?? 'Could not join. Check the code and try again.';
+        if (body.code === 'banned_from_room') {
+          error = 'You were removed from this room and can no longer rejoin.';
+        } else {
+          error = body.message ?? 'Could not join. Check the code and try again.';
+        }
         return;
       }
       const body = await res.json();
