@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Dashboard — FabDoYouMeme</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared.css">
+<style>
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 24px 60px;display:flex;flex-direction:column;gap:28px}
+
+  /* Greeting */
+  .greet{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;flex-wrap:wrap}
+  .greet h1{font-size:clamp(2.2rem,4.5vw,3.4rem);letter-spacing:-.03em;line-height:1;margin:8px 0 0;font-weight:700}
+  .greet h1 em{font-style:normal;background:linear-gradient(95deg,var(--accent),var(--accent-3) 60%,var(--accent-2));-webkit-background-clip:text;background-clip:text;color:transparent;padding-right:2px}
+  .greet .sub{color:var(--text-mid);font-size:16px;margin:8px 0 0;max-width:520px;line-height:1.4}
+  .greet .meta{display:flex;gap:10px;flex-wrap:wrap}
+  .meta-chip{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;background:var(--surface);border:2.5px solid var(--border);font-size:12px;font-weight:700;color:var(--text-mid);box-shadow:0 3px 0 rgba(0,0,0,.1)}
+  .meta-chip .glyph{font-family:'JetBrains Mono',monospace;color:var(--accent)}
+
+  /* Active room banner */
+  .active-room{
+    background:var(--text); color:var(--surface);
+    border:2.5px solid var(--border); border-radius:22px;
+    padding:22px 26px; box-shadow:0 6px 0 rgba(0,0,0,.25);
+    display:grid; grid-template-columns: 1fr auto; gap:18px; align-items:center;
+    text-decoration:none; transition:transform .2s;
+    position:relative; overflow:hidden;
+  }
+  .active-room:hover{transform:translateY(-3px)}
+  .active-room::after{content:"♠ ♥ ♦ ♣";position:absolute;right:-6px;top:-14px;font-size:90px;opacity:.06;letter-spacing:4px;pointer-events:none}
+  .active-room .eyebrow{font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;opacity:.7}
+  .active-room h2{margin:4px 0 4px;font-size:26px;letter-spacing:-.02em}
+  .active-room p{margin:0;font-size:13px;opacity:.7;font-weight:600}
+  .active-room .right{display:flex;align-items:center;gap:14px}
+  .active-room .code-chip{display:inline-flex;gap:4px}
+  .active-room .code-chip span{display:grid;place-items:center;width:30px;height:40px;background:var(--surface);color:var(--text);border:2.5px solid var(--border);border-radius:8px;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:16px;box-shadow:0 3px 0 rgba(0,0,0,.2)}
+  .active-room .play-btn{width:52px;height:52px;border-radius:999px;background:var(--accent);border:2.5px solid var(--border);display:grid;place-items:center;color:var(--text);font-size:22px;box-shadow:0 3px 0 rgba(0,0,0,.25);font-weight:700}
+
+  /* Quick actions */
+  .quick{display:grid;grid-template-columns:1.4fr 1fr;gap:20px}
+  @media (max-width:880px){.quick{grid-template-columns:1fr}}
+  .qa{background:var(--surface);border:2.5px solid var(--border);border-radius:22px;padding:22px;box-shadow:var(--shadow-card);display:flex;flex-direction:column;gap:14px;position:relative}
+  .qa h3{margin:0;font-size:20px;letter-spacing:-.01em;display:flex;align-items:center;justify-content:space-between}
+  .qa h3 .suit{font-size:14px;color:var(--text-muted);letter-spacing:.2em}
+  .qa.dark{background:var(--text);color:var(--surface);box-shadow:0 6px 0 rgba(0,0,0,.25)}
+  .qa.dark .label{color:rgba(255,255,255,.7)}
+  .code-input{display:flex;gap:8px}
+  .code-input input{width:56px;height:64px;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:30px;border-radius:14px;border:2.5px solid var(--border);background:var(--surface);color:var(--text);box-shadow:0 3px 0 rgba(0,0,0,.15);transition:transform .1s,box-shadow .1s}
+  .code-input input:focus{outline:none;transform:translateY(-2px);box-shadow:0 5px 0 rgba(0,0,0,.22),0 0 0 3px rgba(232,147,127,.3)}
+  .qa .cta-row{display:flex;gap:10px;margin-top:auto}
+  .qa .foot-note{font-size:12px;color:var(--text-muted);margin:0}
+  .qa.dark .foot-note{color:rgba(255,255,255,.6)}
+
+  /* Host tile — stack of "game cards" */
+  .host-stack{position:relative;height:90px;margin-bottom:8px}
+  .host-stack .mini{position:absolute;width:60px;height:82px;border-radius:10px;border:2.5px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08);box-shadow:0 3px 0 rgba(0,0,0,.2)}
+  .host-stack .mini:nth-child(1){left:0;transform:rotate(-10deg)}
+  .host-stack .mini:nth-child(2){left:24px;transform:rotate(-2deg);background:rgba(255,255,255,.14)}
+  .host-stack .mini:nth-child(3){left:48px;transform:rotate(7deg);background:var(--surface);border-color:var(--border)}
+  .host-stack .mini:nth-child(3)::after{content:"★";position:absolute;inset:0;display:grid;place-items:center;color:var(--text);font-size:22px}
+
+  /* Stats row */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+  @media (max-width:760px){.stats{grid-template-columns:repeat(2,1fr)}}
+  .stat{background:var(--surface);border:2.5px solid var(--border);border-radius:22px;padding:18px;box-shadow:var(--shadow-card);position:relative;overflow:hidden}
+  .stat .k{font-size:11px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--text-mid);display:flex;align-items:center;gap:6px}
+  .stat .v{font-size:40px;font-weight:700;letter-spacing:-.03em;line-height:1;margin-top:10px;font-variant-numeric:tabular-nums}
+  .stat .v.small{font-size:22px;letter-spacing:-.01em}
+  .stat .trend{font-size:11px;color:var(--accent-2);font-weight:700;margin-top:6px;display:flex;align-items:center;gap:4px}
+  .stat .bg-suit{position:absolute;right:-14px;bottom:-18px;font-size:80px;opacity:.06;color:var(--text);font-weight:700}
+
+  /* 2-col layout: activity + circles */
+  .split{display:grid;grid-template-columns:1.8fr 1fr;gap:20px}
+  @media (max-width:1000px){.split{grid-template-columns:1fr}}
+  .panel{background:var(--surface);border:2.5px solid var(--border);border-radius:22px;padding:22px;box-shadow:var(--shadow-card);display:flex;flex-direction:column;gap:14px}
+  .panel .phead{display:flex;justify-content:space-between;align-items:center}
+  .panel h2{margin:0;font-size:18px;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+  .panel a.see-all{font-size:12px;font-weight:700;color:var(--text);text-decoration:none;padding:6px 12px;border-radius:999px;background:rgba(0,0,0,.04)}
+  .panel a.see-all:hover{background:rgba(0,0,0,.08)}
+
+  /* Activity list */
+  .activity{display:flex;flex-direction:column;gap:10px}
+  .a-row{display:flex;align-items:center;gap:14px;padding:12px 16px;border-radius:999px;border:2.5px solid var(--border);background:var(--surface);box-shadow:0 3px 0 rgba(0,0,0,.08);transition:transform .2s}
+  .a-row:hover{transform:translateX(4px)}
+  .a-row .code{display:inline-flex;gap:3px}
+  .a-row .code span{display:grid;place-items:center;width:22px;height:28px;background:var(--surface);border:2px solid var(--border);border-radius:6px;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:11px}
+  .a-row .main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+  .a-row .title{font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px}
+  .a-row .sub-line{font-size:12px;color:var(--text-mid);font-weight:600}
+  .a-row .end{display:flex;align-items:center;gap:18px}
+  .a-row .cell{text-align:right}
+  .a-row .cell .k{font-size:10px;font-weight:700;letter-spacing:.2em;color:var(--text-mid);text-transform:uppercase}
+  .a-row .cell .v{font-weight:700;font-size:14px;font-variant-numeric:tabular-nums}
+  .rank-1{color:var(--accent)}
+  .medal{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:999px;border:2px solid var(--border);font-size:11px;font-weight:700;background:var(--surface)}
+  .medal.gold{background:linear-gradient(140deg,#FDDCB5,#E8937F);color:var(--text)}
+  .medal.silver{background:linear-gradient(140deg,#fff,#ddd)}
+  .medal.bronze{background:linear-gradient(140deg,#E8BF9E,#C89478);color:var(--text)}
+
+  /* Circles */
+  .circles-panel{background:rgba(255,255,255,.5);border:2.5px dashed var(--border-soft)}
+  .circles-panel .soon{position:absolute;top:16px;right:16px;font-size:10px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;padding:4px 10px;border-radius:999px;border:2px solid var(--border);background:var(--surface)}
+  .c-list{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+  .c-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:999px;border:2.5px solid var(--border);background:var(--surface);font-size:13px;font-weight:700}
+  .c-row .av-stack{display:flex}
+  .c-row .av-stack .avatar{width:26px;height:26px;font-size:10px;margin-left:-6px;border-width:2px}
+  .c-row .av-stack .avatar:first-child{margin-left:0}
+  .c-row .count{margin-left:auto;font-size:11px;color:var(--text-mid);font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+
+  /* Game type picker */
+  .games-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px}
+  .games-head h2{margin:4px 0 0;font-size:28px;letter-spacing:-.02em}
+  .games{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  @media (max-width:960px){.games{grid-template-columns:repeat(2,1fr)}}
+  @media (max-width:600px){.games{grid-template-columns:1fr}}
+  .game-card{background:var(--surface);border:2.5px solid var(--border);border-radius:22px;padding:22px;box-shadow:var(--shadow-card);text-decoration:none;color:var(--text);display:flex;flex-direction:column;gap:12px;transition:transform .3s cubic-bezier(.22,1,.36,1);position:relative;overflow:hidden}
+  .game-card:hover{transform:translateY(-4px) rotate(-.5deg)}
+  .game-card .art{height:90px;border-radius:14px;border:2.5px solid var(--border);display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--text-mid);position:relative;overflow:hidden}
+  .game-card .art.a1{background:linear-gradient(140deg,var(--stop-1),var(--accent))}
+  .game-card .art.a2{background:linear-gradient(140deg,var(--stop-3),var(--accent-3))}
+  .game-card .art.a3{background:linear-gradient(140deg,var(--stop-4),var(--accent-2))}
+  .game-card .art.a4{background:linear-gradient(140deg,var(--stop-2),var(--stop-1))}
+  .game-card .art.a5{background:linear-gradient(140deg,var(--accent-2),var(--stop-4))}
+  .game-card .art.a6{background:linear-gradient(140deg,var(--accent-3),var(--stop-3))}
+  .game-card h3{margin:0;font-size:20px;letter-spacing:-.01em;display:flex;align-items:center;gap:8px}
+  .game-card p{margin:0;font-size:13px;color:var(--text-mid);line-height:1.45;flex:1}
+  .game-card .foot{display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:11px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--text-mid)}
+  .game-card .foot .tag{padding:4px 10px;border-radius:999px;border:2px solid var(--border-soft);background:rgba(255,255,255,.6)}
+  .game-card[aria-disabled="true"]{opacity:.5;pointer-events:none}
+  .game-card .ribbon{position:absolute;top:12px;right:-30px;background:var(--text);color:var(--surface);font-size:10px;letter-spacing:.2em;padding:4px 32px;transform:rotate(35deg);font-weight:700}
+
+  /* Maker card (floating) */
+  .maker{
+    position:fixed; bottom:24px; left:24px; z-index:30;
+    width:300px; background:var(--surface); border:2.5px solid var(--border);
+    border-radius:22px; box-shadow:0 8px 0 rgba(0,0,0,.15);
+    padding:18px; display:flex; flex-direction:column; gap:12px;
+  }
+  .maker .mhead{display:flex;align-items:center;gap:12px}
+  .maker .mhead .avatar{width:48px;height:48px;font-size:16px;background:var(--accent-3)}
+  .maker .mhead .name{font-weight:700;font-size:16px;letter-spacing:-.01em}
+  .maker .mhead .tag{font-size:11px;font-weight:700;color:var(--text-mid);letter-spacing:.15em;text-transform:uppercase}
+  .maker .mhead .close{margin-left:auto;width:30px;height:30px;border-radius:999px;border:2.5px solid var(--border);background:var(--surface);cursor:pointer;font-size:14px;font-weight:700;display:grid;place-items:center;color:var(--text)}
+  .maker .medals-row{display:flex;gap:8px}
+  .maker .medals-row .medal{width:34px;height:34px;font-size:14px}
+  .maker .mstat{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding-top:4px;border-top:2px dashed var(--border-soft)}
+  .maker .mstat div{font-size:10px;color:var(--text-mid);font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+  .maker .mstat strong{display:block;font-size:18px;color:var(--text);margin-top:3px;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+
+  /* Footer */
+  footer{max-width:1180px;margin:20px auto 24px;padding:18px 24px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--text-mid);font-weight:600;border-top:2.5px dashed var(--border-soft)}
+  footer a{color:var(--text-mid);text-decoration:none;margin-left:14px}
+  footer a:hover{color:var(--text);text-decoration:underline;text-underline-offset:4px}
+
+</style>
+</head>
+<body>
+
+<header>
+  <nav class="nav" aria-label="Primary">
+    <div class="logo">
+      <div class="logo-mark"><span>F</span></div>
+      <span>FabDoYouMeme</span>
+    </div>
+    <div class="nav-links">
+      <a href="Home.html" class="active">Dashboard</a>
+      <a href="#">The Lab</a>
+      <a href="#">Hall of Fame</a>
+      <a href="Gameplay.html">Playing →</a>
+      <div class="nav-user"><span class="av">MK</span> morgan</div>
+    </div>
+  </nav>
+</header>
+
+<main>
+  <div class="wrap">
+
+    <!-- Greeting + meta -->
+    <section class="greet reveal">
+      <div>
+        <span class="label"><span class="dot"></span> Welcome back, maker</span>
+        <h1>Hey, <em>morgan.</em></h1>
+        <p class="sub">Three rooms open at your Lab tonight. Jump back in, or deal a fresh hand.</p>
+      </div>
+      <div class="meta">
+        <span class="meta-chip"><span class="glyph">★</span> Rank 9 · Hall of Fame</span>
+        <span class="meta-chip"><span class="glyph">♦</span> 47-day streak</span>
+      </div>
+    </section>
+
+    <!-- Active room banner -->
+    <a href="Gameplay.html" class="active-room reveal">
+      <div>
+        <span class="eyebrow">Your room · In progress · Round 3 of 5</span>
+        <h2>Return to <span style="text-decoration:underline;text-decoration-style:wavy;text-decoration-color:var(--accent);text-underline-offset:6px">LAB7</span></h2>
+        <p>Meme Caption · House Warming pack · 5 players waiting for you to vote</p>
+      </div>
+      <div class="right">
+        <div class="code-chip"><span>L</span><span>A</span><span>B</span><span>7</span></div>
+        <div class="play-btn">▶</div>
+      </div>
+    </a>
+
+    <!-- Quick actions -->
+    <section class="quick">
+      <div class="qa reveal">
+        <h3>Got a code? <span class="suit">♠ JOIN</span></h3>
+        <p style="margin:0;font-size:14px;color:var(--text-mid)">Type the 4 letters. No account needed for guests.</p>
+        <div class="code-input" role="group" aria-label="Room code">
+          <input maxlength="1" aria-label="letter 1" />
+          <input maxlength="1" aria-label="letter 2" />
+          <input maxlength="1" aria-label="letter 3" />
+          <input maxlength="1" aria-label="letter 4" />
+        </div>
+        <div class="cta-row">
+          <button class="btn dark">▶ Play</button>
+          <button class="btn ghost sm">Paste invite link</button>
+        </div>
+      </div>
+
+      <a href="#host" class="qa dark reveal" style="text-decoration:none;color:inherit">
+        <h3>Host a round <span class="suit" style="color:rgba(255,255,255,.5)">★ HOST</span></h3>
+        <div class="host-stack">
+          <div class="mini"></div>
+          <div class="mini"></div>
+          <div class="mini"></div>
+        </div>
+        <p style="margin:0;font-size:13px;opacity:.7">Pick a game, pick a pack, deal the cards.</p>
+        <div class="cta-row">
+          <span class="btn" style="background:var(--surface);color:var(--text);flex:1;justify-content:space-between">
+            Start a new game <span>→</span>
+          </span>
+        </div>
+      </a>
+    </section>
+
+    <!-- Stats -->
+    <section class="stats">
+      <div class="stat reveal">
+        <div class="k">♠ Played</div>
+        <div class="v">38</div>
+        <div class="trend">+4 this week</div>
+        <div class="bg-suit">♠</div>
+      </div>
+      <div class="stat reveal">
+        <div class="k">♥ Wins</div>
+        <div class="v">12</div>
+        <div class="trend">3 in a row 🔥</div>
+        <div class="bg-suit">♥</div>
+      </div>
+      <div class="stat reveal">
+        <div class="k">♦ Win rate</div>
+        <div class="v">32%</div>
+        <div class="trend" style="color:var(--text-mid)">+4% vs last month</div>
+        <div class="bg-suit">♦</div>
+      </div>
+      <div class="stat reveal">
+        <div class="k">♣ Favourite</div>
+        <div class="v small" style="margin-top:14px">Meme Caption</div>
+        <div class="trend" style="color:var(--text-mid)">21 of your 38 rounds</div>
+        <div class="bg-suit">♣</div>
+      </div>
+    </section>
+
+    <!-- Activity + circles -->
+    <section class="split">
+      <div class="panel reveal">
+        <div class="phead">
+          <h2>⏱ Recent activity</h2>
+          <a class="see-all" href="#">See all →</a>
+        </div>
+        <div class="activity">
+          <div class="a-row">
+            <div class="code"><span>L</span><span>A</span><span>B</span><span>7</span></div>
+            <div class="main">
+              <div class="title">Meme Caption <span class="medal gold">1</span></div>
+              <div class="sub-line">House Warming · 5 players · just now</div>
+            </div>
+            <div class="end">
+              <div class="cell"><div class="k">Rank</div><div class="v rank-1">1<span style="color:var(--text-mid)">/5</span></div></div>
+              <div class="cell"><div class="k">Score</div><div class="v">2,840</div></div>
+            </div>
+          </div>
+          <div class="a-row">
+            <div class="code"><span>V</span><span>I</span><span>B</span><span>E</span></div>
+            <div class="main">
+              <div class="title">Meme Caption</div>
+              <div class="sub-line">Dev &amp; Deploy · 6 players · 2d ago</div>
+            </div>
+            <div class="end">
+              <div class="cell"><div class="k">Rank</div><div class="v">3<span style="color:var(--text-mid)">/6</span></div></div>
+              <div class="cell"><div class="k">Score</div><div class="v">1,620</div></div>
+            </div>
+          </div>
+          <div class="a-row">
+            <div class="code"><span>P</span><span>E</span><span>A</span><span>R</span></div>
+            <div class="main">
+              <div class="title">Meme Caption <span class="medal silver">2</span></div>
+              <div class="sub-line">Lab Original · 4 players · 5d ago</div>
+            </div>
+            <div class="end">
+              <div class="cell"><div class="k">Rank</div><div class="v">2<span style="color:var(--text-mid)">/4</span></div></div>
+              <div class="cell"><div class="k">Score</div><div class="v">2,100</div></div>
+            </div>
+          </div>
+          <div class="a-row">
+            <div class="code"><span>F</span><span>O</span><span>G</span><span>S</span></div>
+            <div class="main">
+              <div class="title">Meme Caption <span class="medal bronze">3</span></div>
+              <div class="sub-line">House Warming · 7 players · 1w ago</div>
+            </div>
+            <div class="end">
+              <div class="cell"><div class="k">Rank</div><div class="v">3<span style="color:var(--text-mid)">/7</span></div></div>
+              <div class="cell"><div class="k">Score</div><div class="v">1,880</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel circles-panel reveal" style="position:relative">
+        <div class="soon">Coming soon</div>
+        <div class="phead">
+          <h2>◇ Your circles</h2>
+        </div>
+        <p style="margin:0;font-size:13px;color:var(--text-mid);line-height:1.45">Track who you play with most. Rival counts, repeat rooms, all-time standings.</p>
+        <div class="c-list">
+          <div class="c-row">
+            <div class="av-stack">
+              <div class="avatar">MI</div><div class="avatar a2">LE</div><div class="avatar a3">JN</div>
+            </div>
+            <span>Sunday crew</span>
+            <span class="count">12 games</span>
+          </div>
+          <div class="c-row">
+            <div class="av-stack">
+              <div class="avatar a3">KO</div><div class="avatar a4">SA</div><div class="avatar">TA</div>
+            </div>
+            <span>The office</span>
+            <span class="count">8 games</span>
+          </div>
+          <div class="c-row">
+            <div class="av-stack">
+              <div class="avatar a2">NI</div><div class="avatar a4">RO</div>
+            </div>
+            <span>D&amp;D group</span>
+            <span class="count">5 games</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Game types -->
+    <section id="host">
+      <div class="games-head reveal">
+        <div>
+          <span class="label">Host a new round</span>
+          <h2>Pick a game type</h2>
+        </div>
+        <a class="btn sm" href="#">See all packs →</a>
+      </div>
+      <div class="games">
+        <a href="#" class="game-card reveal">
+          <div class="art a1">[ DECK ART · SUNSET ]</div>
+          <h3>♠ Meme Caption</h3>
+          <p>The classic. Everybody gets the same meme. Write the funniest caption. Votes decide.</p>
+          <div class="foot"><span class="tag">3–8 players</span><span>Host →</span></div>
+        </a>
+        <a href="#" class="game-card reveal">
+          <div class="art a2">[ DECK ART · DUSK ]</div>
+          <h3>♥ Match the Meme <span class="medal bronze" style="font-size:10px">β</span></h3>
+          <p>Read the caption, pick the image from your hand. Best pairings win the round.</p>
+          <div class="foot"><span class="tag">4–8 players</span><span>Host →</span></div>
+        </a>
+        <a href="#" class="game-card reveal">
+          <div class="art a3">[ DECK ART · MINT ]</div>
+          <h3>♦ Quickfire</h3>
+          <p>15 seconds per round. No mercy. Only raw punchline reflexes survive.</p>
+          <div class="foot"><span class="tag">3–6 players</span><span>Host →</span></div>
+        </a>
+        <a href="#" aria-disabled="true" class="game-card reveal">
+          <div class="art a4">[ DECK ART · PEACH ]</div>
+          <div class="ribbon">SOON</div>
+          <h3>♣ Drawing Duel</h3>
+          <p>Draw the prompt. Friends vote. The worst artist usually wins.</p>
+          <div class="foot"><span class="tag">2–6 players</span><span>Coming</span></div>
+        </a>
+        <a href="#" aria-disabled="true" class="game-card reveal">
+          <div class="art a5">[ DECK ART · SAGE ]</div>
+          <div class="ribbon">SOON</div>
+          <h3>✦ Pairs</h3>
+          <p>Memory, but with memes. Match tiles. Score style points on the flip.</p>
+          <div class="foot"><span class="tag">2–4 players</span><span>Coming</span></div>
+        </a>
+        <a href="#" aria-disabled="true" class="game-card reveal">
+          <div class="art a6">[ DECK ART · PLUM ]</div>
+          <div class="ribbon">SOON</div>
+          <h3>♪ Trivia Jam</h3>
+          <p>Classic trivia, meme-skinned. Answer fast, buzz faster.</p>
+          <div class="foot"><span class="tag">2–8 players</span><span>Coming</span></div>
+        </a>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Maker Card (floating) -->
+  <aside class="maker" aria-label="Your maker card">
+    <div class="mhead">
+      <div class="avatar">MK</div>
+      <div>
+        <div class="name">morgan</div>
+        <div class="tag">Lab Master · KRYZE-LAB</div>
+      </div>
+      <button class="close" aria-label="Close">×</button>
+    </div>
+    <div class="medals-row" aria-label="Medals">
+      <span class="medal gold" title="First Gold">1</span>
+      <span class="medal silver" title="Silver">2</span>
+      <span class="medal bronze" title="Bronze">3</span>
+      <span class="medal" title="Streak">🔥</span>
+      <span class="medal" style="background:var(--stop-4)">10</span>
+    </div>
+    <div class="mstat">
+      <div>Played <strong>38</strong></div>
+      <div>Wins <strong>12</strong></div>
+      <div>Rate <strong>32%</strong></div>
+    </div>
+  </aside>
+</main>
+
+<footer>
+  <div>© FabDoYouMeme · GPLv3 · Made in the lab, played at the table.</div>
+  <div>
+    <a href="#">Privacy</a>
+    <a href="#">Docs</a>
+    <a href="#">Sign out</a>
+  </div>
+</footer>
+
+<script>
+  // Reveal: stagger on load, observer for anything offscreen, hard fallback
+  const reveals=document.querySelectorAll('.reveal');
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('is-in');io.unobserve(e.target)}}),{rootMargin:'0px 0px -10% 0px',threshold:0});
+  reveals.forEach((el,i)=>{
+    const r=el.getBoundingClientRect();
+    if(r.top < window.innerHeight + 40){
+      setTimeout(()=>el.classList.add('is-in'), Math.min(i*40,600));
+    } else {
+      io.observe(el);
+    }
+  });
+  // Safety net — if anything is still hidden after 1s, force it in
+  setTimeout(()=>reveals.forEach(el=>el.classList.add('is-in')), 1000);
+
+  // Code input UX
+  const inputs=document.querySelectorAll('.code-input input');
+  inputs.forEach((inp,i)=>{
+    inp.addEventListener('input',e=>{e.target.value=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,1);if(e.target.value&&i<inputs.length-1)inputs[i+1].focus();});
+    inp.addEventListener('keydown',e=>{if(e.key==='Backspace'&&!e.target.value&&i>0)inputs[i-1].focus();});
+  });
+
+  // Close maker
+  document.querySelector('.maker .close')?.addEventListener('click',()=>{document.querySelector('.maker').style.display='none'});
+</script>
+
+</body>
+</html>
