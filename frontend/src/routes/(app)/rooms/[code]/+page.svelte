@@ -10,6 +10,8 @@
   import MemeCaptionResultsView from '$lib/games/meme-caption/ResultsView.svelte';
   import WaitingStage from '$lib/components/room/WaitingStage.svelte';
   import EndStage from '$lib/components/room/EndStage.svelte';
+  import RoomHeader from '$lib/components/room/RoomHeader.svelte';
+  import RoomRail from '$lib/components/room/RoomRail.svelte';
 
   // Player identity — registered users match via user.id; guest identity
   // is recovered from sessionStorage (set by the /join flow in F4).
@@ -26,6 +28,9 @@
   // Read it from the SSR-loaded page data (room.config) rather than adding it
   // to RoomState to avoid over-widening the reactive singleton.
   const hostPaced = $derived(($page.data as any)?.room?.config?.host_paced ?? false);
+  const totalRounds = $derived(
+    (($page.data as any)?.room?.config?.round_count as number | undefined) ?? null
+  );
 
   let prefersReducedMotion = $state(false);
 
@@ -42,50 +47,72 @@
   function nextRound() {
     ws.send('next_round');
   }
+
+  // Table chrome (sticky header + felt table + right rail) only makes sense
+  // during active play. Lobby and end stages render against the bare page.
+  const showTable = $derived(
+    (room.state === 'playing' || room.state === 'finished') &&
+    (stage.displayPhase === 'submitting' ||
+      stage.displayPhase === 'voting' ||
+      stage.displayPhase === 'results')
+  );
 </script>
 
-<div class="p-6 flex flex-col gap-6">
+<!-- Countdown overlay. Uses global class so all styles land reliably
+     (inline style + action combos were fragile on Firefox). -->
+{#if room.countdown !== null}
+  <div class="countdown-overlay" aria-live="assertive">
+    <div class="countdown-number" class:no-bounce={prefersReducedMotion}>
+      {room.countdown > 0 ? room.countdown : 'GO!'}
+    </div>
+  </div>
+{/if}
 
-  <!-- Countdown overlay -->
-  {#if room.countdown !== null}
-    <div class="fixed inset-0 z-50 flex items-center justify-center" style="background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);">
-      <div
-        class="font-bold tabular-nums text-brand-white {prefersReducedMotion ? '' : 'animate-bounce'}"
-        style="font-size: clamp(6rem, 20vw, 12rem); line-height: 1;"
-        aria-live="assertive"
-      >
-        {room.countdown > 0 ? room.countdown : 'GO!'}
+{#if showTable}
+  <!-- Active-play shell: sticky header + felt table + right rail.
+       `content-blur` applies `filter: blur()` to the whole shell while
+       the countdown is running — more reliable across browsers than
+       `backdrop-filter` on the overlay (Firefox drops the latter when
+       any ancestor has a `transform`, which `.stage-wrap` always does). -->
+  <div
+    class="max-w-[1280px] mx-auto px-4 md:px-6 pt-4 pb-10 flex flex-col gap-5"
+    class:content-blur={room.countdown !== null}
+  >
+    <RoomHeader {totalRounds} />
+
+    <div class="grid gap-5 lg:grid-cols-[1fr_288px]">
+      <section class="table-panel">
+        <div class="stage-wrap relative z-[1]" class:hidden={!stage.visible}>
+          {#if stage.displayPhase === 'submitting' && room.currentRound}
+            <MemeCaptionSubmitForm round={room.currentRound} />
+          {:else if stage.displayPhase === 'voting'}
+            <MemeCaptionVoteForm submissions={room.submissions} round={room.currentRound} />
+          {:else if stage.displayPhase === 'results'}
+            <MemeCaptionResultsView
+              submissions={room.submissions}
+              leaderboard={room.leaderboard}
+              {isHost}
+              {hostPaced}
+              onNextRound={nextRound}
+            />
+          {/if}
+        </div>
+      </section>
+
+      <div class="hidden lg:block">
+        <RoomRail />
       </div>
     </div>
-  {/if}
-
-  <!-- Stage-wrapped phase branches (L1c) -->
-  <div class="stage-wrap" class:hidden={!stage.visible}>
-    <!-- Waiting stage: lobby -->
-    {#if stage.displayPhase === 'idle' && room.state === 'lobby'}
-      <WaitingStage {isHost} />
-
-    <!-- Submission phase -->
-    {:else if stage.displayPhase === 'submitting' && room.currentRound}
-      <MemeCaptionSubmitForm round={room.currentRound} />
-
-    <!-- Voting phase -->
-    {:else if stage.displayPhase === 'voting'}
-      <MemeCaptionVoteForm submissions={room.submissions} round={room.currentRound} />
-
-    <!-- Results phase -->
-    {:else if stage.displayPhase === 'results'}
-      <MemeCaptionResultsView
-        submissions={room.submissions}
-        leaderboard={room.leaderboard}
-        {isHost}
-        {hostPaced}
-        onNextRound={nextRound}
-      />
-
-    <!-- End stage: game finished -->
-    {:else if room.state === 'finished'}
-      <EndStage />
-    {/if}
   </div>
-</div>
+{:else}
+  <!-- Lobby / end / idle — pages render their own chrome -->
+  <div class="p-6 flex flex-col gap-6" class:content-blur={room.countdown !== null}>
+    <div class="stage-wrap" class:hidden={!stage.visible}>
+      {#if stage.displayPhase === 'idle' && room.state === 'lobby'}
+        <WaitingStage {isHost} />
+      {:else if room.state === 'finished'}
+        <EndStage />
+      {/if}
+    </div>
+  </div>
+{/if}

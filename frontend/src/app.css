@@ -21,6 +21,8 @@
   --brand-border: rgba(26, 26, 26, 0.18);
   --brand-border-heavy: rgba(26, 26, 26, 0.7);
   --brand-accent: #E8937F;
+  --brand-accent-2: #7CB5A1;
+  --brand-accent-3: #C89DBF;
   --brand-success: #2F8566;
   --brand-success-soft: #DFF3EA;
 
@@ -90,6 +92,8 @@ body {
   --color-brand-border: var(--brand-border);
   --color-brand-border-heavy: var(--brand-border-heavy);
   --color-brand-accent: var(--brand-accent);
+  --color-brand-accent-2: var(--brand-accent-2);
+  --color-brand-accent-3: var(--brand-accent-3);
   --color-brand-success: var(--brand-success);
   --color-brand-success-soft: var(--brand-success-soft);
 }
@@ -286,4 +290,213 @@ body {
   font-weight: 700;
   letter-spacing: -0.015em;
   color: var(--brand-text);
+}
+
+/* ==========================================================================
+   Card-game primitives — shared across Home + Gameplay
+   ========================================================================== */
+
+/* Felt "table" surface — wraps the active phase in /rooms/[code]. */
+.table-panel {
+  position: relative;
+  background: radial-gradient(
+    ellipse at 50% 20%,
+    rgba(255, 255, 255, 0.82),
+    rgba(255, 255, 255, 0.40)
+  );
+  border: 2.5px solid var(--brand-border-heavy);
+  border-radius: 24px;
+  padding: 20px;
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.1);
+}
+/* Soft corner accents instead of a dashed perimeter — reads as a card table
+   without the visual noise of a full inner ring. */
+.table-panel::before,
+.table-panel::after {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid var(--brand-border);
+  border-radius: 6px;
+  pointer-events: none;
+  opacity: 0.5;
+}
+.table-panel::before {
+  top: 10px;
+  left: 10px;
+  border-right: none;
+  border-bottom: none;
+}
+.table-panel::after {
+  bottom: 10px;
+  right: 10px;
+  border-left: none;
+  border-top: none;
+}
+@media (max-width: 640px) {
+  .table-panel { padding: 14px; border-radius: 20px; }
+}
+
+/* Decorative suit watermark — absolute-positioned background glyph. */
+.bg-suit {
+  position: absolute;
+  right: -14px;
+  bottom: -18px;
+  font-size: 80px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--brand-text);
+  opacity: 0.06;
+  pointer-events: none;
+}
+
+/* Meta chip — small pill for greeting row and game footer chips. */
+.meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--brand-white);
+  border: 2.5px solid var(--brand-border-heavy);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--brand-text-mid);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1);
+}
+.meta-chip .glyph {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  color: var(--brand-accent);
+}
+
+/* Medal — top-3 badge used in activity rows and results podium. */
+.medal {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 2px solid var(--brand-border-heavy);
+  background: var(--brand-white);
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand-text);
+  flex-shrink: 0;
+}
+.medal.gold   { background: linear-gradient(140deg, #FDDCB5, #E8937F); }
+.medal.silver { background: linear-gradient(140deg, #ffffff, #d8d8d8); }
+.medal.bronze { background: linear-gradient(140deg, #E8BF9E, #C89478); }
+
+/* Round progress pills — 28×10 cap pills with done/active variants. */
+.round-pill {
+  display: inline-block;
+  width: 28px;
+  height: 10px;
+  border-radius: 999px;
+  border: 2.5px solid var(--brand-border-heavy);
+  background: var(--brand-white);
+}
+.round-pill.done   { background: var(--brand-accent-2); }
+.round-pill.active {
+  background: var(--brand-accent);
+  box-shadow: 0 0 0 3px rgba(232, 147, 127, 0.25);
+}
+
+/* Deck-art header band — decorative gradient slab above game tile titles.
+   Gradients lean on time-aware --brand-grad-* so the palette shifts with
+   the time-of-day theme. */
+.deck-art {
+  height: 96px;
+  border-radius: 14px;
+  border: 2.5px solid var(--brand-border-heavy);
+  display: grid;
+  place-items: center;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--brand-text-mid);
+  background: linear-gradient(140deg, var(--brand-grad-1), var(--brand-accent));
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.25);
+}
+.deck-art.a1 { background: linear-gradient(140deg, var(--brand-grad-1), var(--brand-accent)); }
+.deck-art.a2 { background: linear-gradient(140deg, var(--brand-grad-3), var(--brand-accent-3)); }
+.deck-art.a3 { background: linear-gradient(140deg, var(--brand-grad-4), var(--brand-accent-2)); }
+.deck-art.a4 { background: linear-gradient(140deg, var(--brand-grad-2), var(--brand-grad-1)); }
+.deck-art.a5 { background: linear-gradient(140deg, var(--brand-accent-2), var(--brand-grad-4)); }
+.deck-art.a6 { background: linear-gradient(140deg, var(--brand-accent-3), var(--brand-grad-3)); }
+
+/* ==========================================================================
+   Pre-round countdown overlay
+   --------------------------------------------------------------------------
+   Kept in global CSS (not scoped/inline) after Firefox refused to paint
+   the overlay reliably with inline-style + class combos. `!important` is
+   used defensively so no stray cascade can flatten it to default text.
+   ========================================================================== */
+.countdown-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 50 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  /* Radial scrim — darker at the edges, lighter near the centered numerals.
+     Blur is applied to the *content* behind (via `.content-blur` on the
+     game shell) rather than via `backdrop-filter` here; Firefox silently
+     drops backdrop-filter when an ancestor of the content has a transform,
+     and `.stage-wrap` always does. `filter: blur()` on the shell itself is
+     fully supported everywhere. */
+  background:
+    radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.82) 70%) !important;
+  pointer-events: none;
+}
+
+/* Game shell blur — paired with .countdown-overlay. Uses `filter` (not
+   `backdrop-filter`) so it works across all modern engines, including
+   Firefox. Transition fades cleanly in/out with the countdown mount. */
+.content-blur {
+  filter: blur(10px);
+  transition: filter 0.25s ease-out;
+  pointer-events: none;
+  user-select: none;
+}
+.countdown-number {
+  color: #FEFEFE !important;
+  font-size: clamp(6rem, 20vw, 12rem) !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 6px 0 rgba(0, 0, 0, 0.35);
+  animation: countdownBounce 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.countdown-number.no-bounce { animation: none; }
+@keyframes countdownBounce {
+  0%   { transform: scale(0.6); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .countdown-number { animation: none; }
+}
+
+/* ==========================================================================
+   Vote-card state chips (picked / voted)
+   --------------------------------------------------------------------------
+   `!important` is defensive — inline styles were occasionally failing to
+   apply the coral fill in Firefox when the chip sat inside a nested
+   `<button>` with a `preserve-3d` parent.
+   ========================================================================== */
+.chip-picked,
+.chip-voted {
+  background-color: #E8937F !important;
+  color: #1A1A1A !important;
+  border: 2px solid var(--brand-border-heavy);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.18);
+}
+.chip-voted {
+  border-width: 2.5px;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.22);
 }

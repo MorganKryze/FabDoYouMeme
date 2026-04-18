@@ -1,5 +1,6 @@
 <script lang="ts">
   import { room } from '$lib/state/room.svelte';
+  import { user } from '$lib/state/user.svelte';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { reveal } from '$lib/actions/reveal';
   import { hoverEffect } from '$lib/actions/hoverEffect';
@@ -65,6 +66,9 @@
 
   const winner = $derived<LeaderboardEntry | null>(room.leaderboard[0] ?? null);
   const rest = $derived(room.leaderboard.slice(3));
+
+  // New Game → game-choice for registered users; sign-in for guests.
+  const newGameHref = $derived(user.id !== null ? '/host' : '/auth/magic-link');
 
   // Portal: move the confetti layer to <body> so its `position: fixed`
   // attaches to the viewport. An ancestor with any non-`none` transform
@@ -226,7 +230,7 @@
        ═══════════════════════════════════════════════════════════════ -->
   <div class="flex flex-col items-center gap-3 w-full max-w-xs mx-auto relative z-[1]" use:reveal={{ delay: 4 }}>
     <a
-      href="/"
+      href={newGameHref}
       use:pressPhysics={'dark'}
       use:hoverEffect={'gradient'}
       class="w-full h-14 px-10 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold text-lg cursor-pointer inline-flex items-center justify-center gap-2"

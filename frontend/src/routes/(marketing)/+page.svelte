@@ -202,7 +202,7 @@
         </a>
       {:else}
         <a
-          href="/auth/magic-link"
+          href="#join"
           use:pressPhysics={'dark'}
           use:hoverEffect={'gradient'}
           class="btn btn-lg btn-dark"

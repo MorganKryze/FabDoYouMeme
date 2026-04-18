@@ -947,8 +947,10 @@ func (h *Hub) runRounds(ctx context.Context) {
 				// safety timeout: auto-advance
 			}
 		} else {
-			// Server-paced: brief inter-round pause to let clients display results.
-			if !h.waitPhase(ctx, 3*time.Second, nil) {
+			// Server-paced: inter-round pause to let clients read the results
+			// (podium + mini leaderboard). 3s was too brief for a scanning
+			// player; 10s gives time to process before the next round lands.
+			if !h.waitPhase(ctx, 10*time.Second, nil) {
 				return
 			}
 		}

@@ -16,11 +16,8 @@
   import {
     Play,
     Sparkles,
-    Trophy,
-    Gamepad2,
     Clock,
     Users,
-    PartyPopper,
     IdCard,
     XCircle,
   } from '$lib/icons';
@@ -89,6 +86,14 @@
   const winRate = $derived(
     gamesPlayed === 0 ? 0 : Math.round((wins / gamesPlayed) * 100)
   );
+  const bestRank = $derived.by<number | null>(() => {
+    if (history.length === 0) return null;
+    let best = Infinity;
+    for (const r of history) if (r.rank && r.rank < best) best = r.rank;
+    return best === Infinity ? null : best;
+  });
+  const earnedMedalCount = $derived(medals.filter((m) => m.earned).length);
+
   const favoriteGameType = $derived.by(() => {
     if (history.length === 0) return null;
     const counts = new Map<string, number>();
@@ -136,23 +141,46 @@
   <div class="w-full max-w-5xl flex flex-col gap-10">
 
     <!-- ─── Hero row: greeting (full-width) ──────────────────── -->
-    <section use:reveal class="flex flex-col justify-center gap-1" aria-live="polite">
-      <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
+    <section use:reveal class="flex flex-col justify-center gap-3" aria-live="polite">
+      <p class="text-sm font-bold uppercase tracking-[0.3em] text-brand-text-mid">
         Welcome back
       </p>
       {#if greetingH1Parts && greetingSub}
-        <h1 class="text-4xl font-bold" in:fade={{ duration: 150 }}>{greetingH1Parts.before}<span
-            class="text-brand-accent font-extrabold">{usernameStr}</span>{greetingH1Parts.after}</h1>
-        <p class="text-sm font-semibold text-brand-text-mid mt-1" in:fade={{ duration: 150 }}>
+        <h1
+          class="greeting-h1 font-extrabold leading-[0.98] tracking-tight m-0"
+          in:fade={{ duration: 150 }}
+        >{greetingH1Parts.before}<span
+            class="username-gradient">{usernameStr}</span>{greetingH1Parts.after}</h1>
+        <p
+          class="font-semibold text-brand-text-mid m-0"
+          style="font-size: clamp(1rem, 1.6vw, 1.25rem);"
+          in:fade={{ duration: 150 }}
+        >
           {greetingSub}
         </p>
+        {#if bestRank !== null || earnedMedalCount > 0}
+          <div class="flex flex-wrap gap-2 mt-1">
+            {#if bestRank !== null}
+              <span class="meta-chip">
+                <span class="glyph">★</span>
+                Best rank · {bestRank}
+              </span>
+            {/if}
+            {#if earnedMedalCount > 0}
+              <span class="meta-chip">
+                <span class="glyph">♠</span>
+                {earnedMedalCount} medal{earnedMedalCount !== 1 ? 's' : ''}
+              </span>
+            {/if}
+          </div>
+        {/if}
       {:else}
         <!-- SSR / pre-mount skeleton: blurred placeholder that reserves layout.
              aria-hidden so screen readers don't read the placeholder copy
              inside the aria-live region before the rotated greeting arrives. -->
         <!-- svelte-ignore a11y_hidden -->
-        <h1 aria-hidden="true" class="text-4xl font-bold blur-sm opacity-40 select-none">Hey there.</h1>
-        <p aria-hidden="true" class="text-sm font-semibold text-brand-text-mid mt-1 blur-sm opacity-40 select-none">
+        <h1 aria-hidden="true" class="greeting-h1 font-extrabold blur-sm opacity-40 select-none m-0">Hey there.</h1>
+        <p aria-hidden="true" class="font-semibold text-brand-text-mid m-0 blur-sm opacity-40 select-none" style="font-size: clamp(1rem, 1.6vw, 1.25rem);">
           Jump back into a room, or spin up a new one.
         </p>
       {/if}
@@ -171,33 +199,28 @@
           use:pressPhysics={'dark'}
           use:hoverEffect={'gradient'}
           use:physCard
-          class="group block rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white p-6 no-underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+          class="active-room group relative block rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white p-6 overflow-hidden no-underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
           style="box-shadow: 0 5px 0 rgba(0,0,0,0.2);"
         >
-          <div class="flex items-center justify-between gap-4">
+          <div class="relative flex items-center justify-between gap-4">
             <div class="flex flex-col gap-1 min-w-0">
               <span class="text-xs font-bold uppercase tracking-[0.2em] opacity-70">
                 {data.activeRoom.is_host ? 'Your room' : "You're in"} · {data.activeRoom.state === 'playing' ? 'In progress' : 'Lobby'}
               </span>
               <div class="text-xl font-bold leading-tight">
-                Return to your room
+                Return to <span class="wavy font-mono tracking-widest">{data.activeRoom.code}</span>
               </div>
               <div class="text-xs font-bold uppercase tracking-[0.2em] opacity-70 truncate">
                 {prettyGameSlug(data.activeRoom.game_type_slug)}
               </div>
             </div>
             <div class="flex items-center gap-3 shrink-0">
-              <span
-                class="font-mono font-bold tracking-widest text-sm inline-flex items-center justify-center rounded-full bg-brand-white text-brand-text border-[2.5px] border-brand-border-heavy px-3 h-10"
-              >
-                {data.activeRoom.code}
-              </span>
               <span class="inline-flex items-center justify-center h-12 w-12 rounded-full bg-brand-white text-brand-text border-[2.5px] border-brand-border-heavy transition-transform group-hover:translate-x-0.5">
                 <Play size={18} strokeWidth={2.5} />
               </span>
             </div>
           </div>
-          <p class="text-xs font-semibold opacity-70 mt-3">
+          <p class="relative text-xs font-semibold opacity-70 mt-3">
             You can only be in one room at a time. Leave or finish this one to create or join another.
           </p>
         </a>
@@ -272,50 +295,54 @@
     <section class="grid grid-cols-2 sm:grid-cols-4 gap-4">
       <div
         use:reveal={{ delay: 2 }}
-        class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-1"
+        class="relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-1 overflow-hidden"
         style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
       >
-        <div class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
-          <Gamepad2 size={12} strokeWidth={2.5} />
+        <span class="bg-suit" aria-hidden="true">♠</span>
+        <div class="relative flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
+          <span class="font-mono" style="color: var(--brand-text);">♠</span>
           Played
         </div>
-        <div class="text-3xl font-bold leading-none mt-1 tabular-nums">{gamesPlayed}</div>
+        <div class="relative text-4xl font-bold leading-none mt-1 tabular-nums">{gamesPlayed}</div>
       </div>
 
       <div
         use:reveal={{ delay: 3 }}
-        class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-1"
+        class="relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-1 overflow-hidden"
         style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
       >
-        <div class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
-          <Trophy size={12} strokeWidth={2.5} />
+        <span class="bg-suit" aria-hidden="true">♥</span>
+        <div class="relative flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
+          <span class="font-mono" style="color: var(--brand-accent);">♥</span>
           Wins
         </div>
-        <div class="text-3xl font-bold leading-none mt-1 tabular-nums">{wins}</div>
+        <div class="relative text-4xl font-bold leading-none mt-1 tabular-nums">{wins}</div>
       </div>
 
       <div
         use:reveal={{ delay: 4 }}
-        class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-1"
+        class="relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-1 overflow-hidden"
         style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
       >
-        <div class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
-          <PartyPopper size={12} strokeWidth={2.5} />
+        <span class="bg-suit" aria-hidden="true">♦</span>
+        <div class="relative flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
+          <span class="font-mono" style="color: var(--brand-accent);">♦</span>
           Win rate
         </div>
-        <div class="text-3xl font-bold leading-none mt-1 tabular-nums">{winRate}%</div>
+        <div class="relative text-4xl font-bold leading-none mt-1 tabular-nums">{winRate}%</div>
       </div>
 
       <div
         use:reveal={{ delay: 5 }}
-        class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-1"
+        class="relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-1 overflow-hidden"
         style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
       >
-        <div class="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
-          <Sparkles size={12} strokeWidth={2.5} />
+        <span class="bg-suit" aria-hidden="true">♣</span>
+        <div class="relative flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
+          <span class="font-mono" style="color: var(--brand-text);">♣</span>
           Favourite
         </div>
-        <div class="text-lg font-bold leading-tight mt-1 line-clamp-1">
+        <div class="relative text-lg font-bold leading-tight mt-1 line-clamp-1">
           {favoriteGameType ? prettyGameSlug(favoriteGameType) : '—'}
         </div>
       </div>
@@ -361,7 +388,7 @@
           </div>
         {:else}
           <ul class="flex flex-col gap-2">
-            {#each history as room}
+            {#each history.slice(0, 5) as room}
               <li
                 class="flex items-center justify-between gap-3 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 py-2.5 text-sm"
                 style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
@@ -373,7 +400,16 @@
                     {room.code}
                   </span>
                   <div class="flex flex-col min-w-0">
-                    <span class="font-bold truncate">{prettyGameSlug(room.game_type_slug)}</span>
+                    <span class="inline-flex items-center gap-2 font-bold truncate">
+                      {#if room.rank === 1}
+                        <span class="medal gold" aria-label="First place">1</span>
+                      {:else if room.rank === 2}
+                        <span class="medal silver" aria-label="Second place">2</span>
+                      {:else if room.rank === 3}
+                        <span class="medal bronze" aria-label="Third place">3</span>
+                      {/if}
+                      <span class="truncate">{prettyGameSlug(room.game_type_slug)}</span>
+                    </span>
                     <span class="text-xs font-semibold text-brand-text-mid truncate">
                       {room.pack_name} · {formatRelative(room.started_at)}
                     </span>
@@ -446,23 +482,37 @@
 
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {#each data.gameTypes as gt, i}
+            {@const variant = `a${(i % 6) + 1}`}
+            {@const minP = gt.config?.min_players}
+            {@const maxP = gt.config?.max_players}
             <a
               href={`/host?game_type=${gt.slug}`}
               use:reveal={{ delay: i + 3 }}
               use:physCard
               use:hoverEffect={'gradient'}
-              class="group rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-6 flex flex-col gap-3 cursor-pointer no-underline text-brand-text focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+              class="group rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-3 cursor-pointer no-underline text-brand-text focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
               style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
             >
-              <h3 class="inline-flex items-center gap-2 text-lg font-bold m-0">
-                <Sparkles size={18} strokeWidth={2.5} />
+              <div class="deck-art {variant}" aria-hidden="true">
+                Game card
+              </div>
+              <h3 class="text-lg font-bold m-0 leading-tight">
                 {gt.name}
               </h3>
               {#if gt.description}
-                <p class="text-sm font-semibold text-brand-text-mid line-clamp-3">{gt.description}</p>
+                <p class="text-sm font-semibold text-brand-text-mid line-clamp-3 m-0">{gt.description}</p>
               {/if}
-              <div class="mt-auto text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid inline-flex items-center gap-1 transition-transform group-hover:translate-x-0.5">
-                Host this →
+              <div class="mt-auto flex items-center justify-between gap-2">
+                {#if minP != null}
+                  <span class="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-text-mid inline-flex items-center gap-1 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-2.5 py-0.5">
+                    {minP}{maxP != null ? `–${maxP}` : '+'} players
+                  </span>
+                {:else}
+                  <span></span>
+                {/if}
+                <span class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid inline-flex items-center gap-1 transition-transform group-hover:translate-x-0.5">
+                  Host this →
+                </span>
               </div>
             </a>
           {/each}
@@ -515,3 +565,50 @@
     </button>
   {/if}
 {/if}
+
+<style>
+  /* Dashboard greeting — bold, hero-scale, but not landing-page hero.
+     clamp() keeps it proportionate: 3rem on tiny screens, up to 6rem on
+     wide desktops. Line-height tuned tight so the two-line fallback
+     ("Oh good, admin is here.") still reads as a single beat. */
+  .greeting-h1 {
+    font-size: clamp(2.5rem, 5.5vw, 4.25rem);
+    letter-spacing: -0.02em;
+  }
+
+  .username-gradient {
+    background: linear-gradient(
+      95deg,
+      var(--brand-accent),
+      var(--brand-accent-3) 60%,
+      var(--brand-accent-2)
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .wavy {
+    text-decoration: underline;
+    text-decoration-style: wavy;
+    text-decoration-color: var(--brand-accent);
+    text-underline-offset: 6px;
+    text-decoration-thickness: 2px;
+  }
+
+  /* Decorative suit watermark on the active-room banner. */
+  .active-room::after {
+    content: "♠ ♥ ♦ ♣";
+    position: absolute;
+    right: -10px;
+    bottom: -26px;
+    font-size: 120px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--brand-white);
+    opacity: 0.06;
+    pointer-events: none;
+    transform: rotate(-6deg);
+    white-space: nowrap;
+  }
+</style>

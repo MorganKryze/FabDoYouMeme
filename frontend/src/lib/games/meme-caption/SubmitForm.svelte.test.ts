@@ -39,7 +39,7 @@ describe('SubmitForm.svelte', () => {
       props: { round: makeRound() }
     });
 
-    const textarea = getByPlaceholderText(/write your caption/i);
+    const textarea = getByPlaceholderText(/type the funniest/i);
     await fireEvent.input(textarea, { target: { value: 'funny' } });
     flushSync();
 
