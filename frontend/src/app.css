@@ -389,11 +389,11 @@ body {
 .medal.silver { background: linear-gradient(140deg, #ffffff, #d8d8d8); }
 .medal.bronze { background: linear-gradient(140deg, #E8BF9E, #C89478); }
 
-/* Round progress pills — 28×10 cap pills with done/active variants. */
+/* Round progress pills — 44×16 cap pills with done/active variants. */
 .round-pill {
   display: inline-block;
-  width: 28px;
-  height: 10px;
+  width: 44px;
+  height: 16px;
   border-radius: 999px;
   border: 2.5px solid var(--brand-border-heavy);
   background: var(--brand-white);
@@ -401,7 +401,7 @@ body {
 .round-pill.done   { background: var(--brand-accent-2); }
 .round-pill.active {
   background: var(--brand-accent);
-  box-shadow: 0 0 0 3px rgba(232, 147, 127, 0.25);
+  box-shadow: 0 0 0 4px rgba(232, 147, 127, 0.28);
 }
 
 /* Deck-art header band — decorative gradient slab above game tile titles.

@@ -65,6 +65,10 @@ export interface RoomConfig {
   round_count: number;
   /** When true, the host manually advances rounds via "Next Round". Default false (server auto-advances after 3s). */
   host_paced?: boolean;
+  /** Per-player jokers available to skip their own submit turn (platform-level). Defaults to ceil(round_count/5). */
+  joker_count: number;
+  /** When true, players may abstain from voting in a round. Defaults to true. */
+  allow_skip_vote: boolean;
 }
 
 export interface Invite {
@@ -120,6 +124,8 @@ export type WsMessageType =
   | 'player_left'
   | 'player_kicked'
   | 'player_submitted'
+  | 'player_skipped_submit'
+  | 'player_skipped_vote'
   | 'reconnecting'
   | 'game_started'
   | 'round_started'

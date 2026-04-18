@@ -40,9 +40,9 @@ func TestE2E_ServerPaced_AutoAdvances(t *testing.T) {
 	// No submissions → voting skipped; vote_results arrives immediately.
 	readUntilType(t, hostConn, "vote_results")
 
-	// In server-paced mode, advancing 3+ seconds causes the auto-advance.
-	// Single round → game_ended.
-	fake.Advance(4 * time.Second)
+	// In server-paced mode, the inter-round pause is 10s — advance past it
+	// so the auto-advance fires. Single round → game_ended.
+	fake.Advance(11 * time.Second)
 	m := readUntilType(t, hostConn, "game_ended")
 	data, _ := m["data"].(map[string]any)
 	if reason, _ := data["reason"].(string); reason != "game_complete" {

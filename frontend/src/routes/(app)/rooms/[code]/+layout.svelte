@@ -2,6 +2,8 @@
   import { onMount, onDestroy } from 'svelte';
   import { ws } from '$lib/state/ws.svelte';
   import { room } from '$lib/state/room.svelte';
+  import { user } from '$lib/state/user.svelte';
+  import { guest } from '$lib/state/guest.svelte';
   import type { WsMessage } from '$lib/api/types';
   import type { LayoutData } from './$types';
 
@@ -10,7 +12,11 @@
   let unsubscribe: (() => void) | null = null;
 
   onMount(() => {
-    room.init(data.room);
+    // Player identity: logged-in users expose `user.id`; guests resolve via
+    // the per-tab sessionStorage record keyed by room code. room.svelte.ts
+    // uses this to match WS broadcasts against "is this me?".
+    const ownUserId = user.id ?? guest.playerId(data.room.code);
+    room.init({ ...data.room, own_user_id: ownUserId });
     ws.connect(data.room.code);
     unsubscribe = ws.onMessage('*', (msg) => room.handleMessage(msg as WsMessage));
   });

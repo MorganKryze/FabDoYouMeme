@@ -40,9 +40,9 @@ Requires session.
 
 | Method  | Path                           | Description                                               |
 | ------- | ------------------------------ | --------------------------------------------------------- |
-| `POST`  | `/api/rooms`                   | Create a room with game type, pack, mode, and config      |
+| `POST`  | `/api/rooms`                   | Create a room with game type, pack, mode, and config. Config accepts `round_count`, `round_duration_seconds`, `voting_duration_seconds`, `host_paced`, `joker_count` (default `ceil(round_count/5)`, `0` disables), and `allow_skip_vote` (default `true`) |
 | `GET`   | `/api/rooms/:code`             | Get room info — state, players, config, game type         |
-| `PATCH` | `/api/rooms/:code/config`      | Update room config (host only, lobby state only)          |
+| `PATCH` | `/api/rooms/:code/config`      | Update room config (host only, lobby state only). Accepts a **partial patch** — send only the fields you changed. `joker_count` must satisfy `0 ≤ joker_count ≤ round_count`; violations return `422 invalid_config` |
 | `POST`  | `/api/rooms/:code/leave`       | Leave the room (lobby only; host leaving closes the room) |
 | `POST`  | `/api/rooms/:code/kick`        | Kick a player by `user_id` (host only, lobby or playing)  |
 | `POST`  | `/api/rooms/:code/end`         | End the room (host or admin): lobby→hard-delete, playing→persist as finished |
@@ -187,6 +187,8 @@ All messages are JSON with a `type` field and an optional `data` object.
 | `ping`          | Keepalive heartbeat                                      |
 | `{slug}:submit` | Player submits their answer (game-type-specific payload) |
 | `{slug}:vote`   | Player casts a vote (game-type-specific payload)         |
+| `skip_submit`   | Player spends a joker to skip the submit phase (platform-level; valid only during submit phase) |
+| `skip_vote`     | Player abstains from voting (platform-level; valid only during voting phase)                    |
 
 **Server → client:**
 
@@ -199,8 +201,11 @@ All messages are JSON with a `type` field and an optional `data` object.
 | `reconnecting`       | A player entered the grace window                                      |
 | `game_started`       | Host started the game                                                  |
 | `round_started`      | New round begins — includes timer info (`duration_seconds`, `ends_at`) |
+| `player_submitted`   | A player submitted (anonymous — only `user_id`/`player_id`)            |
+| `player_skipped_submit` | A player spent a joker — includes `jokers_remaining` for the sender |
 | `submissions_closed` | Submission phase ended, voting opens                                   |
-| `vote_results`       | Scores for the completed round                                         |
+| `player_skipped_vote` | A player abstained from voting                                        |
+| `vote_results`       | Scores for the completed round; server-paced mode also includes `next_round_at` and `results_duration_seconds` |
 | `game_ended`         | Final leaderboard with `reason` field                                  |
 | `room_closed`        | Host or admin terminated the room — clients must disconnect            |
 | `room_state`         | Full snapshot sent on reconnect                                        |

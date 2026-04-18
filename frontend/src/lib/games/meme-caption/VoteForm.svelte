@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { page } from '$app/stores';
   import { ws } from '$lib/state/ws.svelte';
   import { room } from '$lib/state/room.svelte';
   import { physCard } from '$lib/actions/physCard';
@@ -13,6 +14,22 @@
 
   let selectedId = $state<string | null>(null);
   let voted = $state(false);
+
+  const allowSkipVote = $derived(
+    ($page.data as any)?.room?.config?.allow_skip_vote ?? true
+  );
+
+  // When the only submission in the pool is the player's own (e.g. 2-player
+  // room where the other player used a joker), the player has no real vote
+  // to cast — skip would be a vote-against-no-one, so we hide it.
+  const hasVoteable = $derived(
+    submissions.some((s) => s.id !== room.ownSubmissionId)
+  );
+
+  function abstain() {
+    if (voted || room.ownSkippedVote) return;
+    ws.send('skip_vote');
+  }
 
   const promptText = $derived(
     round ? (round.item?.payload as { prompt?: string } | undefined)?.prompt ?? null : null
@@ -48,18 +65,13 @@
     >
       {#if round?.item?.media_url}
         <div
-          class="relative w-full rounded-[14px] overflow-hidden border-[2.5px] border-brand-border-heavy bg-brand-surface flex items-center justify-center"
+          class="relative w-full rounded-[14px] overflow-hidden border-[2.5px] border-brand-border-heavy bg-brand-surface"
           style="box-shadow: inset 0 2px 0 rgba(0,0,0,0.04);"
         >
-          <span
-            class="absolute top-[-6px] left-1/2 w-[90px] h-[18px] rounded-[4px] border-[2px] z-10"
-            style="transform: translateX(-50%) rotate(-2deg); background: rgba(255,255,255,0.6); border-color: var(--brand-border);"
-            aria-hidden="true"
-          ></span>
           <img
             src={mediaSrc(round.item.media_url, room.code)}
             alt="Round prompt"
-            class="block w-full max-h-52 object-contain"
+            class="block w-full h-auto max-h-[55vh] object-cover"
           />
         </div>
       {/if}
@@ -186,18 +198,35 @@
     {/each}
   </div>
 
-  {#if !voted}
-    <button
-      use:pressPhysics={'dark'}
-      use:hoverEffect={'bounce'}
-      type="button"
-      onclick={vote}
-      disabled={!selectedId}
-      class="h-12 mx-auto px-8 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-50 cursor-pointer inline-flex items-center justify-center gap-2"
-    >
-      <Heart size={18} strokeWidth={2.5} />
-      Lock in my vote
-    </button>
+  {#if room.ownSkippedVote}
+    <p class="text-center text-sm font-bold text-brand-text-mid m-0">
+      Skipped — waiting for the count…
+    </p>
+  {:else if !voted}
+    <div class="flex flex-row items-center justify-center gap-3">
+      <button
+        use:pressPhysics={'dark'}
+        use:hoverEffect={'bounce'}
+        type="button"
+        onclick={vote}
+        disabled={!selectedId}
+        class="h-12 px-8 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-50 cursor-pointer inline-flex items-center justify-center gap-2"
+      >
+        <Heart size={18} strokeWidth={2.5} />
+        Lock in my vote
+      </button>
+      {#if allowSkipVote && hasVoteable}
+        <button
+          use:pressPhysics={'ghost'}
+          use:hoverEffect={'bounce'}
+          type="button"
+          onclick={abstain}
+          class="h-12 px-6 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-surface text-brand-text-mid text-xs font-bold cursor-pointer inline-flex items-center justify-center"
+        >
+          Skip
+        </button>
+      {/if}
+    </div>
   {:else}
     <p class="text-center text-sm font-bold text-brand-text-mid m-0">
       Voted — waiting for the count…

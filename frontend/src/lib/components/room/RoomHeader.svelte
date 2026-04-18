@@ -10,14 +10,17 @@
     room.state === 'playing' && user.id !== null && room.hostUserId === user.id
   );
 
-  // Phase-aware deadline. Returns 0 during results/idle so the pill renders
-  // without a countdown.
+  // Phase-aware deadline. Falls back to 0 when no timer applies — during
+  // results the deadline is only present in server-paced mode; host-paced
+  // mode has no deadline (the host advances manually).
   const deadline = $derived(
     room.phase === 'submitting'
       ? (room.currentRound?.ends_at ? Date.parse(room.currentRound.ends_at) : 0)
       : room.phase === 'voting'
         ? (room.votingEndsAt ? Date.parse(room.votingEndsAt) : 0)
-        : 0
+        : room.phase === 'results'
+          ? (room.resultsEndsAt ? Date.parse(room.resultsEndsAt) : 0)
+          : 0
   );
 
   let timerMs = $state(untrack(() => Math.max(0, deadline - Date.now())));
@@ -39,7 +42,8 @@
   const mm = $derived(Math.floor(secondsLeft / 60).toString().padStart(2, '0'));
   const ss = $derived((secondsLeft % 60).toString().padStart(2, '0'));
   const showCountdown = $derived(
-    (room.phase === 'submitting' || room.phase === 'voting') && deadline > 0
+    (room.phase === 'submitting' || room.phase === 'voting' || room.phase === 'results') &&
+      deadline > 0
   );
   const isWarn = $derived(showCountdown && !room.roundPaused && secondsLeft <= 10);
   const isLarge = $derived(room.phase === 'submitting');
@@ -55,6 +59,12 @@
         : room.phase === 'results'
           ? 'Results'
           : ''
+  );
+  // During results with a live deadline, prefix the countdown so players see
+  // "Next round 00:08" instead of a bare 00:08 that could be mistaken for the
+  // current phase's remaining time.
+  const countdownPrefix = $derived(
+    room.phase === 'results' && deadline > 0 ? 'Next round' : ''
   );
 </script>
 
@@ -91,8 +101,8 @@
 
   <!-- CENTER: round progress -->
   {#if roundNumber !== null}
-    <div class="flex items-center gap-2.5">
-      <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-text-mid">
+    <div class="flex items-center gap-3.5">
+      <span class="text-[13px] font-bold uppercase tracking-[0.22em] text-brand-text">
         {#if totalRounds}
           Round {roundNumber} of {totalRounds}
         {:else}
@@ -100,7 +110,7 @@
         {/if}
       </span>
       {#if showRoundPills}
-        <div class="inline-flex gap-1" aria-hidden="true">
+        <div class="inline-flex gap-1.5" aria-hidden="true">
           {#each Array(totalRounds) as _, i}
             {@const n = i + 1}
             <span
@@ -134,6 +144,9 @@
     {#if room.roundPaused}
       <span class="text-lg font-bold uppercase tracking-[0.2em] tabular-nums">Paused</span>
     {:else if showCountdown}
+      {#if countdownPrefix}
+        <span class="text-[11px] font-bold uppercase tracking-[0.2em] opacity-80">{countdownPrefix}</span>
+      {/if}
       <span class="font-bold tabular-nums leading-none {isLarge ? 'text-4xl' : 'text-2xl'}">
         {mm}:{ss}
       </span>

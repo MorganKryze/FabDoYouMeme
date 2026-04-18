@@ -23,7 +23,8 @@
         connected: true,
         isHost: false,
         hasSubmitted: false,
-        hasVoted: false,
+        hasSkippedSubmit: false,
+        hasSkippedVote: false,
       }));
     }
     return [...room.players]
@@ -40,7 +41,8 @@
         connected: p.connected ?? true,
         isHost: p.is_host ?? false,
         hasSubmitted: room.submittedPlayerIds.has(p.user_id),
-        hasVoted: false, // per-player vote state not tracked
+        hasSkippedSubmit: room.skippedSubmitIds.has(p.user_id),
+        hasSkippedVote: room.skippedVoteIds.has(p.user_id),
       }));
   });
 
@@ -50,7 +52,7 @@
     if (room.phase === 'submitting') {
       return {
         label: 'Submitted',
-        done: room.submittedPlayerIds.size,
+        done: room.submittedPlayerIds.size + room.skippedSubmitIds.size,
         total,
       };
     }
@@ -121,12 +123,26 @@
               <span class="text-[9px] font-bold uppercase tracking-[0.15em] opacity-70">
                 Rank {row.rank}
               </span>
+            {:else if row.hasSkippedSubmit}
+              <span
+                class="text-[9px] font-bold uppercase tracking-[0.15em]"
+                style="color: {isSelf ? '#1A1A1A' : 'var(--brand-accent-3)'}; opacity: {isSelf ? 0.75 : 1};"
+              >
+                ♠ Joker
+              </span>
             {:else if row.hasSubmitted}
               <span
                 class="text-[9px] font-bold uppercase tracking-[0.15em]"
                 style="color: {isSelf ? '#1A1A1A' : 'var(--brand-accent-2)'}; opacity: {isSelf ? 0.75 : 1};"
               >
                 ✓ Submitted
+              </span>
+            {:else if row.hasSkippedVote && room.phase === 'voting'}
+              <span
+                class="text-[9px] font-bold uppercase tracking-[0.15em]"
+                style="color: {isSelf ? '#1A1A1A' : 'var(--brand-accent-3)'}; opacity: {isSelf ? 0.75 : 1};"
+              >
+                ✗ Skipped
               </span>
             {:else if row.isHost}
               <span class="text-[9px] font-bold uppercase tracking-[0.15em] opacity-70">

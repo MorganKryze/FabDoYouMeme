@@ -19,6 +19,9 @@ export class RoomState {
   hostUserId = $state<string | null>(null);
   votingEndsAt = $state<string | null>(null);
   votingDurationSeconds = $state<number | null>(null);
+  // Results phase auto-advance deadline (server-paced only; null in host-paced
+  // mode, where the host clicks "Next Round" instead of a timer expiring).
+  resultsEndsAt = $state<string | null>(null);
   ownSubmissionId = $state<string | null>(null);
   roundPaused = $state(false);
   roundPausedSince = $state<number | null>(null); // timestamp (ms) when pause started
@@ -29,6 +32,21 @@ export class RoomState {
   // Cleared on round_started; populated by player_submitted broadcasts so the
   // player panel can show per-player progress during the submission phase.
   submittedPlayerIds = $state<Set<string>>(new Set());
+
+  // Skip-turn (joker) state — jokersRemaining drops as the current player
+  // consumes jokers; own* flip to true for the current player's own action
+  // and are consumed by the SubmitForm / VoteForm to render the locked state.
+  // skippedSubmitIds / skippedVoteIds are used by the player rail to flip
+  // other players' "done" chip identically to submittedPlayerIds.
+  jokersRemaining = $state<number | null>(null);
+  ownSkippedSubmit = $state(false);
+  ownSkippedVote = $state(false);
+  skippedSubmitIds = $state<Set<string>>(new Set());
+  skippedVoteIds = $state<Set<string>>(new Set());
+  // The client's own user_id, populated from the room_state snapshot so the
+  // WS handlers can check broadcasts against "is this me?" without reaching
+  // into a separate session/page store.
+  ownUserId = $state<string | null>(null);
 
   // Pre-round countdown shown as a full-screen overlay. Driven imperatively
   // from the 'game_started' handler rather than observed via a reactive
@@ -44,11 +62,13 @@ export class RoomState {
     state: string;
     players?: Player[];
     host_id?: string | null;
+    own_user_id?: string | null;
   }): void {
     this.code = data.code;
     this.gameType = data.game_type ?? null;
     this.state = data.state as RoomStatus;
     this.hostUserId = data.host_id ?? null;
+    this.ownUserId = data.own_user_id ?? null;
     this.players = (data.players ?? []).map(p => ({
       ...p,
       is_host: p.user_id === this.hostUserId
@@ -59,9 +79,27 @@ export class RoomState {
     switch (msg.type) {
       case 'player_joined': {
         const d = msg.data as Player;
-        if (!this.players.find(p => p.user_id === d.user_id)) {
-          this.players = [...this.players, { ...d, is_host: d.user_id === this.hostUserId }];
+        const existing = this.players.find(p => p.user_id === d.user_id);
+        if (existing) {
+          // Reconnect: the server re-sends player_joined when a player returns
+          // within the grace window. Flip their connected flag so the rail pill
+          // returns to "Online" without waiting for the next full snapshot.
+          this.players = this.players.map(p =>
+            p.user_id === d.user_id ? { ...p, connected: true } : p
+          );
+        } else {
+          this.players = [
+            ...this.players,
+            { ...d, connected: d.connected ?? true, is_host: d.user_id === this.hostUserId },
+          ];
         }
+        break;
+      }
+      case 'reconnecting': {
+        const d = msg.data as Player;
+        this.players = this.players.map(p =>
+          p.user_id === d.user_id ? { ...p, connected: false } : p
+        );
         break;
       }
       case 'player_left':
@@ -84,9 +122,14 @@ export class RoomState {
         this.submittedPlayerIds = new Set();
         this.votingEndsAt = null;
         this.votingDurationSeconds = null;
+        this.resultsEndsAt = null;
         this.ownSubmissionId = null;
         this.roundPaused = false;
         this.roundPausedSince = null;
+        this.ownSkippedSubmit = false;
+        this.ownSkippedVote = false;
+        this.skippedSubmitIds = new Set();
+        this.skippedVoteIds = new Set();
         break;
       case 'submission_accepted': {
         const d = msg.data as { submission_id?: string } | null;
@@ -101,6 +144,35 @@ export class RoomState {
           // Reassign so Svelte picks up the mutation — $state(Set) tracks
           // identity, not internal set members.
           this.submittedPlayerIds = new Set([...this.submittedPlayerIds, id]);
+        }
+        break;
+      }
+      case 'player_skipped_submit': {
+        const d = msg.data as {
+          user_id?: string;
+          player_id?: string;
+          jokers_remaining?: number;
+        };
+        const id = d.player_id ?? d.user_id;
+        if (id) {
+          this.skippedSubmitIds = new Set([...this.skippedSubmitIds, id]);
+        }
+        if (id && this.ownUserId && id === this.ownUserId) {
+          this.ownSkippedSubmit = true;
+          if (typeof d.jokers_remaining === 'number') {
+            this.jokersRemaining = d.jokers_remaining;
+          }
+        }
+        break;
+      }
+      case 'player_skipped_vote': {
+        const d = msg.data as { user_id?: string; player_id?: string };
+        const id = d.player_id ?? d.user_id;
+        if (id) {
+          this.skippedVoteIds = new Set([...this.skippedVoteIds, id]);
+        }
+        if (id && this.ownUserId && id === this.ownUserId) {
+          this.ownSkippedVote = true;
         }
         break;
       }
@@ -120,9 +192,11 @@ export class RoomState {
         const d = msg.data as {
           results?: { submissions?: Submission[] };
           leaderboard?: LeaderboardEntry[];
+          next_round_at?: string;
         };
         this.submissions = d.results?.submissions ?? [];
         this.leaderboard = d.leaderboard ?? [];
+        this.resultsEndsAt = d.next_round_at ?? null;
         this.phase = 'results';
         break;
       }
@@ -168,9 +242,17 @@ export class RoomState {
           submissions_shown?: { submissions?: Submission[] };
           voting_ends_at?: string;
           voting_duration_seconds?: number;
+          results_ends_at?: string;
           results?: { submissions?: Submission[] };
           leaderboard?: LeaderboardEntry[];
           own_submission_id?: string;
+          my_jokers_remaining?: number;
+          skipped_submit?: boolean;
+          skipped_vote?: boolean;
+          own_user_id?: string;
+          submitted_player_ids?: string[];
+          skipped_submit_ids?: string[];
+          skipped_vote_ids?: string[];
         };
         this.state = d.state;
         if (d.host_id) this.hostUserId = d.host_id;
@@ -200,10 +282,28 @@ export class RoomState {
           if (d.phase === 'results') {
             this.submissions = d.results?.submissions ?? this.submissions;
             this.leaderboard = d.leaderboard ?? [];
+            this.resultsEndsAt = d.results_ends_at ?? null;
           }
           if (d.own_submission_id) {
             this.ownSubmissionId = d.own_submission_id;
             this.hasSubmitted = true;
+          }
+          if (typeof d.my_jokers_remaining === 'number') {
+            this.jokersRemaining = d.my_jokers_remaining;
+          }
+          if (d.skipped_submit) this.ownSkippedSubmit = true;
+          if (d.skipped_vote) this.ownSkippedVote = true;
+          // Seed the per-player progress sets so the rail renders every peer's
+          // chip after a refresh or late join, not just our own. Reassign the
+          // $state Set so Svelte picks up the change.
+          if (d.submitted_player_ids) {
+            this.submittedPlayerIds = new Set(d.submitted_player_ids);
+          }
+          if (d.skipped_submit_ids) {
+            this.skippedSubmitIds = new Set(d.skipped_submit_ids);
+          }
+          if (d.skipped_vote_ids) {
+            this.skippedVoteIds = new Set(d.skipped_vote_ids);
           }
         }
         break;
@@ -272,12 +372,19 @@ export class RoomState {
     this.hostUserId = null;
     this.votingEndsAt = null;
     this.votingDurationSeconds = null;
+    this.resultsEndsAt = null;
     this.ownSubmissionId = null;
     this.roundPaused = false;
     this.roundPausedSince = null;
     this.hasSubmitted = false;
     this.hasVoted = false;
     this.submittedPlayerIds = new Set();
+    this.jokersRemaining = null;
+    this.ownSkippedSubmit = false;
+    this.ownSkippedVote = false;
+    this.skippedSubmitIds = new Set();
+    this.skippedVoteIds = new Set();
+    this.ownUserId = null;
     if (this.#countdownInterval) {
       clearInterval(this.#countdownInterval);
       this.#countdownInterval = null;

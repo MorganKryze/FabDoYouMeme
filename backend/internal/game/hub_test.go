@@ -60,6 +60,15 @@ type hubEnvOpts struct {
 	skipPreCreate bool
 }
 
+// defaultJokerCount mirrors the ValidateAndFill ceil(round_count/5) default so
+// skip-feature tests can rely on the harness emitting a realistic, non-zero
+// joker budget without explicitly opting in. Kept here (not in hub_skip_test.go)
+// because newHubEnvWith writes the config row directly and would otherwise
+// serialize zero values for the two new RoomConfig fields.
+func defaultJokerCount(roundCount int) int {
+	return (roundCount + 4) / 5
+}
+
 // newHubEnv is the default, happy-path test environment (60s rounds, 30s
 // voting, 300ms grace). Most hub tests don't care about timings and use this
 // directly so they stay insulated from churn in the options struct.
@@ -81,6 +90,11 @@ func newHubEnvWith(t *testing.T, opts hubEnvOpts) *hubEnv {
 	if len(slug) > 20 {
 		slug = slug[:20]
 	}
+	// Add a nanosecond suffix so two tests whose slugified names share the
+	// first 20 characters (e.g. TestHub_SkipSubmit_Exhausted_Rejected vs
+	// TestHub_SkipSubmit_EarlyClose…) don't collide on the unique
+	// `users.username` constraint when the package runs them back-to-back.
+	slug = fmt.Sprintf("%s%d", slug, time.Now().UnixNano()%100000)
 
 	if opts.roundDurationSeconds == 0 {
 		opts.roundDurationSeconds = 60
@@ -153,8 +167,9 @@ func newHubEnvWith(t *testing.T, opts hubEnvOpts) *hubEnv {
 
 	code := hubCode()
 	roomConfig := fmt.Sprintf(
-		`{"round_count":%d,"round_duration_seconds":%d,"voting_duration_seconds":%d,"host_paced":%t}`,
+		`{"round_count":%d,"round_duration_seconds":%d,"voting_duration_seconds":%d,"host_paced":%t,"joker_count":%d,"allow_skip_vote":true}`,
 		opts.roundCount, opts.roundDurationSeconds, opts.votingDurationSeconds, opts.hostPaced,
+		defaultJokerCount(opts.roundCount),
 	)
 	room, err := q.CreateRoom(ctx, db.CreateRoomParams{
 		Code:       code,
@@ -678,8 +693,8 @@ func TestE2E_ZeroSubmissions_SkipsVotingPhase(t *testing.T) {
 		}
 	}
 
-	// Advance past the 3-second inter-round delay; game ends (1 round configured).
-	fake.Advance(4 * time.Second)
+	// Advance past the 10-second inter-round delay; game ends (1 round configured).
+	fake.Advance(11 * time.Second)
 	readUntilType(t, hostConn, "game_ended")
 }
 

@@ -130,6 +130,8 @@
   let settingsSubmitDuration = $state(0);
   let settingsVoteDuration = $state(0);
   let settingsHostPaced = $state(false);
+  let settingsJokerCount = $state(0);
+  let settingsAllowSkipVote = $state(true);
   let settingsSaving = $state(false);
 
   $effect(() => {
@@ -137,6 +139,8 @@
     settingsSubmitDuration = submitDuration;
     settingsVoteDuration = voteDuration;
     settingsHostPaced = pageRoom?.config.host_paced ?? false;
+    settingsJokerCount = pageRoom?.config.joker_count ?? Math.ceil(roundCount / 5);
+    settingsAllowSkipVote = pageRoom?.config.allow_skip_vote ?? true;
   });
 
   // Bounds come from the game type manifest (backend/internal/game/types/
@@ -194,7 +198,229 @@
     settingsHostPaced = checked;
     void saveSettings({ host_paced: checked });
   }
+
+  function commitJokerCount() {
+    const v = clamp(settingsJokerCount, 0, settingsRoundCount);
+    settingsJokerCount = v;
+    if (v !== (pageRoom?.config.joker_count ?? Math.ceil(roundCount / 5))) {
+      void saveSettings({ joker_count: v });
+    }
+  }
+
+  function toggleAllowSkipVote(e: Event) {
+    const checked = (e.currentTarget as HTMLInputElement).checked;
+    settingsAllowSkipVote = checked;
+    void saveSettings({ allow_skip_vote: checked });
+  }
 </script>
+
+<style>
+  .stepper {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 2.5rem;
+    padding: 0 0.25rem;
+    border-radius: 9999px;
+    border: 2.5px solid var(--brand-border-heavy);
+    background: var(--brand-white);
+    gap: 0.25rem;
+  }
+  .stepper button {
+    flex-shrink: 0;
+    height: 1.75rem;
+    width: 1.75rem;
+    border-radius: 9999px;
+    background: var(--brand-surface);
+    color: var(--brand-text);
+    font-weight: 700;
+    font-size: 1rem;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition:
+      background-color 150ms ease,
+      opacity 150ms ease,
+      transform 80ms ease;
+  }
+  .stepper button:hover:not(:disabled) {
+    background: var(--brand-border);
+  }
+  .stepper button:active:not(:disabled) {
+    transform: scale(0.92);
+  }
+  .stepper button:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+  .stepper input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    text-align: center;
+    font-size: 0.9rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--brand-text);
+    outline: none;
+    border: none;
+    padding: 0;
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  .stepper input::-webkit-inner-spin-button,
+  .stepper input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  .brand-toggle {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+    margin-top: 2px;
+    border-radius: 9999px;
+    border: 2.5px solid var(--brand-border-heavy);
+    background: var(--brand-white);
+    cursor: pointer;
+    transition: background-color 180ms ease;
+  }
+  .brand-toggle.is-on {
+    background: var(--brand-text);
+  }
+  .brand-toggle input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+  .brand-toggle .thumb {
+    position: absolute;
+    top: 50%;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 9999px;
+    background: var(--brand-text);
+    transform: translateY(-50%);
+    transition:
+      left 180ms cubic-bezier(0.4, 0, 0.2, 1),
+      background-color 180ms ease;
+    pointer-events: none;
+  }
+  .brand-toggle.is-on .thumb {
+    left: calc(100% - 14px - 2px);
+    background: var(--brand-white);
+  }
+
+  .status-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.25rem 0.6rem 0.25rem 0.5rem;
+    border-radius: 9999px;
+    border: 2px solid var(--brand-border-heavy);
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    line-height: 1;
+    white-space: nowrap;
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.08);
+  }
+  .status-chip .status-dot {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 9999px;
+    flex-shrink: 0;
+  }
+  .status-chip.is-online {
+    background: var(--brand-success-soft);
+    border-color: var(--brand-success);
+    color: var(--brand-success);
+  }
+  .status-chip.is-online .status-dot {
+    background: var(--brand-success);
+    box-shadow: 0 0 0 3px rgba(47, 133, 102, 0.18);
+    animation: status-pulse 1.8s ease-in-out infinite;
+  }
+  .status-chip.is-away {
+    background: var(--brand-grad-1);
+    border-color: var(--brand-accent);
+    color: #8A4A3A;
+  }
+  .status-chip.is-away .status-dot {
+    background: var(--brand-accent);
+    box-shadow: 0 0 0 3px rgba(232, 147, 127, 0.22);
+  }
+
+  @keyframes status-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.65; transform: scale(0.85); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .status-chip.is-online .status-dot { animation: none; }
+  }
+
+  .readiness-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.35rem 0.75rem 0.35rem 0.6rem;
+    border-radius: 9999px;
+    border: 2px solid var(--brand-border-heavy);
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    line-height: 1;
+    white-space: nowrap;
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.08);
+  }
+  .readiness-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    flex-shrink: 0;
+  }
+  .readiness-sep {
+    opacity: 0.4;
+  }
+  .readiness-count {
+    font-variant-numeric: tabular-nums;
+  }
+  .readiness-chip.is-ready {
+    background: var(--brand-success-soft);
+    border-color: var(--brand-success);
+    color: var(--brand-success);
+  }
+  .readiness-chip.is-ready .readiness-dot {
+    background: var(--brand-success);
+    box-shadow: 0 0 0 3px rgba(47, 133, 102, 0.18);
+    animation: status-pulse 1.8s ease-in-out infinite;
+  }
+  .readiness-chip.is-waiting {
+    background: var(--brand-grad-1);
+    border-color: var(--brand-accent);
+    color: #8A4A3A;
+  }
+  .readiness-chip.is-waiting .readiness-dot {
+    background: var(--brand-accent);
+    box-shadow: 0 0 0 3px rgba(232, 147, 127, 0.22);
+    animation: status-pulse 1.4s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .readiness-chip .readiness-dot { animation: none; }
+  }
+</style>
 
 <div
   class="w-full max-w-6xl mx-auto px-6 py-6 flex flex-col gap-6"
@@ -269,11 +495,6 @@
         </div>
       {/if}
     </div>
-    {#if isHost && !canStart}
-      <p class="text-[0.65rem] font-semibold text-brand-text-muted">
-        Need {minPlayers}+ players — you have {playerCount}
-      </p>
-    {/if}
   </div>
 
   <!-- ═══════════════════════════════════════════════════════════════
@@ -299,71 +520,165 @@
         {/if}
       </div>
 
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <label class="flex flex-col gap-1.5">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="flex flex-col gap-1.5">
           <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
             Rounds
           </span>
-          <input
-            type="number"
-            min={roundCountMin}
-            max={roundCountMax}
-            bind:value={settingsRoundCount}
-            onblur={commitRoundCount}
-            onchange={commitRoundCount}
-            class="h-11 px-4 rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white text-sm font-bold tabular-nums"
-          />
+          <div class="stepper">
+            <button
+              type="button"
+              aria-label="Decrease rounds"
+              disabled={settingsRoundCount <= roundCountMin}
+              onclick={() => { settingsRoundCount = Math.max(roundCountMin, settingsRoundCount - 1); commitRoundCount(); }}
+            >−</button>
+            <input
+              type="number"
+              min={roundCountMin}
+              max={roundCountMax}
+              bind:value={settingsRoundCount}
+              onblur={commitRoundCount}
+              onchange={commitRoundCount}
+              aria-label="Rounds"
+            />
+            <button
+              type="button"
+              aria-label="Increase rounds"
+              disabled={settingsRoundCount >= roundCountMax}
+              onclick={() => { settingsRoundCount = Math.min(roundCountMax, settingsRoundCount + 1); commitRoundCount(); }}
+            >+</button>
+          </div>
           <span class="text-[0.6rem] font-semibold text-brand-text-muted tabular-nums">
             {roundCountMin}–{roundCountMax}
           </span>
-        </label>
-        <label class="flex flex-col gap-1.5">
+        </div>
+        <div class="flex flex-col gap-1.5">
           <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
             Submit time (s)
           </span>
-          <input
-            type="number"
-            min={submitMin}
-            max={submitMax}
-            bind:value={settingsSubmitDuration}
-            onblur={commitSubmitDuration}
-            onchange={commitSubmitDuration}
-            class="h-11 px-4 rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white text-sm font-bold tabular-nums"
-          />
+          <div class="stepper">
+            <button
+              type="button"
+              aria-label="Decrease submit time"
+              disabled={settingsSubmitDuration <= submitMin}
+              onclick={() => { settingsSubmitDuration = Math.max(submitMin, settingsSubmitDuration - 5); commitSubmitDuration(); }}
+            >−</button>
+            <input
+              type="number"
+              min={submitMin}
+              max={submitMax}
+              bind:value={settingsSubmitDuration}
+              onblur={commitSubmitDuration}
+              onchange={commitSubmitDuration}
+              aria-label="Submit time in seconds"
+            />
+            <button
+              type="button"
+              aria-label="Increase submit time"
+              disabled={settingsSubmitDuration >= submitMax}
+              onclick={() => { settingsSubmitDuration = Math.min(submitMax, settingsSubmitDuration + 5); commitSubmitDuration(); }}
+            >+</button>
+          </div>
           <span class="text-[0.6rem] font-semibold text-brand-text-muted tabular-nums">
             {submitMin}–{submitMax}s
           </span>
-        </label>
-        <label class="flex flex-col gap-1.5">
+        </div>
+        <div class="flex flex-col gap-1.5">
           <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
             Vote time (s)
           </span>
-          <input
-            type="number"
-            min={voteMin}
-            max={voteMax}
-            bind:value={settingsVoteDuration}
-            onblur={commitVoteDuration}
-            onchange={commitVoteDuration}
-            class="h-11 px-4 rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white text-sm font-bold tabular-nums"
-          />
+          <div class="stepper">
+            <button
+              type="button"
+              aria-label="Decrease vote time"
+              disabled={settingsVoteDuration <= voteMin}
+              onclick={() => { settingsVoteDuration = Math.max(voteMin, settingsVoteDuration - 5); commitVoteDuration(); }}
+            >−</button>
+            <input
+              type="number"
+              min={voteMin}
+              max={voteMax}
+              bind:value={settingsVoteDuration}
+              onblur={commitVoteDuration}
+              onchange={commitVoteDuration}
+              aria-label="Vote time in seconds"
+            />
+            <button
+              type="button"
+              aria-label="Increase vote time"
+              disabled={settingsVoteDuration >= voteMax}
+              onclick={() => { settingsVoteDuration = Math.min(voteMax, settingsVoteDuration + 5); commitVoteDuration(); }}
+            >+</button>
+          </div>
           <span class="text-[0.6rem] font-semibold text-brand-text-muted tabular-nums">
             {voteMin}–{voteMax}s
           </span>
-        </label>
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+            Jokers per player
+          </span>
+          <div class="stepper">
+            <button
+              type="button"
+              aria-label="Decrease jokers"
+              disabled={settingsJokerCount <= 0}
+              onclick={() => { settingsJokerCount = Math.max(0, settingsJokerCount - 1); commitJokerCount(); }}
+            >−</button>
+            <input
+              type="number"
+              min={0}
+              max={settingsRoundCount}
+              bind:value={settingsJokerCount}
+              onblur={commitJokerCount}
+              onchange={commitJokerCount}
+              aria-label="Jokers per player"
+            />
+            <button
+              type="button"
+              aria-label="Increase jokers"
+              disabled={settingsJokerCount >= settingsRoundCount}
+              onclick={() => { settingsJokerCount = Math.min(settingsRoundCount, settingsJokerCount + 1); commitJokerCount(); }}
+            >+</button>
+          </div>
+          <span class="text-[0.6rem] font-semibold text-brand-text-muted tabular-nums">
+            0 disables · rec. {Math.ceil(settingsRoundCount / 5)}
+          </span>
+        </div>
       </div>
 
       <label class="flex items-start gap-3 cursor-pointer rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white px-4 py-3">
-        <input
-          type="checkbox"
-          checked={settingsHostPaced}
-          onchange={toggleHostPaced}
-          class="mt-0.5 h-4 w-4 rounded border-brand-border-heavy"
-        />
+        <span class="brand-toggle" class:is-on={settingsHostPaced}>
+          <input
+            type="checkbox"
+            checked={settingsHostPaced}
+            onchange={toggleHostPaced}
+            aria-label="Host-paced rounds"
+          />
+          <span class="thumb"></span>
+        </span>
         <span class="flex flex-col gap-0.5">
           <span class="text-sm font-bold text-brand-text">Host-paced rounds</span>
           <span class="text-xs font-semibold text-brand-text-muted">
             You advance each round manually instead of auto-advancing.
+          </span>
+        </span>
+      </label>
+
+      <label class="flex items-start gap-3 cursor-pointer rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white px-4 py-3">
+        <span class="brand-toggle" class:is-on={settingsAllowSkipVote}>
+          <input
+            type="checkbox"
+            checked={settingsAllowSkipVote}
+            onchange={toggleAllowSkipVote}
+            aria-label="Allow skip vote"
+          />
+          <span class="thumb"></span>
+        </span>
+        <span class="flex flex-col gap-0.5">
+          <span class="text-sm font-bold text-brand-text">Allow skip button</span>
+          <span class="text-xs font-semibold text-brand-text-muted">
+            Players can skip voting if no caption landed. If everyone skips, the round ends with no points.
           </span>
         </span>
       </label>
@@ -437,13 +752,25 @@
             Players
           </h2>
         </div>
-        <span class="text-xs font-bold tabular-nums text-brand-text-muted">
-          {playerCount} / {maxPlayers}
+        <span
+          class="readiness-chip"
+          class:is-ready={canStart}
+          class:is-waiting={!canStart}
+        >
+          <span class="readiness-dot"></span>
+          <span class="readiness-count tabular-nums">{playerCount} / {maxPlayers}</span>
+          <span class="readiness-sep" aria-hidden="true">·</span>
+          {#if canStart}
+            Ready
+          {:else}
+            Need {minPlayers - playerCount} more
+          {/if}
         </span>
       </div>
 
       <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {#each room.players as player, i (player.user_id)}
+          {@const isOnline = player.connected ?? true}
           <li
             class="flex items-center gap-3 rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white px-3 py-3"
             style="box-shadow: 0 4px 0 rgba(0,0,0,0.1);"
@@ -471,13 +798,15 @@
                 {/if}
               </div>
             </div>
-            {#if player.connected}
-              <span
-                class="h-2 w-2 rounded-full shrink-0"
-                style="background: var(--brand-success, #4ade80);"
-                title="Connected"
-              ></span>
-            {/if}
+            <span
+              class="status-chip shrink-0"
+              class:is-online={isOnline}
+              class:is-away={!isOnline}
+              aria-label={isOnline ? 'Online' : 'Away'}
+            >
+              <span class="status-dot"></span>
+              {isOnline ? 'Online' : 'Away'}
+            </span>
           </li>
         {/each}
 

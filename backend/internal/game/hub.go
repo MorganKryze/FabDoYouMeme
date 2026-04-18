@@ -97,7 +97,11 @@ type roundCtrlCloseSubmissions struct {
 func (roundCtrlCloseSubmissions) roundCtrl() {}
 
 // roundCtrlCloseVoting signals the hub to tally votes and broadcast vote_results.
-type roundCtrlCloseVoting struct{}
+// resultsDuration is the server-paced inter-round pause — zero in host-paced
+// mode, where the client shows "Waiting for host…" instead of a countdown.
+type roundCtrlCloseVoting struct {
+	resultsDuration time.Duration
+}
 
 func (roundCtrlCloseVoting) roundCtrl() {}
 
@@ -171,6 +175,17 @@ type Hub struct {
 	roundSubmissions map[string]Submission // userID → submission
 	roundVotes       map[string]Vote       // userID → vote
 
+	// Skip-turn / skip-vote state. jokerCount and allowSkipVote are cached
+	// from room.Config at startGame so the Run goroutine can read them
+	// synchronously in handleSkipSubmit / handleSkipVote without racing
+	// runRounds (which has its own copy). playerJokersUsed is per-game;
+	// the two roundSkipped* maps are per-round and reset in roundCtrlStartRound.
+	jokerCount          int
+	allowSkipVote       bool
+	playerJokersUsed    map[string]int  // playerID → jokers consumed so far
+	roundSkippedSubmits map[string]bool // playerID → true when they've skipped this round
+	roundSkippedVotes   map[string]bool // playerID → true when they've skipped this round
+
 	// Round snapshot for mid-game reconnection rehydration. A client that
 	// refreshes or joins late would otherwise receive only the minimal
 	// room_state (state/players/host) and have no way to render the
@@ -187,6 +202,11 @@ type Hub struct {
 	submissionsShown   json.RawMessage
 	resultsShown       json.RawMessage
 	resultsLeaderboard []db.GetRoomLeaderboardRow
+	// roundResultsEndsAt is the deadline after which the server-paced inter-
+	// round pause expires and the next round starts. Zero in host-paced mode
+	// (the host advances manually). Surfaced in vote_results and room_state
+	// so the client can render a countdown on the results view.
+	roundResultsEndsAt time.Time
 	roundPausedFlag    bool
 
 	// Early-close channels: created by runRounds, stored here so handleGameMessage
@@ -262,6 +282,10 @@ func NewHub(hc HubConfig) *Hub {
 		roundPhase:       phaseIdle,
 		roundSubmissions: make(map[string]Submission),
 		roundVotes:       make(map[string]Vote),
+
+		playerJokersUsed:    make(map[string]int),
+		roundSkippedSubmits: make(map[string]bool),
+		roundSkippedVotes:   make(map[string]bool),
 	}
 }
 
@@ -392,6 +416,7 @@ func playerJoinedPayload(p *connectedPlayer) map[string]any {
 		"player_id":    p.userID,
 		"display_name": p.username,
 		"is_guest":     p.isGuest,
+		"connected":    !p.reconnecting,
 	}
 }
 
@@ -517,6 +542,12 @@ func (h *Hub) handleMessage(ctx context.Context, msg playerMessage) {
 	case "ping":
 		h.sendTo(msg.player, buildMessage("pong", nil))
 
+	case "skip_submit":
+		h.handleSkipSubmit(ctx, msg.player)
+
+	case "skip_vote":
+		h.handleSkipVote(ctx, msg.player)
+
 	case "system:kick":
 		var d struct {
 			TargetUserID string `json:"target_user_id"`
@@ -579,6 +610,8 @@ func (h *Hub) handleRoundCtrl(ctx context.Context, ctrl roundCtrlMsg) {
 		h.roundNum++
 		h.roundSubmissions = make(map[string]Submission)
 		h.roundVotes = make(map[string]Vote)
+		h.roundSkippedSubmits = make(map[string]bool)
+		h.roundSkippedVotes = make(map[string]bool)
 		h.currentRound = &db.Round{ID: c.roundID}
 		h.allSubmittedCh = c.allSubmittedCh
 		h.allVotedCh = nil
@@ -594,6 +627,7 @@ func (h *Hub) handleRoundCtrl(ctx context.Context, ctrl roundCtrlMsg) {
 		h.submissionsShown = nil
 		h.resultsShown = nil
 		h.resultsLeaderboard = nil
+		h.roundResultsEndsAt = time.Time{}
 		h.roundPausedFlag = false
 		h.broadcast(buildMessage("round_started", map[string]any{
 			"round_number":     h.roundNum,
@@ -681,14 +715,31 @@ func (h *Hub) handleRoundCtrl(ctx context.Context, ctrl roundCtrlMsg) {
 				leaderboard, _ := h.db.GetRoomLeaderboard(ctx, h.roomID)
 				h.resultsShown = resultsPayload
 				h.resultsLeaderboard = leaderboard
-				h.broadcast(buildMessage("vote_results", map[string]any{
+				payload := map[string]any{
 					"results":     json.RawMessage(resultsPayload),
 					"leaderboard": leaderboard,
-				}))
+				}
+				if c.resultsDuration > 0 {
+					h.roundResultsEndsAt = h.clock.Now().Add(c.resultsDuration)
+					payload["next_round_at"] = h.roundResultsEndsAt.UTC().Format(time.RFC3339)
+					payload["results_duration_seconds"] = int(c.resultsDuration.Seconds())
+				} else {
+					h.roundResultsEndsAt = time.Time{}
+				}
+				h.broadcast(buildMessage("vote_results", payload))
 				return
 			}
 		}
-		h.broadcast(buildMessage("vote_results", nil))
+		if c.resultsDuration > 0 {
+			h.roundResultsEndsAt = h.clock.Now().Add(c.resultsDuration)
+			h.broadcast(buildMessage("vote_results", map[string]any{
+				"next_round_at":            h.roundResultsEndsAt.UTC().Format(time.RFC3339),
+				"results_duration_seconds": int(c.resultsDuration.Seconds()),
+			}))
+		} else {
+			h.roundResultsEndsAt = time.Time{}
+			h.broadcast(buildMessage("vote_results", nil))
+		}
 
 	case roundCtrlPaused:
 		h.roundPausedFlag = true
@@ -721,6 +772,21 @@ func (h *Hub) startGame(ctx context.Context) {
 		return
 	}
 	h.state = HubPlaying
+	// Cache skip-turn / skip-vote config on the Run goroutine so
+	// handleSkipSubmit / handleSkipVote can read them without racing
+	// runRounds. The duplicate parse in runRounds is intentional: it
+	// keeps the single-goroutine-writes-hub-state invariant.
+	if room, err := h.db.GetRoomByID(ctx, h.roomID); err == nil && room.Config != nil {
+		var cfg RoomConfig
+		if err := json.Unmarshal(room.Config, &cfg); err == nil {
+			h.jokerCount = cfg.JokerCount
+			h.allowSkipVote = cfg.AllowSkipVote
+		} else if h.log != nil {
+			h.log.Warn("hub: startGame config unmarshal failed",
+				"error", err, "room", h.roomCode)
+		}
+	}
+	h.playerJokersUsed = make(map[string]int)
 	if _, err := h.db.SetRoomState(ctx, db.SetRoomStateParams{
 		ID: h.roomID, State: "playing",
 	}); err != nil {
@@ -930,7 +996,16 @@ func (h *Hub) runRounds(ctx context.Context) {
 			return
 		}
 
-		if !h.sendRoundCtrl(ctx, roundCtrlCloseVoting{}) {
+		resultsDur := time.Duration(0)
+		if !cfg.HostPaced {
+			// Server-paced inter-round pause — let clients read the results
+			// (podium + mini leaderboard). 3s was too brief for a scanning
+			// player; 10s gives time to process before the next round lands.
+			// The value is echoed to clients in vote_results as next_round_at
+			// so they can render a matching countdown.
+			resultsDur = 10 * time.Second
+		}
+		if !h.sendRoundCtrl(ctx, roundCtrlCloseVoting{resultsDuration: resultsDur}) {
 			return
 		}
 
@@ -946,13 +1021,8 @@ func (h *Hub) runRounds(ctx context.Context) {
 			case <-h.clock.After(5 * time.Minute):
 				// safety timeout: auto-advance
 			}
-		} else {
-			// Server-paced: inter-round pause to let clients read the results
-			// (podium + mini leaderboard). 3s was too brief for a scanning
-			// player; 10s gives time to process before the next round lands.
-			if !h.waitPhase(ctx, 10*time.Second, nil) {
-				return
-			}
+		} else if !h.waitPhase(ctx, resultsDur, nil) {
+			return
 		}
 	}
 
@@ -1043,6 +1113,12 @@ func (h *Hub) handleGameMessage(ctx context.Context, msg playerMessage) {
 			}))
 			return
 		}
+		if h.roundSkippedSubmits[msg.player.userID] {
+			h.safeSend(msg.player, buildMessage("error", map[string]string{
+				"code": "already_submitted", "message": "You have already submitted",
+			}))
+			return
+		}
 		roundRef := Round{}
 		if h.currentRound != nil {
 			roundRef.ID = h.currentRound.ID
@@ -1081,7 +1157,7 @@ func (h *Hub) handleGameMessage(ctx context.Context, msg playerMessage) {
 		h.safeSend(msg.player, buildMessage("submission_accepted", map[string]any{
 			"submission_id": sub.ID.String(),
 		}))
-		if len(h.roundSubmissions) >= len(h.players) && h.allSubmittedCh != nil {
+		if len(h.roundSubmissions)+len(h.roundSkippedSubmits) >= len(h.players) && h.allSubmittedCh != nil {
 			close(h.allSubmittedCh)
 			h.allSubmittedCh = nil
 		}
@@ -1101,6 +1177,12 @@ func (h *Hub) handleGameMessage(ctx context.Context, msg playerMessage) {
 			return
 		}
 		if _, already := h.roundVotes[msg.player.userID]; already {
+			h.safeSend(msg.player, buildMessage("error", map[string]string{
+				"code": "already_voted", "message": "You have already voted",
+			}))
+			return
+		}
+		if h.roundSkippedVotes[msg.player.userID] {
 			h.safeSend(msg.player, buildMessage("error", map[string]string{
 				"code": "already_voted", "message": "You have already voted",
 			}))
@@ -1161,13 +1243,101 @@ func (h *Hub) handleGameMessage(ctx context.Context, msg playerMessage) {
 			VoterID:      voterID,
 		}
 		h.safeSend(msg.player, buildMessage("vote_accepted", nil))
-		if len(h.roundVotes) >= len(h.players) && h.allVotedCh != nil {
+		if len(h.roundVotes)+len(h.roundSkippedVotes) >= len(h.players) && h.allVotedCh != nil {
 			close(h.allVotedCh)
 			h.allVotedCh = nil
 		}
 
 	default:
 		h.safeSend(msg.player, buildMessage("error", map[string]string{"code": "unknown_message_type"}))
+	}
+}
+
+// handleSkipSubmit consumes one of the player's jokers and flips them to
+// "skipped" for this round. Symmetric with the submit path: the player
+// cannot both submit and skip, and cannot skip twice. Jokers do not
+// replenish between rounds.
+func (h *Hub) handleSkipSubmit(ctx context.Context, p *connectedPlayer) {
+	if h.roundPhase != phaseSubmitting {
+		h.safeSend(p, buildMessage("error", map[string]string{
+			"code": "submission_closed", "message": "Submission window is closed",
+		}))
+		return
+	}
+	if h.jokerCount == 0 {
+		h.safeSend(p, buildMessage("error", map[string]string{
+			"code": "skip_submit_disabled", "message": "The skip-turn joker is disabled in this room",
+		}))
+		return
+	}
+	if _, already := h.roundSubmissions[p.userID]; already {
+		h.safeSend(p, buildMessage("error", map[string]string{
+			"code": "already_submitted", "message": "You have already submitted",
+		}))
+		return
+	}
+	if h.roundSkippedSubmits[p.userID] {
+		h.safeSend(p, buildMessage("error", map[string]string{
+			"code": "already_submitted", "message": "You have already submitted",
+		}))
+		return
+	}
+	if h.playerJokersUsed[p.userID] >= h.jokerCount {
+		h.safeSend(p, buildMessage("error", map[string]string{
+			"code": "jokers_exhausted", "message": "You have no jokers left",
+		}))
+		return
+	}
+	h.playerJokersUsed[p.userID]++
+	h.roundSkippedSubmits[p.userID] = true
+	remaining := h.jokerCount - h.playerJokersUsed[p.userID]
+	h.broadcast(buildMessage("player_skipped_submit", map[string]any{
+		"user_id":          p.userID,
+		"player_id":        p.userID,
+		"jokers_remaining": remaining,
+	}))
+	if len(h.roundSubmissions)+len(h.roundSkippedSubmits) >= len(h.players) && h.allSubmittedCh != nil {
+		close(h.allSubmittedCh)
+		h.allSubmittedCh = nil
+	}
+}
+
+// handleSkipVote flips the player to "abstained" for this round. No budget —
+// players can abstain in every round. If allow_skip_vote is false the
+// feature is server-side rejected (the frontend also hides the button).
+func (h *Hub) handleSkipVote(ctx context.Context, p *connectedPlayer) {
+	if h.roundPhase != phaseVoting {
+		h.safeSend(p, buildMessage("error", map[string]string{
+			"code": "vote_closed", "message": "Voting window is closed",
+		}))
+		return
+	}
+	if !h.allowSkipVote {
+		h.safeSend(p, buildMessage("error", map[string]string{
+			"code": "skip_vote_disabled", "message": "Abstaining is disabled in this room",
+		}))
+		return
+	}
+	if _, already := h.roundVotes[p.userID]; already {
+		h.safeSend(p, buildMessage("error", map[string]string{
+			"code": "already_voted", "message": "You have already voted",
+		}))
+		return
+	}
+	if h.roundSkippedVotes[p.userID] {
+		h.safeSend(p, buildMessage("error", map[string]string{
+			"code": "already_voted", "message": "You have already voted",
+		}))
+		return
+	}
+	h.roundSkippedVotes[p.userID] = true
+	h.broadcast(buildMessage("player_skipped_vote", map[string]any{
+		"user_id":   p.userID,
+		"player_id": p.userID,
+	}))
+	if len(h.roundVotes)+len(h.roundSkippedVotes) >= len(h.players) && h.allVotedCh != nil {
+		close(h.allVotedCh)
+		h.allVotedCh = nil
 	}
 }
 
@@ -1342,6 +1512,7 @@ func (h *Hub) buildRoomState(recipientUserID string) map[string]any {
 			"player_id":    p.userID,
 			"display_name": p.username,
 			"is_guest":     p.isGuest,
+			"connected":    !p.reconnecting,
 		})
 	}
 	out := map[string]any{
@@ -1356,6 +1527,33 @@ func (h *Hub) buildRoomState(recipientUserID string) map[string]any {
 		out["phase"] = roundPhaseName(h.roundPhase)
 		out["round_number"] = h.roundNum
 		out["round_paused"] = h.roundPausedFlag
+		out["my_jokers_remaining"] = h.jokerCount - h.playerJokersUsed[recipientUserID]
+		if h.roundPhase == phaseSubmitting && h.roundSkippedSubmits[recipientUserID] {
+			out["skipped_submit"] = true
+		}
+		if h.roundPhase == phaseVoting && h.roundSkippedVotes[recipientUserID] {
+			out["skipped_vote"] = true
+		}
+		// Per-player progress snapshots so a client joining or refreshing
+		// mid-round can rebuild the rail chips (submitted / ♠ joker / ✗ skipped)
+		// for every peer, not just itself. Without these the recipient only
+		// ever sees its own status and other players appear idle until their
+		// next action fires a fresh broadcast.
+		submittedIDs := make([]string, 0, len(h.roundSubmissions))
+		for uid := range h.roundSubmissions {
+			submittedIDs = append(submittedIDs, uid)
+		}
+		out["submitted_player_ids"] = submittedIDs
+		skippedSubmitIDs := make([]string, 0, len(h.roundSkippedSubmits))
+		for uid := range h.roundSkippedSubmits {
+			skippedSubmitIDs = append(skippedSubmitIDs, uid)
+		}
+		out["skipped_submit_ids"] = skippedSubmitIDs
+		skippedVoteIDs := make([]string, 0, len(h.roundSkippedVotes))
+		for uid := range h.roundSkippedVotes {
+			skippedVoteIDs = append(skippedVoteIDs, uid)
+		}
+		out["skipped_vote_ids"] = skippedVoteIDs
 		out["item"] = map[string]any{
 			"payload":   h.roundItemPayload,
 			"media_url": nilIfEmpty(h.roundMediaURL),
@@ -1382,6 +1580,9 @@ func (h *Hub) buildRoomState(recipientUserID string) map[string]any {
 			}
 			if h.resultsLeaderboard != nil {
 				out["leaderboard"] = h.resultsLeaderboard
+			}
+			if !h.roundResultsEndsAt.IsZero() {
+				out["results_ends_at"] = h.roundResultsEndsAt.UTC().Format(time.RFC3339)
 			}
 		}
 	}

@@ -41,8 +41,17 @@ The backend hub drives the round lifecycle autonomously once `start` is received
 4. If at least one submission exists: broadcasts `submissions_closed` and starts the voting timer. If zero submissions: skips voting entirely.
 5. Accepts votes until the timer expires or all players have voted (skipped when step 4 had zero submissions)
 6. Calculates scores, broadcasts `vote_results` (submissions and scores are empty when voting was skipped)
-7. **Server-paced (default, `host_paced: false`)**: waits 3 seconds then automatically advances. **Host-paced (`host_paced: true`)**: waits for the host to send `next_round`; auto-advances after a 5-minute safety ceiling if the host never responds.
+7. **Server-paced (default, `host_paced: false`)**: waits 10 seconds then automatically advances. The deadline is echoed to clients in `vote_results.data.next_round_at` (RFC 3339) and `results_duration_seconds` so the results view can render a countdown. **Host-paced (`host_paced: true`)**: waits for the host to send `next_round` — no deadline is emitted; the client shows "Waiting for host…". An absent host is recovered by a 5-minute safety ceiling.
 8. Repeats until all rounds are complete
+
+### Skip-turn joker and skip-vote abstention
+
+Both features are **platform-level** — they live in the hub, not inside any game handler, so they work for every game type without code duplication.
+
+- **Skip-turn joker.** Each player gets `config.joker_count` jokers for the game (default: `ceil(round_count / 5)`). A player spends one by sending the platform message `skip_submit` during the submit phase. The hub counts the skip toward "all players finished" and broadcasts `player_skipped_submit { user_id, player_id, jokers_remaining }`. Once exhausted, further `skip_submit` messages return `{ code: "jokers_exhausted" }`. Setting `joker_count = 0` disables the feature for the room.
+- **Skip-vote abstention.** During the voting phase any player may send `skip_vote` to abstain. Abstention is unlimited and counts toward early-close. The hub broadcasts `player_skipped_vote { user_id, player_id }`. If every player abstains, `vote_results` still fires with empty scores so the round ends cleanly. Setting `allow_skip_vote = false` disables the feature.
+
+Both messages are rejected when sent outside their valid phase (`submission_closed` / `voting_closed`) or after the same player already acted (`already_submitted` / `already_voted`). The `room_state` snapshot surfaces `my_jokers_remaining`, `skipped_submit`, and `skipped_vote` so a reconnecting player's UI lands in the correct state without waiting for the next broadcast.
 
 ### Finished phase
 
@@ -175,6 +184,19 @@ Both write paths funnel through it:
 - `PATCH /api/rooms/{code}/config` (edit in lobby) — accepts a **partial patch**, calls `game.MergeJSON(room.Config, req.Config)`, then `ValidateAndFill` on the merged result. Clients only send the field they changed; the server refuses to overwrite the others with zeros.
 
 The frontend never enforces bounds as a contract — it reads them from `gameType.config` and reflects them in `min`/`max` attributes for UX only. The server is always the source of truth.
+
+`RoomConfig` (the canonical runtime shape stored in `rooms.config`) is:
+
+| Field                    | Type | Default                     | Notes                                                                  |
+| ------------------------ | ---- | --------------------------- | ---------------------------------------------------------------------- |
+| `round_duration_seconds` | int  | manifest `default_*`        | Manifest min/max per game type                                         |
+| `voting_duration_seconds`| int  | manifest `default_*`        | Manifest min/max per game type                                         |
+| `round_count`            | int  | manifest `default_*`        | Manifest min/max per game type                                         |
+| `host_paced`             | bool | `false`                     | When true, host advances rounds manually                               |
+| `joker_count`            | int  | `ceil(round_count/5)`       | Platform-wide. `0` disables the skip-turn joker for this room          |
+| `allow_skip_vote`        | bool | `true`                      | Platform-wide. `false` disables the "none of these" vote for this room |
+
+`joker_count` has a cross-field rule: `0 ≤ joker_count ≤ round_count`. Violations on either `POST /api/rooms` or `PATCH /api/rooms/{code}/config` produce `422 invalid_config` with `joker_count` named in the error message. Setting both `joker_count = 0` and `allow_skip_vote = false` puts the room in "fully disabled" mode — the two buttons are hidden and any platform skip message is refused.
 
 ### The `GameTypeHandler` interface
 

@@ -58,6 +58,8 @@ type RoomConfig struct {
 	VotingDurationSeconds int  `json:"voting_duration_seconds"`
 	RoundCount            int  `json:"round_count"`
 	HostPaced             bool `json:"host_paced"`
+	JokerCount            int  `json:"joker_count"`
+	AllowSkipVote         bool `json:"allow_skip_vote"`
 }
 
 // LoadManifest parses a YAML manifest and fails fast on any internal
@@ -144,6 +146,8 @@ func (b Bounds) ValidateAndFill(raw json.RawMessage) (json.RawMessage, error) {
 		VotingDurationSeconds *int  `json:"voting_duration_seconds"`
 		RoundCount            *int  `json:"round_count"`
 		HostPaced             *bool `json:"host_paced"`
+		JokerCount            *int  `json:"joker_count"`
+		AllowSkipVote         *bool `json:"allow_skip_vote"`
 	}
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &in); err != nil {
@@ -155,6 +159,15 @@ func (b Bounds) ValidateAndFill(raw json.RawMessage) (json.RawMessage, error) {
 		VotingDurationSeconds: intOr(in.VotingDurationSeconds, b.DefaultVotingDurationSeconds),
 		RoundCount:            intOr(in.RoundCount, b.DefaultRoundCount),
 		HostPaced:             in.HostPaced != nil && *in.HostPaced,
+		AllowSkipVote:         in.AllowSkipVote == nil || *in.AllowSkipVote,
+	}
+	// joker_count default depends on round_count, so it is computed after
+	// round_count has been populated from input-or-default. ceil(n/5) via
+	// integer arithmetic: (n + 4) / 5.
+	if in.JokerCount != nil {
+		out.JokerCount = *in.JokerCount
+	} else {
+		out.JokerCount = (out.RoundCount + 4) / 5
 	}
 	if out.RoundDurationSeconds < b.MinRoundDurationSeconds || out.RoundDurationSeconds > b.MaxRoundDurationSeconds {
 		return nil, &ValidationError{Field: "round_duration_seconds", Reason: fmt.Sprintf("must be between %d and %d seconds", b.MinRoundDurationSeconds, b.MaxRoundDurationSeconds)}
@@ -164,6 +177,9 @@ func (b Bounds) ValidateAndFill(raw json.RawMessage) (json.RawMessage, error) {
 	}
 	if out.RoundCount < b.MinRoundCount || out.RoundCount > b.MaxRoundCount {
 		return nil, &ValidationError{Field: "round_count", Reason: fmt.Sprintf("must be between %d and %d", b.MinRoundCount, b.MaxRoundCount)}
+	}
+	if out.JokerCount < 0 || out.JokerCount > out.RoundCount {
+		return nil, &ValidationError{Field: "joker_count", Reason: fmt.Sprintf("must be between 0 and %d", out.RoundCount)}
 	}
 	return json.Marshal(out)
 }

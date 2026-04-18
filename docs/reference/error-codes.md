@@ -71,6 +71,11 @@ Sent to the originating connection as `{ "type": "error", "data": { "code": "...
 | `voting_closed`        | Hub                          | Vote message received outside the voting window                                            |
 | `duplicate_vote`       | Hub                          | Player already cast a vote this round                                                      |
 | `unknown_game_type`    | Registry `Dispatch`          | Prefixed message slug does not match the room's game type                                  |
+| `skip_submit_disabled` | Hub                          | `skip_submit` received while host has set `joker_count == 0` — the skip-turn joker is unavailable for this room |
+| `skip_vote_disabled`   | Hub                          | `skip_vote` received while host has set `allow_skip_vote == false` — abstention is unavailable for this room    |
+| `jokers_exhausted`     | Hub                          | `skip_submit` received after the player has used every joker for this game — no further skips accepted          |
+| `already_submitted`    | Hub                          | Submit or skip_submit received after the player already submitted or skipped this round                         |
+| `already_voted`        | Hub                          | Vote or skip_vote received after the player already voted or abstained this round                               |
 
 ### WebSocket `room_closed` reasons
 
