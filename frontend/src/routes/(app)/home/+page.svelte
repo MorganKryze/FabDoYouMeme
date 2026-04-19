@@ -468,57 +468,6 @@
       </div>
     </section>
 
-    <!-- ─── Host a new game (game tile grid) ────────────────── -->
-    {#if !data.activeRoom}
-      <section class="flex flex-col gap-5">
-        <div use:reveal={{ delay: 2 }} class="flex items-center justify-between">
-          <div>
-            <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
-              Host a new game
-            </p>
-            <h2 class="text-2xl font-bold">Pick a game type</h2>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {#each data.gameTypes as gt, i}
-            {@const variant = `a${(i % 6) + 1}`}
-            {@const minP = gt.config?.min_players}
-            {@const maxP = gt.config?.max_players}
-            <a
-              href={`/host?game_type=${gt.slug}`}
-              use:reveal={{ delay: i + 3 }}
-              use:physCard
-              use:hoverEffect={'gradient'}
-              class="group rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-3 cursor-pointer no-underline text-brand-text focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
-              style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
-            >
-              <div class="deck-art {variant}" aria-hidden="true">
-                Game card
-              </div>
-              <h3 class="text-lg font-bold m-0 leading-tight">
-                {gt.name}
-              </h3>
-              {#if gt.description}
-                <p class="text-sm font-semibold text-brand-text-mid line-clamp-3 m-0">{gt.description}</p>
-              {/if}
-              <div class="mt-auto flex items-center justify-between gap-2">
-                {#if minP != null}
-                  <span class="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-text-mid inline-flex items-center gap-1 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-2.5 py-0.5">
-                    {minP}{maxP != null ? `–${maxP}` : '+'} players
-                  </span>
-                {:else}
-                  <span></span>
-                {/if}
-                <span class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid inline-flex items-center gap-1 transition-transform group-hover:translate-x-0.5">
-                  Host this →
-                </span>
-              </div>
-            </a>
-          {/each}
-        </div>
-      </section>
-    {/if}
   </div>
 </div>
 

@@ -1,6 +1,5 @@
 import { redirect, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import type { GameType } from '$lib/api/types';
 import { API_BASE, apiFetch } from '$lib/server/backend';
 
 // Matches the shape returned by GET /api/users/me/history
@@ -35,18 +34,15 @@ type ActiveRoomResponse = {
 };
 
 export const load: PageServerLoad = async ({ fetch }) => {
-  // Parallel loads: history for "recent activity + derived stats", game types
-  // for the host grid, and the single-room-enforcement check. Both require
-  // auth and are served by the (app) layout's session gate, so anon visitors
-  // never reach this load.
-  const [historyRes, gameTypes, activeRoomRes] = await Promise.all([
+  // Parallel loads: history for "recent activity + derived stats" and the
+  // single-room-enforcement check. Both require auth and are served by the
+  // (app) layout's session gate, so anon visitors never reach this load.
+  const [historyRes, activeRoomRes] = await Promise.all([
     apiFetch<HistoryResponse>(fetch, '/api/users/me/history?limit=10'),
-    apiFetch<GameType[]>(fetch, '/api/game-types'),
     apiFetch<ActiveRoomResponse>(fetch, '/api/users/me/active-room'),
   ]);
   return {
     history: historyRes.rooms,
-    gameTypes,
     activeRoom: activeRoomRes.room,
   };
 };
