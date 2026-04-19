@@ -139,6 +139,7 @@ export type WsMessageType =
   | 'player_kicked'
   | 'player_submitted'
   | 'player_skipped_submit'
+  | 'player_voted'
   | 'player_skipped_vote'
   | 'reconnecting'
   | 'game_started'

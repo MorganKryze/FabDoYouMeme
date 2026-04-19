@@ -1313,6 +1313,13 @@ func (h *Hub) handleGameMessage(ctx context.Context, msg playerMessage) {
 			VoterID:      voterID,
 		}
 		h.safeSend(msg.player, buildMessage("vote_accepted", nil))
+		// Announce progress (no vote target) so every client can flip the
+		// voted-indicator on the player panel without waiting for the round
+		// to close. Mirrors player_submitted during the submit phase.
+		h.broadcast(buildMessage("player_voted", map[string]any{
+			"user_id":   msg.player.userID,
+			"player_id": msg.player.userID,
+		}))
 		h.maybeCloseVoting()
 
 	default:
@@ -1706,6 +1713,11 @@ func (h *Hub) buildRoomState(recipientUserID string) map[string]any {
 			skippedVoteIDs = append(skippedVoteIDs, uid)
 		}
 		out["skipped_vote_ids"] = skippedVoteIDs
+		votedIDs := make([]string, 0, len(h.roundVotes))
+		for uid := range h.roundVotes {
+			votedIDs = append(votedIDs, uid)
+		}
+		out["voted_player_ids"] = votedIDs
 		out["item"] = map[string]any{
 			"payload":   h.roundItemPayload,
 			"media_url": nilIfEmpty(h.roundMediaURL),

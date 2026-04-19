@@ -199,7 +199,7 @@
           {@const isFirst = i === 0}
           <li
             class="l-row flex items-center gap-3 rounded-full border-[2.5px] border-brand-border-heavy px-3 py-1.5 text-sm font-bold"
-            style="background: {isFirst ? 'var(--brand-accent)' : 'var(--brand-white)'}; color: #1A1A1A;"
+            style="background: {isFirst ? 'var(--brand-accent)' : 'var(--brand-white)'}; color: {isFirst ? '#1A1A1A' : 'var(--brand-text)'};"
           >
             <span class="font-mono tabular-nums text-[11px] font-bold w-5 text-right opacity-70">
               {entry.rank}

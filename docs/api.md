@@ -204,6 +204,7 @@ All messages are JSON with a `type` field and an optional `data` object.
 | `player_submitted`   | A player submitted (anonymous — only `user_id`/`player_id`)            |
 | `player_skipped_submit` | A player spent a joker — includes `jokers_remaining` for the sender |
 | `submissions_closed` | Submission phase ended, voting opens                                   |
+| `player_voted`       | A player cast a vote (anonymous — only `user_id`/`player_id`)          |
 | `player_skipped_vote` | A player abstained from voting                                        |
 | `vote_results`       | Scores for the completed round; server-paced mode also includes `next_round_at` and `results_duration_seconds` |
 | `game_ended`         | Final leaderboard with `reason` field                                  |

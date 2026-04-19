@@ -24,6 +24,7 @@
         isHost: false,
         hasSubmitted: false,
         hasSkippedSubmit: false,
+        hasVoted: false,
         hasSkippedVote: false,
       }));
     }
@@ -42,6 +43,7 @@
         isHost: p.is_host ?? false,
         hasSubmitted: room.submittedPlayerIds.has(p.user_id),
         hasSkippedSubmit: room.skippedSubmitIds.has(p.user_id),
+        hasVoted: room.votedPlayerIds.has(p.user_id),
         hasSkippedVote: room.skippedVoteIds.has(p.user_id),
       }));
   });
@@ -57,14 +59,10 @@
       };
     }
     if (room.phase === 'voting') {
-      // We don't track a votedPlayerIds set, but the server sends
-      // `submissions` with the final vote tally only at results time. During
-      // voting we can honestly report just our own status.
       return {
-        label: 'Your vote',
-        done: room.hasVoted ? 1 : 0,
-        total: 1,
-        selfOnly: true,
+        label: 'Voted',
+        done: room.votedPlayerIds.size + room.skippedVoteIds.size,
+        total,
       };
     }
     return null;
@@ -107,7 +105,7 @@
         <li
           class="flex items-center gap-2.5 rounded-full border-[2.5px] px-3 py-1.5 text-sm font-bold transition-colors"
           class:is-self={isSelf}
-          style="background: {isSelf ? 'var(--brand-accent)' : 'var(--brand-white)'}; color: #1A1A1A; border-color: var(--brand-border-heavy);"
+          style="background: {isSelf ? 'var(--brand-accent)' : 'var(--brand-white)'}; color: {isSelf ? '#1A1A1A' : 'var(--brand-text)'}; border-color: var(--brand-border-heavy);"
         >
           <span
             class="avatar inline-grid place-items-center h-8 w-8 rounded-full border-[2.5px] border-brand-border-heavy text-[11px] font-bold shrink-0 {avatarClass(row.id, isSelf)}"
@@ -123,26 +121,33 @@
               <span class="text-[9px] font-bold uppercase tracking-[0.15em] opacity-70">
                 Rank {row.rank}
               </span>
-            {:else if row.hasSkippedSubmit}
+            {:else if room.phase === 'voting' && row.hasSkippedVote}
+              <span
+                class="text-[9px] font-bold uppercase tracking-[0.15em]"
+                style="color: {isSelf ? '#1A1A1A' : 'var(--brand-accent-3)'}; opacity: {isSelf ? 0.75 : 1};"
+              >
+                ✗ Skipped
+              </span>
+            {:else if room.phase === 'voting' && row.hasVoted}
+              <span
+                class="text-[9px] font-bold uppercase tracking-[0.15em]"
+                style="color: {isSelf ? '#1A1A1A' : 'var(--brand-accent-2)'}; opacity: {isSelf ? 0.75 : 1};"
+              >
+                ✓ Voted
+              </span>
+            {:else if room.phase === 'submitting' && row.hasSkippedSubmit}
               <span
                 class="text-[9px] font-bold uppercase tracking-[0.15em]"
                 style="color: {isSelf ? '#1A1A1A' : 'var(--brand-accent-3)'}; opacity: {isSelf ? 0.75 : 1};"
               >
                 ♠ Joker
               </span>
-            {:else if row.hasSubmitted}
+            {:else if room.phase === 'submitting' && row.hasSubmitted}
               <span
                 class="text-[9px] font-bold uppercase tracking-[0.15em]"
                 style="color: {isSelf ? '#1A1A1A' : 'var(--brand-accent-2)'}; opacity: {isSelf ? 0.75 : 1};"
               >
                 ✓ Submitted
-              </span>
-            {:else if row.hasSkippedVote && room.phase === 'voting'}
-              <span
-                class="text-[9px] font-bold uppercase tracking-[0.15em]"
-                style="color: {isSelf ? '#1A1A1A' : 'var(--brand-accent-3)'}; opacity: {isSelf ? 0.75 : 1};"
-              >
-                ✗ Skipped
               </span>
             {:else if row.isHost}
               <span class="text-[9px] font-bold uppercase tracking-[0.15em] opacity-70">
@@ -225,7 +230,7 @@
   :global(.avatar.av-accent)   { background: var(--brand-accent); color: #ffffff; }
   :global(.avatar.av-accent-2) { background: var(--brand-accent-2); color: #ffffff; }
   :global(.avatar.av-accent-3) { background: var(--brand-accent-3); color: #ffffff; }
-  :global(.avatar.av-grad-4)   { background: var(--brand-grad-4); color: #1A1A1A; }
+  :global(.avatar.av-grad-4)   { background: var(--brand-grad-4); color: var(--brand-text); }
   /* Self-row avatar sits on a coral pill — invert to a cream disc with dark
      ink so it reads as a "chip" rather than blending with the bg. */
   :global(.avatar.av-self)     { background: #FEFEFE; color: #1A1A1A; }

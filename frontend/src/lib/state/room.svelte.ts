@@ -33,6 +33,10 @@ export class RoomState {
   // Cleared on round_started; populated by player_submitted broadcasts so the
   // player panel can show per-player progress during the submission phase.
   submittedPlayerIds = $state<Set<string>>(new Set());
+  // IDs of players who have cast a vote in the current round. Cleared on
+  // round_started; populated by player_voted broadcasts so the rail can flip
+  // peer status identically to submittedPlayerIds during the voting phase.
+  votedPlayerIds = $state<Set<string>>(new Set());
 
   // Skip-turn (joker) state — jokersRemaining drops as the current player
   // consumes jokers; own* flip to true for the current player's own action
@@ -136,6 +140,7 @@ export class RoomState {
         this.hasSubmitted = false;
         this.hasVoted = false;
         this.submittedPlayerIds = new Set();
+        this.votedPlayerIds = new Set();
         this.votingEndsAt = null;
         this.votingDurationSeconds = null;
         this.resultsEndsAt = null;
@@ -192,6 +197,14 @@ export class RoomState {
         }
         if (id && this.ownUserId && id === this.ownUserId) {
           this.ownSkippedVote = true;
+        }
+        break;
+      }
+      case 'player_voted': {
+        const d = msg.data as { user_id?: string; player_id?: string };
+        const id = d.player_id ?? d.user_id;
+        if (id) {
+          this.votedPlayerIds = new Set([...this.votedPlayerIds, id]);
         }
         break;
       }
@@ -272,6 +285,7 @@ export class RoomState {
           submitted_player_ids?: string[];
           skipped_submit_ids?: string[];
           skipped_vote_ids?: string[];
+          voted_player_ids?: string[];
           // meme-showdown-only: the caller's current caption hand, sent on
           // reconnect so the SubmitForm doesn't render empty while the
           // client waits for the next round.
@@ -327,6 +341,9 @@ export class RoomState {
           }
           if (d.skipped_vote_ids) {
             this.skippedVoteIds = new Set(d.skipped_vote_ids);
+          }
+          if (d.voted_player_ids) {
+            this.votedPlayerIds = new Set(d.voted_player_ids);
           }
         }
         // `my_hand` can also arrive independently of `d.phase` in principle
@@ -406,6 +423,7 @@ export class RoomState {
     this.hasSubmitted = false;
     this.hasVoted = false;
     this.submittedPlayerIds = new Set();
+    this.votedPlayerIds = new Set();
     this.jokersRemaining = null;
     this.ownSkippedSubmit = false;
     this.ownSkippedVote = false;
