@@ -128,7 +128,13 @@
 
   const playerCount = $derived(room.players.length);
   const canStart = $derived(playerCount >= minPlayers);
-  const slotsToShow = $derived(Math.max(maxPlayers, playerCount));
+  // Dynamic staging: always surface one empty "Waiting…" slot so joiners can
+  // see the room has room, and round up to pairs so the 2-column grid never
+  // leaves an orphan. Capped at maxPlayers — once the room is full, no empty
+  // slot is shown.
+  const slotsToShow = $derived(
+    Math.min(maxPlayers, Math.max(2, Math.ceil((playerCount + 1) / 2) * 2))
+  );
   const emptySlots = $derived(
     Array.from({ length: Math.max(0, slotsToShow - playerCount) })
   );
@@ -417,11 +423,11 @@
   .status-chip.is-away {
     background: var(--brand-grad-1);
     border-color: var(--brand-accent);
-    color: #8A4A3A;
+    color: var(--brand-text);
   }
   .status-chip.is-away .status-dot {
     background: var(--brand-accent);
-    box-shadow: 0 0 0 3px rgba(232, 147, 127, 0.22);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-accent) 22%, transparent);
   }
 
   @keyframes status-pulse {
@@ -472,11 +478,11 @@
   .readiness-chip.is-waiting {
     background: var(--brand-grad-1);
     border-color: var(--brand-accent);
-    color: #8A4A3A;
+    color: var(--brand-text);
   }
   .readiness-chip.is-waiting .readiness-dot {
     background: var(--brand-accent);
-    box-shadow: 0 0 0 3px rgba(232, 147, 127, 0.22);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-accent) 22%, transparent);
     animation: status-pulse 1.4s ease-in-out infinite;
   }
   @media (prefers-reduced-motion: reduce) {
