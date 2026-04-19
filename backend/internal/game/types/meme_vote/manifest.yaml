@@ -1,0 +1,45 @@
+# Meme Vote — handler manifest.
+#
+# Pick the funniest caption for the meme. Each player is dealt a hand of
+# captions from a text pack and plays one per round. Authors are revealed
+# after voting.
+#
+# This file is the single source of truth for identity and bounds. Edit
+# and restart to tune a bound; no DB migration needed.
+
+slug: meme-vote
+name: Meme Vote
+description: Pick the funniest caption for the meme. Others vote for the best.
+version: "1.0.0"
+supports_solo: false
+
+required_packs:
+  - role: image
+    payload_versions: [1]
+  - role: text
+    payload_versions: [2]
+
+config:
+  # Per-round submit phase.
+  min_round_duration_seconds: 15
+  max_round_duration_seconds: 300
+  default_round_duration_seconds: 45
+
+  # Per-round voting phase.
+  min_voting_duration_seconds: 10
+  max_voting_duration_seconds: 120
+  default_voting_duration_seconds: 30
+
+  # Rounds in a single game.
+  min_round_count: 1
+  max_round_count: 30
+  default_round_count: 8
+
+  # Simultaneous players in a room.
+  min_players: 2
+  max_players: 12
+
+  # Caption hand dealt to each player at game start; refilled each round.
+  min_hand_size: 3
+  max_hand_size: 7
+  default_hand_size: 4

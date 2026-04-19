@@ -96,11 +96,11 @@ The contradictory note in the pre-redesign `04-api.md` ("backend sets user_id = 
 
 **Status**: Accepted
 
-**Context**: packs are game-type-agnostic. A pack of meme images can be used for `meme-caption`, `meme-vote`, or any future type. Two options for enforcing compatibility at room creation: (a) junction table `pack_game_type_support`, (b) dynamic check via handler's `SupportedPayloadVersions()` at room creation.
+**Context**: packs are game-type-agnostic. A pack of meme images can be used for `meme-caption`, `meme-vote`, or any future type. Two options for enforcing compatibility at room creation: (a) junction table `pack_game_type_support`, (b) dynamic check via the handler's declared pack requirements at room creation.
 
-**Decision**: no junction table. Compatibility is determined at `POST /api/rooms` by counting `game_items WHERE payload_version = ANY($supported_versions)`. The frontend additionally filters the pack dropdown to only show packs with ≥1 compatible item.
+**Decision**: no junction table. Compatibility is determined at `POST /api/rooms` by counting `game_items WHERE payload_version = ANY($role_versions)` for each role declared in the handler's `RequiredPacks()`. The frontend additionally filters the pack dropdown to only show packs with ≥1 compatible item via `GET /api/packs?game_type=<slug>&role=<role>`.
 
-**Consequences**: admins do not need to tag packs per game type. New game types work with existing packs immediately. The API must expose `supported_payload_versions` in `GET /api/game-types/:slug` so the frontend can filter. The room creation endpoint returns `pack_no_supported_items` or `pack_insufficient_items` (see `ref-error-codes.md`) on failure.
+**Consequences**: admins do not need to tag packs per game type. New game types work with existing packs immediately. The API exposes `required_packs` in `GET /api/game-types/:slug` so the frontend can filter. The room creation endpoint returns per-role error codes (`image_pack_no_supported_items`, `image_pack_insufficient`, `text_pack_no_supported_items`, `text_pack_insufficient`, and the companion `*_required` / `*_not_applicable` codes — see `ref-error-codes.md`) on failure. See [ADR-013](#adr-013--multi-pack-rooms-via-explicit-role-columns) for how multi-role game types (e.g. `meme-vote`) extend this model without a junction table.
 
 ---
 
@@ -161,3 +161,20 @@ The contradictory note in the pre-redesign `04-api.md` ("backend sets user_id = 
 4. **Server-side phrase validation is still required.** The routes being unmounted in prod is not a substitute for per-action confirmation. Every non-prod invocation requires a typed phrase both in the UI modal and as a JSON body field, validated server-side against a hardcoded expected value. This catches two distinct failure modes: (a) an operator mis-enabling the danger zone in a shared preprod instance, and (b) a CSRF-style forged POST from a malicious site. The `SameSite=Strict` guarantee from [ADR-011](#adr-011--samesitestrict-as-the-sole-csrf-defense) already rules out (b) in conforming browsers, but the typed phrase adds a belt-and-braces confirmation that's visible in server logs.
 5. **Option (c) rejected as too costly.** Shipping a separate prod binary would require a second Docker image, a second CI pipeline, and divergent build tags — all to gate ~200 lines of handler code. The conditional-route approach gives the same effective surface reduction at the cost of a single `if` in `main.go`.
 6. **Audit logging is unconditional.** Every successful danger-zone invocation writes an entry to the `admin_audit` table with the action name, acting admin ID, and a JSON summary of what was deleted. This exists regardless of stage — dev and preprod use it as well, because the same logs are useful when investigating "who reset the staging env yesterday".
+
+---
+
+## ADR-013 — Multi-Pack Rooms via Explicit Role Columns
+
+**Status**: Accepted
+
+**Context**: `meme-vote` needs two content streams — the image stack (same as `meme-caption`) and a caption pack dealt to players. The schema had one `rooms.pack_id`. Three options for associating a room with N packs: (a) add a nullable `rooms.text_pack_id` column referencing `game_packs(id)` and let handlers declare the roles they consume, (b) generalise to a `room_packs(room_id, role, pack_id)` join table, (c) store the secondary pack ID inside `rooms.config` JSON.
+
+**Decision**: option (a). `rooms.text_pack_id` is a nullable FK to `game_packs(id)`. Game-type handlers declare their pack roles via `GameTypeHandler.RequiredPacks() []PackRequirement`; the API layer iterates this list at `POST /api/rooms` to validate each pack's compatibility (count items matching `payload_version = ANY($role_versions)`) and minimum size (`MinItemsFn(cfg, maxPlayers)`). Single-role game types (`meme-caption`) leave `text_pack_id` null; two-role types (`meme-vote`) populate it. The frontend renders one pack picker per declared role using `GET /api/packs?game_type=<slug>&role=<role>`.
+
+**Consequences**:
+
+1. **Rooms can reference up to two packs with zero extra plumbing.** Every `rooms`-touching query stays as-is because `text_pack_id` is nullable; only queries that need the caption pack opt in via an extra join.
+2. **Role-keyed error codes keep diagnostics actionable.** Validation failures surface per role (`image_pack_no_supported_items`, `text_pack_insufficient`, `text_pack_required`, `image_pack_not_applicable`, etc.) — the UI can point directly at the offending picker. See [error-codes.md](error-codes.md).
+3. **A future game type needing a third role promotes the pattern to a join table.** The migration is mechanical: introduce `room_packs(room_id, role, pack_id)`, backfill from `pack_id` / `text_pack_id`, migrate queries, drop the columns. Deferring this is YAGNI — no third role is planned, and the join table would churn every existing query and test today without adding value.
+4. **Storing `text_pack_id` in `rooms.config` (option c) rejected.** Packs are first-class FKs everywhere else (`submissions.pack_id` would have no DB-enforced integrity if the second pack lived in JSON). Role-keyed columns keep the invariant that every pack a room uses is discoverable and FK-protected.

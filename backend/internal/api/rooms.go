@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"log/slog"
 	"math/big"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -44,6 +46,7 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		GameTypeID string          `json:"game_type_id"`
 		PackID     string          `json:"pack_id"`
+		TextPackID string          `json:"text_pack_id"`
 		Mode       string          `json:"mode"`
 		Config     json.RawMessage `json:"config"`
 	}
@@ -60,6 +63,14 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid pack_id")
 		return
+	}
+	var textPackID uuid.UUID
+	if req.TextPackID != "" {
+		textPackID, err = uuid.Parse(req.TextPackID)
+		if err != nil {
+			writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid text_pack_id")
+			return
+		}
 	}
 	// Validate mode
 	switch req.Mode {
@@ -104,24 +115,42 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate pack compatibility
-	versions := handler.SupportedPayloadVersions()
-	count, err := h.db.CountCompatibleItems(r.Context(), db.CountCompatibleItemsParams{
-		PackID: packID, Versions: int32SliceToI32Arr(versions),
-	})
-	if err != nil || count == 0 {
-		writeError(w, r, http.StatusUnprocessableEntity, "pack_no_supported_items", "Pack has no items compatible with this game type")
-		return
-	}
-
-	// Pack must carry enough items to cover the normalized round count.
+	// Role-aware pack validation. The handler declares what packs it needs
+	// (image, text, …) and ValidatePackRequirements enforces presence + item
+	// counts across every declared role. Error codes are scoped per role so
+	// the client can map them to the right picker.
 	var normalized game.RoomConfig
 	if err := json.Unmarshal(roomConfig, &normalized); err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to parse normalized config")
 		return
 	}
-	if int64(normalized.RoundCount) > count {
-		writeError(w, r, http.StatusUnprocessableEntity, "pack_insufficient_items", "Pack does not have enough items for the requested round count")
+	packRefs := map[game.PackRole][16]byte{
+		game.PackRoleImage: packID,
+	}
+	if req.TextPackID != "" {
+		packRefs[game.PackRoleText] = textPackID
+	}
+	maxPlayers := handler.MaxPlayers()
+	if maxPlayers == 0 {
+		maxPlayers = 12
+	}
+	if perr := game.ValidatePackRequirements(
+		r.Context(),
+		sqlcCounter{q: h.db},
+		handler,
+		normalized,
+		packRefs,
+		maxPlayers,
+	); perr != nil {
+		status := http.StatusUnprocessableEntity
+		switch {
+		case perr.Code == "internal_error":
+			status = http.StatusInternalServerError
+		case strings.HasSuffix(perr.Code, "_required"),
+			strings.HasSuffix(perr.Code, "_not_applicable"):
+			status = http.StatusBadRequest
+		}
+		writeError(w, r, status, perr.Code, perr.Message)
 		return
 	}
 
@@ -141,10 +170,15 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to check active room")
 		return
 	}
+	textPackParam := pgtype.UUID{}
+	if req.TextPackID != "" {
+		textPackParam = pgtype.UUID{Bytes: textPackID, Valid: true}
+	}
 	room, err := h.db.CreateRoom(r.Context(), db.CreateRoomParams{
 		Code:       generateRoomCode(),
 		GameTypeID: gameTypeID,
 		PackID:     packID,
+		TextPackID: textPackParam,
 		HostID:     hostPG,
 		Mode:       req.Mode,
 		Config:     roomConfig,
@@ -199,4 +233,16 @@ func int32SliceToI32Arr(versions []int) []int32 {
 		out[i] = int32(v)
 	}
 	return out
+}
+
+// sqlcCounter adapts *db.Queries to game.PackItemCounter so the game package
+// can validate pack item counts without importing sqlc types directly. Keeps
+// the interface boundary in the game package free of db-layer concerns.
+type sqlcCounter struct{ q *db.Queries }
+
+func (c sqlcCounter) CountItemsForPack(ctx context.Context, packID [16]byte, versions []int) (int64, error) {
+	return c.q.CountCompatibleItems(ctx, db.CountCompatibleItemsParams{
+		PackID:   packID,
+		Versions: int32SliceToI32Arr(versions),
+	})
 }

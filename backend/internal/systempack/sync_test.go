@@ -73,6 +73,36 @@ func systemPackID(t *testing.T) uuid.UUID {
 	return id
 }
 
+// systemTextPackID is the sibling sentinel for the bundled text pack.
+// Must match systempack.SystemTextPackID.
+func systemTextPackID(t *testing.T) uuid.UUID {
+	t.Helper()
+	id, err := uuid.Parse("00000000-0000-0000-0000-000000000002")
+	if err != nil {
+		t.Fatalf("parse sentinel: %v", err)
+	}
+	return id
+}
+
+// resetTextSystemPack mirrors resetSystemPack for the text demo pack so each
+// text-sync test starts from a clean slate.
+func resetTextSystemPack(t *testing.T, q *db.Queries) {
+	t.Helper()
+	ctx := context.Background()
+	items, err := q.ListItemsForPack(ctx, db.ListItemsForPackParams{
+		PackID: systemTextPackID(t), Lim: 10000, Off: 0,
+	})
+	if err != nil {
+		return
+	}
+	for _, it := range items {
+		versions, _ := q.ListVersionsForItem(ctx, it.ID)
+		for _, v := range versions {
+			_ = q.HardDeleteVersion(ctx, v.ID)
+		}
+	}
+}
+
 // resetSystemPack clears the items from the previous test so each test starts
 // from a clean slate. The pack row is left in place — Sync will upsert it
 // again on the next call. Items are hard-deleted here because nothing else
@@ -289,6 +319,175 @@ func TestSync_RemovedFile_SoftDeletesItem(t *testing.T) {
 	}
 	if len(items) == 1 && items[0].Name != "keep" {
 		t.Errorf("wrong item survived: %q", items[0].Name)
+	}
+}
+
+// ── Text demo pack ───────────────────────────────────────────────────────
+
+// textFS builds a fstest.MapFS containing demo-text-pack/items.json with the
+// given JSON body. Tests use this to drive SyncTextFS directly.
+func textFS(body string) fstest.MapFS {
+	return fstest.MapFS{
+		"demo-text-pack/items.json": &fstest.MapFile{Data: []byte(body)},
+	}
+}
+
+func TestSyncText_MissingFile_CreatesPackWithZeroItems(t *testing.T) {
+	pool := testutil.Pool()
+	q := db.New(pool)
+	resetTextSystemPack(t, q)
+
+	// fstest.MapFS without the items.json entry — readTextEntries treats this
+	// as "no entries" so the pack row is upserted with zero items.
+	fs := fstest.MapFS{}
+
+	if err := systempack.SyncTextFS(context.Background(), q, fs, testutil.NewLogger()); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+
+	pack, err := q.GetPackByID(context.Background(), systemTextPackID(t))
+	if err != nil {
+		t.Fatalf("text pack not created: %v", err)
+	}
+	if !pack.IsSystem {
+		t.Errorf("want is_system=true, got false")
+	}
+	if pack.Name != "Demo Text Pack" {
+		t.Errorf("want Name=Demo Text Pack, got %q", pack.Name)
+	}
+	if pack.OwnerID.Valid {
+		t.Errorf("want owner_id=NULL, got %v", pack.OwnerID)
+	}
+	items, _ := q.ListItemsForPack(context.Background(), db.ListItemsForPackParams{
+		PackID: systemTextPackID(t), Lim: 100, Off: 0,
+	})
+	if len(items) != 0 {
+		t.Errorf("want 0 items, got %d", len(items))
+	}
+}
+
+func TestSyncText_NewEntry_CreatesItemV2WithPayload(t *testing.T) {
+	pool := testutil.Pool()
+	q := db.New(pool)
+	resetTextSystemPack(t, q)
+
+	body := `[{"name":"hello","text":"Hello world"}]`
+	if err := systempack.SyncTextFS(context.Background(), q, textFS(body), testutil.NewLogger()); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+
+	items, _ := q.ListItemsForPack(context.Background(), db.ListItemsForPackParams{
+		PackID: systemTextPackID(t), Lim: 100, Off: 0,
+	})
+	if len(items) != 1 {
+		t.Fatalf("want 1 item, got %d", len(items))
+	}
+	if items[0].Name != "hello" {
+		t.Errorf("want name=hello, got %q", items[0].Name)
+	}
+	if items[0].PayloadVersion != 2 {
+		t.Errorf("want payload_version=2, got %d", items[0].PayloadVersion)
+	}
+	if items[0].MediaKey != nil {
+		t.Errorf("want media_key=nil for text item, got %v", items[0].MediaKey)
+	}
+	// payload should embed both text and a sha256
+	if !bytes.Contains(items[0].Payload, []byte("Hello world")) {
+		t.Errorf("payload missing text: %s", items[0].Payload)
+	}
+	if !bytes.Contains(items[0].Payload, []byte("sha256")) {
+		t.Errorf("payload missing sha256: %s", items[0].Payload)
+	}
+}
+
+func TestSyncText_UnchangedEntry_NoOp(t *testing.T) {
+	pool := testutil.Pool()
+	q := db.New(pool)
+	resetTextSystemPack(t, q)
+
+	body := `[{"name":"keep","text":"steady"}]`
+	if err := systempack.SyncTextFS(context.Background(), q, textFS(body), testutil.NewLogger()); err != nil {
+		t.Fatalf("first sync: %v", err)
+	}
+	items, _ := q.ListItemsForPack(context.Background(), db.ListItemsForPackParams{
+		PackID: systemTextPackID(t), Lim: 100, Off: 0,
+	})
+	if len(items) != 1 {
+		t.Fatalf("want 1 item, got %d", len(items))
+	}
+	versionsBefore, _ := q.ListVersionsForItem(context.Background(), items[0].ID)
+
+	if err := systempack.SyncTextFS(context.Background(), q, textFS(body), testutil.NewLogger()); err != nil {
+		t.Fatalf("second sync: %v", err)
+	}
+	versionsAfter, _ := q.ListVersionsForItem(context.Background(), items[0].ID)
+	if len(versionsAfter) != len(versionsBefore) {
+		t.Errorf("want no new versions on idempotent sync, got %d→%d", len(versionsBefore), len(versionsAfter))
+	}
+}
+
+func TestSyncText_ModifiedEntry_CreatesNewVersion(t *testing.T) {
+	pool := testutil.Pool()
+	q := db.New(pool)
+	resetTextSystemPack(t, q)
+
+	v1 := `[{"name":"line","text":"first take"}]`
+	if err := systempack.SyncTextFS(context.Background(), q, textFS(v1), testutil.NewLogger()); err != nil {
+		t.Fatalf("v1 sync: %v", err)
+	}
+	v2 := `[{"name":"line","text":"second take"}]`
+	if err := systempack.SyncTextFS(context.Background(), q, textFS(v2), testutil.NewLogger()); err != nil {
+		t.Fatalf("v2 sync: %v", err)
+	}
+
+	items, _ := q.ListItemsForPack(context.Background(), db.ListItemsForPackParams{
+		PackID: systemTextPackID(t), Lim: 100, Off: 0,
+	})
+	if len(items) != 1 {
+		t.Fatalf("want 1 item (same name), got %d", len(items))
+	}
+	versions, err := q.ListVersionsForItem(context.Background(), items[0].ID)
+	if err != nil {
+		t.Fatalf("list versions: %v", err)
+	}
+	if len(versions) != 2 {
+		t.Errorf("want 2 versions after modify, got %d", len(versions))
+	}
+}
+
+func TestSyncText_RemovedEntry_SoftDeletesItem(t *testing.T) {
+	pool := testutil.Pool()
+	q := db.New(pool)
+	resetTextSystemPack(t, q)
+
+	before := `[{"name":"keep","text":"stay"},{"name":"remove","text":"gone"}]`
+	if err := systempack.SyncTextFS(context.Background(), q, textFS(before), testutil.NewLogger()); err != nil {
+		t.Fatalf("before sync: %v", err)
+	}
+	after := `[{"name":"keep","text":"stay"}]`
+	if err := systempack.SyncTextFS(context.Background(), q, textFS(after), testutil.NewLogger()); err != nil {
+		t.Fatalf("after sync: %v", err)
+	}
+
+	items, _ := q.ListItemsForPack(context.Background(), db.ListItemsForPackParams{
+		PackID: systemTextPackID(t), Lim: 100, Off: 0,
+	})
+	if len(items) != 1 {
+		t.Errorf("want 1 visible item after retire, got %d", len(items))
+	}
+	if len(items) == 1 && items[0].Name != "keep" {
+		t.Errorf("wrong item survived: %q", items[0].Name)
+	}
+}
+
+func TestSyncText_InvalidJSON_ReturnsError(t *testing.T) {
+	pool := testutil.Pool()
+	q := db.New(pool)
+	resetTextSystemPack(t, q)
+
+	err := systempack.SyncTextFS(context.Background(), q, textFS("not-json"), testutil.NewLogger())
+	if err == nil {
+		t.Fatalf("want error on invalid JSON, got nil")
 	}
 }
 

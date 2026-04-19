@@ -8,6 +8,9 @@
   import MemeCaptionSubmitForm from '$lib/games/meme-caption/SubmitForm.svelte';
   import MemeCaptionVoteForm from '$lib/games/meme-caption/VoteForm.svelte';
   import MemeCaptionResultsView from '$lib/games/meme-caption/ResultsView.svelte';
+  import MemeVoteSubmitForm from '$lib/games/meme-vote/SubmitForm.svelte';
+  import MemeVoteVoteForm from '$lib/games/meme-vote/VoteForm.svelte';
+  import MemeVoteResultsView from '$lib/games/meme-vote/ResultsView.svelte';
   import WaitingStage from '$lib/components/room/WaitingStage.svelte';
   import EndStage from '$lib/components/room/EndStage.svelte';
   import RoomHeader from '$lib/components/room/RoomHeader.svelte';
@@ -30,6 +33,26 @@
   const hostPaced = $derived(($page.data as any)?.room?.config?.host_paced ?? false);
   const totalRounds = $derived(
     (($page.data as any)?.room?.config?.round_count as number | undefined) ?? null
+  );
+
+  // Per-game-type component trios. Each plugin supplies a Submit/Vote/Results
+  // component that understands the slug's payload shape. Keyed by slug so new
+  // game types slot in without touching the room shell's render logic.
+  const plugins = {
+    'meme-caption': {
+      Submit: MemeCaptionSubmitForm,
+      Vote: MemeCaptionVoteForm,
+      Results: MemeCaptionResultsView,
+    },
+    'meme-vote': {
+      Submit: MemeVoteSubmitForm,
+      Vote: MemeVoteVoteForm,
+      Results: MemeVoteResultsView,
+    },
+  } as const;
+
+  const plugin = $derived(
+    plugins[(room.gameType?.slug ?? 'meme-caption') as keyof typeof plugins] ?? plugins['meme-caption']
   );
 
   let prefersReducedMotion = $state(false);
@@ -84,11 +107,14 @@
       <section class="table-panel">
         <div class="stage-wrap relative z-[1]" class:hidden={!stage.visible}>
           {#if stage.displayPhase === 'submitting' && room.currentRound}
-            <MemeCaptionSubmitForm round={room.currentRound} />
+            {@const Submit = plugin.Submit}
+            <Submit round={room.currentRound} />
           {:else if stage.displayPhase === 'voting'}
-            <MemeCaptionVoteForm submissions={room.submissions} round={room.currentRound} />
+            {@const Vote = plugin.Vote}
+            <Vote submissions={room.submissions} round={room.currentRound} />
           {:else if stage.displayPhase === 'results'}
-            <MemeCaptionResultsView
+            {@const Results = plugin.Results}
+            <Results
               submissions={room.submissions}
               leaderboard={room.leaderboard}
               {isHost}

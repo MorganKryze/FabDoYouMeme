@@ -29,8 +29,14 @@ Canonical reference for every `snake_case` error code emitted by the system.
 | `invalid_mime_type`        | 422  | `POST /api/assets/upload-url`                    | MIME type not in the allowlist (JPEG, PNG, WebP)                                                                           |
 | `magic_bytes_mismatch`     | 422  | `POST /api/assets/upload-url`                    | File magic bytes do not match declared MIME type                                                                           |
 | `upload_too_large`         | 422  | `POST /api/assets/upload-url`                    | `size_bytes` exceeds `MAX_UPLOAD_SIZE_BYTES`                                                                               |
-| `pack_insufficient_items`  | 422  | `POST /api/rooms`                                | Pack has compatible items but fewer than `config.round_count`                                                              |
-| `pack_no_supported_items`  | 422  | `POST /api/rooms`                                | Pack has zero items with a `payload_version` supported by the chosen game type                                             |
+| `image_pack_insufficient`       | 422  | `POST /api/rooms`                                | Image pack has compatible items but fewer than `config.round_count`                                                  |
+| `image_pack_no_supported_items` | 422  | `POST /api/rooms`                                | Image pack has zero items with a `payload_version` supported by the chosen game type                                 |
+| `image_pack_required`           | 400  | `POST /api/rooms`                                | Game type requires an image pack but `pack_id` was not provided                                                      |
+| `image_pack_not_applicable`     | 400  | `POST /api/rooms`                                | Game type does not consume an image pack but `pack_id` was provided                                                  |
+| `text_pack_insufficient`        | 422  | `POST /api/rooms`                                | Text pack has fewer items than required for `hand_size × max_players + refills`                                      |
+| `text_pack_no_supported_items`  | 422  | `POST /api/rooms`                                | Text pack has zero items with a `payload_version` supported by the chosen game type                                  |
+| `text_pack_required`            | 400  | `POST /api/rooms`                                | Game type requires a text pack but `text_pack_id` was not provided                                                   |
+| `text_pack_not_applicable`      | 400  | `POST /api/rooms`                                | Game type does not consume a text pack but `text_pack_id` was provided                                               |
 | `solo_mode_not_supported`  | 422  | `POST /api/rooms`                                | `mode='solo'` requested but `game_types.supports_solo = false`                                                             |
 | `room_not_lobby`           | 409  | `PATCH /api/rooms/:code/config`                  | Room state is not `lobby`; config is locked once the game starts                                                           |
 | `room_already_finished`    | 409  | `POST /api/rooms/:code/end`                      | Room is already in `finished` state — terminal, cannot be ended again                                                      |
@@ -79,6 +85,7 @@ Sent to the originating connection as `{ "type": "error", "data": { "code": "...
 | `jokers_exhausted`     | Hub                          | `skip_submit` received after the player has used every joker for this game — no further skips accepted          |
 | `already_submitted`    | Hub                          | Submit or skip_submit received after the player already submitted or skipped this round                         |
 | `already_voted`        | Hub                          | Vote or skip_vote received after the player already voted or abstained this round                               |
+| `invalid_card`         | Hub                          | `meme-vote:submit { card_id }` references a card not in the player's current hand                               |
 
 ### WebSocket `room_closed` reasons
 

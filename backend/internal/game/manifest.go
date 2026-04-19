@@ -19,13 +19,13 @@ import (
 // Changing a bound is a one-file edit: update the handler's manifest.yaml
 // and restart the server. No DB migration is required.
 type Manifest struct {
-	Slug            string `yaml:"slug"`
-	Name            string `yaml:"name"`
-	Description     string `yaml:"description"`
-	Version         string `yaml:"version"`
-	SupportsSolo    bool   `yaml:"supports_solo"`
-	PayloadVersions []int  `yaml:"payload_versions"`
-	Config          Bounds `yaml:"config"`
+	Slug          string                    `yaml:"slug"`
+	Name          string                    `yaml:"name"`
+	Description   string                    `yaml:"description"`
+	Version       string                    `yaml:"version"`
+	SupportsSolo  bool                      `yaml:"supports_solo"`
+	RequiredPacks []ManifestPackRequirement `yaml:"required_packs"`
+	Config        Bounds                    `yaml:"config"`
 }
 
 // Bounds mirrors the flat JSONB shape we store in game_types.config and
@@ -48,6 +48,15 @@ type Bounds struct {
 	DefaultRoundCount            int  `yaml:"default_round_count"             json:"default_round_count"`
 	MinPlayers                   int  `yaml:"min_players"                     json:"min_players"`
 	MaxPlayers                   *int `yaml:"max_players"                     json:"max_players"`
+
+	// Hand-size bounds are optional — only game types that deal a hand of
+	// items per player (e.g. meme-vote) declare them. A zero MaxHandSize
+	// means the manifest has opted out and ValidateAndFill skips hand_size
+	// altogether. omitempty keeps these fields out of the game_types.config
+	// JSONB row for game types that don't use them.
+	MinHandSize     int `yaml:"min_hand_size,omitempty"     json:"min_hand_size,omitempty"`
+	MaxHandSize     int `yaml:"max_hand_size,omitempty"     json:"max_hand_size,omitempty"`
+	DefaultHandSize int `yaml:"default_hand_size,omitempty" json:"default_hand_size,omitempty"`
 }
 
 // RoomConfig is the normalized per-room config written back to
@@ -60,6 +69,11 @@ type RoomConfig struct {
 	HostPaced             bool `json:"host_paced"`
 	JokerCount            int  `json:"joker_count"`
 	AllowSkipVote         bool `json:"allow_skip_vote"`
+
+	// HandSize is only set for game types that deal a per-player hand of
+	// items (e.g. meme-vote). omitempty keeps rooms.config compact for
+	// game types that do not use a hand.
+	HandSize int `json:"hand_size,omitempty"`
 }
 
 // LoadManifest parses a YAML manifest and fails fast on any internal
@@ -80,8 +94,16 @@ func LoadManifest(raw []byte) (*Manifest, error) {
 	if m.Version == "" {
 		return nil, fmt.Errorf("manifest %q: version is required", m.Slug)
 	}
-	if len(m.PayloadVersions) == 0 {
-		return nil, fmt.Errorf("manifest %q: payload_versions must list at least one version", m.Slug)
+	if len(m.RequiredPacks) == 0 {
+		return nil, fmt.Errorf("manifest %q: required_packs must list at least one role", m.Slug)
+	}
+	for i, pr := range m.RequiredPacks {
+		if pr.Role == "" {
+			return nil, fmt.Errorf("manifest %q: required_packs[%d].role is required", m.Slug, i)
+		}
+		if len(pr.PayloadVersions) == 0 {
+			return nil, fmt.Errorf("manifest %q: required_packs[%d] (%s) must list at least one payload_version", m.Slug, i, pr.Role)
+		}
 	}
 	if err := m.Config.selfCheck(m.Slug); err != nil {
 		return nil, err
@@ -111,6 +133,17 @@ func (b Bounds) selfCheck(slug string) error {
 	}
 	if b.MaxPlayers != nil && *b.MaxPlayers < b.MinPlayers {
 		return fmt.Errorf("manifest %q: max_players (%d) < min_players (%d)", slug, *b.MaxPlayers, b.MinPlayers)
+	}
+	// Hand-size bounds are opted into by setting MaxHandSize > 0. Game types
+	// that don't deal hands (meme-caption) omit all three and selfCheck skips
+	// the block — the zero values are not treated as a bug.
+	if b.MaxHandSize > 0 {
+		if b.MinHandSize <= 0 || b.MinHandSize > b.MaxHandSize {
+			return fmt.Errorf("manifest %q: hand_size bounds invalid (min=%d max=%d)", slug, b.MinHandSize, b.MaxHandSize)
+		}
+		if b.DefaultHandSize < b.MinHandSize || b.DefaultHandSize > b.MaxHandSize {
+			return fmt.Errorf("manifest %q: hand_size default (%d) outside [%d,%d]", slug, b.DefaultHandSize, b.MinHandSize, b.MaxHandSize)
+		}
 	}
 	return nil
 }
@@ -148,6 +181,7 @@ func (b Bounds) ValidateAndFill(raw json.RawMessage) (json.RawMessage, error) {
 		HostPaced             *bool `json:"host_paced"`
 		JokerCount            *int  `json:"joker_count"`
 		AllowSkipVote         *bool `json:"allow_skip_vote"`
+		HandSize              *int  `json:"hand_size"`
 	}
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &in); err != nil {
@@ -180,6 +214,18 @@ func (b Bounds) ValidateAndFill(raw json.RawMessage) (json.RawMessage, error) {
 	}
 	if out.JokerCount < 0 || out.JokerCount > out.RoundCount {
 		return nil, &ValidationError{Field: "joker_count", Reason: fmt.Sprintf("must be between 0 and %d", out.RoundCount)}
+	}
+	// hand_size is only enforced when the manifest opted in via MaxHandSize>0.
+	// Game types that don't deal hands (meme-caption) skip this block entirely
+	// and HandSize stays 0 in the canonical config.
+	if b.MaxHandSize > 0 {
+		out.HandSize = intOr(in.HandSize, b.DefaultHandSize)
+		if out.HandSize < b.MinHandSize || out.HandSize > b.MaxHandSize {
+			return nil, &ValidationError{
+				Field:  "hand_size",
+				Reason: fmt.Sprintf("must be between %d and %d", b.MinHandSize, b.MaxHandSize),
+			}
+		}
 	}
 	return json.Marshal(out)
 }

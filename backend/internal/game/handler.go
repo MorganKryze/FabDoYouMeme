@@ -46,8 +46,10 @@ type GameTypeHandler interface {
 	// Slug returns the game type slug matching game_types.slug (e.g. "meme-caption").
 	Slug() string
 
-	// SupportedPayloadVersions returns which item payload versions this handler can process.
-	SupportedPayloadVersions() []int
+	// RequiredPacks describes every pack the game type needs to run a room.
+	// The API layer (POST /api/rooms) iterates this list to enforce pack
+	// compatibility and per-role minimum item counts at creation time.
+	RequiredPacks() []PackRequirement
 
 	// SupportsSolo returns true if solo mode (single player) is supported.
 	SupportsSolo() bool
@@ -86,4 +88,11 @@ type GameTypeHandler interface {
 	// vote_results.data.results. The hub populates Submission.AuthorUsername
 	// before this call so display names are available to the handler.
 	BuildVoteResultsPayload(submissions []Submission, votes []Vote, scores map[uuid.UUID]int) (json.RawMessage, error)
+
+	// PersonalisesRoundStart signals whether the hub must emit round_started
+	// with per-player data (e.g. to include a hand of cards). Handlers that
+	// broadcast a single payload (meme-caption) return false and keep the
+	// hub on the broadcast fast path. The actual per-player data lives on
+	// the hub — see Hub.personalRoundStartData.
+	PersonalisesRoundStart() bool
 }

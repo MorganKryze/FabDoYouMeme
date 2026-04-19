@@ -218,6 +218,11 @@ type Hub struct {
 	// It is set by startGame and cleared by finishRoom. Accessed only from
 	// the Run() goroutine, so no mutex is needed despite the function type.
 	roundsCancel context.CancelFunc
+
+	// memeVote owns the text-deck and per-player hands for a meme-vote
+	// room; nil for any other game type. Populated by startGame and only
+	// ever read/written on the Run goroutine.
+	memeVote *handState
 }
 
 // connectedPlayer is hub-internal player state. userID is really a generic
@@ -633,7 +638,18 @@ func (h *Hub) handleRoundCtrl(ctx context.Context, ctrl roundCtrlMsg) {
 		h.resultsLeaderboard = nil
 		h.roundResultsEndsAt = time.Time{}
 		h.roundPausedFlag = false
-		h.broadcast(buildMessage("round_started", map[string]any{
+		// Refill meme-vote hands before emitting round_started. Round 1 is a
+		// no-op because DealInitial already filled every hand in startGame;
+		// subsequent rounds top every player back to hand_size. Exhaustion
+		// here is surfaced as pack_exhausted end-of-game so the client sees a
+		// clean close rather than a stalled submit phase.
+		if h.memeVote != nil {
+			if err := h.memeVote.Refill(h.seatedPlayerIDs()); err != nil {
+				h.sendRoundCtrl(ctx, roundCtrlEndGame{reason: "pack_exhausted"})
+				return
+			}
+		}
+		baseRoundStart := map[string]any{
 			"round_number":     h.roundNum,
 			"ends_at":          c.endsAt.UTC().Format(time.RFC3339),
 			"duration_seconds": int(c.duration.Seconds()),
@@ -641,7 +657,12 @@ func (h *Hub) handleRoundCtrl(ctx context.Context, ctrl roundCtrlMsg) {
 				"payload":   c.payload,
 				"media_url": nilIfEmpty(c.mediaURL),
 			},
-		}))
+		}
+		if handler, ok := h.registry.Get(h.gameTypeSlug); ok && handler.PersonalisesRoundStart() {
+			h.sendPerPlayer("round_started", baseRoundStart, h.personalRoundStartData)
+		} else {
+			h.broadcast(buildMessage("round_started", baseRoundStart))
+		}
 
 	case roundCtrlCloseSubmissions:
 		submissions := submissionsMapToSlice(h.roundSubmissions)
@@ -671,6 +692,7 @@ func (h *Hub) handleRoundCtrl(ctx context.Context, ctrl roundCtrlMsg) {
 					"ends_at":          c.votingEndsAt.UTC().Format(time.RFC3339),
 					"duration_seconds": int(c.duration.Seconds()),
 				}))
+				h.maybeCloseVoting()
 				return
 			}
 		}
@@ -678,6 +700,7 @@ func (h *Hub) handleRoundCtrl(ctx context.Context, ctrl roundCtrlMsg) {
 			"ends_at":          c.votingEndsAt.UTC().Format(time.RFC3339),
 			"duration_seconds": int(c.duration.Seconds()),
 		}))
+		h.maybeCloseVoting()
 
 	case roundCtrlCloseVoting:
 		h.roundPhase = phaseResults
@@ -795,6 +818,11 @@ func (h *Hub) startGame(ctx context.Context) {
 		ID: h.roomID, State: "playing",
 	}); err != nil {
 		h.log.Error("hub: set room state playing", "error", err)
+	}
+	if h.gameTypeSlug == "meme-vote" {
+		if !h.initMemeVoteHands(ctx) {
+			return
+		}
 	}
 	h.broadcast(buildMessage("game_started", map[string]any{
 		"player_count": len(h.players),
@@ -918,8 +946,13 @@ func (h *Hub) runRounds(ctx context.Context) {
 	handler, hasHandler := h.registry.Get(h.gameTypeSlug)
 	var versions []int32
 	if hasHandler {
-		for _, v := range handler.SupportedPayloadVersions() {
-			versions = append(versions, int32(v))
+		for _, pr := range handler.RequiredPacks() {
+			if pr.Role != PackRoleImage {
+				continue
+			}
+			for _, v := range pr.PayloadVersions {
+				versions = append(versions, int32(v))
+			}
 		}
 	}
 
@@ -1133,6 +1166,39 @@ func (h *Hub) handleGameMessage(ctx context.Context, msg playerMessage) {
 			}))
 			return
 		}
+		// Meme-vote: consume the card from the player's hand and snapshot its
+		// text into the stored payload so later pack edits do not mutate
+		// history. The handler has already validated that card_id is a UUID.
+		if h.memeVote != nil {
+			var p struct {
+				CardID string `json:"card_id"`
+			}
+			if err := json.Unmarshal(msg.data, &p); err != nil {
+				h.safeSend(msg.player, buildMessage("error", map[string]string{
+					"code": "invalid_submission", "message": err.Error(),
+				}))
+				return
+			}
+			cardID, err := uuid.Parse(p.CardID)
+			if err != nil {
+				h.safeSend(msg.player, buildMessage("error", map[string]string{
+					"code": "invalid_submission", "message": "card_id must be UUID",
+				}))
+				return
+			}
+			if err := h.memeVote.Play(msg.player.userID, cardID); err != nil {
+				h.safeSend(msg.player, buildMessage("error", map[string]string{
+					"code": err.Error(), "message": "card not in your hand",
+				}))
+				return
+			}
+			text := h.memeVote.textFor[cardID]
+			snapshot, _ := json.Marshal(map[string]string{
+				"card_id": p.CardID,
+				"text":    text,
+			})
+			msg.data = snapshot
+		}
 		uid, _ := uuid.Parse(msg.player.userID)
 		pgID := pgtype.UUID{Bytes: uid, Valid: true}
 		var sub db.Submission
@@ -1247,10 +1313,7 @@ func (h *Hub) handleGameMessage(ctx context.Context, msg playerMessage) {
 			VoterID:      voterID,
 		}
 		h.safeSend(msg.player, buildMessage("vote_accepted", nil))
-		if len(h.roundVotes)+len(h.roundSkippedVotes) >= len(h.players) && h.allVotedCh != nil {
-			close(h.allVotedCh)
-			h.allVotedCh = nil
-		}
+		h.maybeCloseVoting()
 
 	default:
 		h.safeSend(msg.player, buildMessage("error", map[string]string{"code": "unknown_message_type"}))
@@ -1339,10 +1402,55 @@ func (h *Hub) handleSkipVote(ctx context.Context, p *connectedPlayer) {
 		"user_id":   p.userID,
 		"player_id": p.userID,
 	}))
-	if len(h.roundVotes)+len(h.roundSkippedVotes) >= len(h.players) && h.allVotedCh != nil {
-		close(h.allVotedCh)
-		h.allVotedCh = nil
+	h.maybeCloseVoting()
+}
+
+// voteThresholdMet reports whether enough players have voted or skipped for
+// the voting phase to close early. The threshold is the number of *eligible*
+// voters — players with at least one submission they did not author — and
+// only their votes/skips count toward progress. A lone submitter in a round
+// where every other player used skip_submit has no votable target (self-vote
+// is rejected by the handler); without this carve-out the round stalls until
+// the full voting timer expires even though every player has acted.
+// Called only from the Run() goroutine.
+func (h *Hub) voteThresholdMet() bool {
+	eligible := 0
+	accounted := 0
+	for playerID := range h.players {
+		hasTarget := false
+		for _, s := range h.roundSubmissions {
+			if s.UserID.String() != playerID {
+				hasTarget = true
+				break
+			}
+		}
+		if !hasTarget {
+			continue
+		}
+		eligible++
+		if _, voted := h.roundVotes[playerID]; voted {
+			accounted++
+		} else if h.roundSkippedVotes[playerID] {
+			accounted++
+		}
 	}
+	return accounted >= eligible
+}
+
+// maybeCloseVoting closes allVotedCh (once) when the vote threshold is met.
+// Called from both the vote and skip_vote handlers, and once at the start of
+// the voting phase to cover the degenerate case where no eligible voter
+// exists at all (e.g. the sole remaining player is the sole submitter).
+// Called only from the Run() goroutine.
+func (h *Hub) maybeCloseVoting() {
+	if h.allVotedCh == nil {
+		return
+	}
+	if !h.voteThresholdMet() {
+		return
+	}
+	close(h.allVotedCh)
+	h.allVotedCh = nil
 }
 
 // Helper: submissionsMapToSlice converts the round submissions map to a slice.
@@ -1462,6 +1570,39 @@ func (h *Hub) broadcast(msg []byte) {
 	}
 }
 
+// sendPerPlayer emits one message per connected player, merging a shared base
+// payload with per-player fields supplied by perPlayer. Reconnecting players
+// are skipped so they rehydrate via room_state on reconnect. perPlayer may
+// return nil to send the base payload unchanged.
+func (h *Hub) sendPerPlayer(msgType string, base map[string]any, perPlayer func(playerID string) map[string]any) {
+	for id, p := range h.players {
+		if p.reconnecting {
+			continue
+		}
+		data := make(map[string]any, len(base)+4)
+		for k, v := range base {
+			data[k] = v
+		}
+		if perPlayer != nil {
+			for k, v := range perPlayer(id) {
+				data[k] = v
+			}
+		}
+		h.safeSend(p, buildMessage(msgType, data))
+	}
+}
+
+// personalRoundStartData returns the player-specific fields that should be
+// merged into round_started. Only called for handlers whose
+// PersonalisesRoundStart()==true. For meme-vote it carries the player's
+// hand; other personalised game types would add their own fields here.
+func (h *Hub) personalRoundStartData(playerID string) map[string]any {
+	if hand := h.memeVoteHandPayload(playerID); hand != nil {
+		return map[string]any{"hand": hand}
+	}
+	return nil
+}
+
 func (h *Hub) sendTo(p *connectedPlayer, msg []byte) {
 	h.safeSend(p, msg)
 }
@@ -1523,6 +1664,13 @@ func (h *Hub) buildRoomState(recipientUserID string) map[string]any {
 		"state":   string(h.state),
 		"players": players,
 		"host_id": h.hostUserID,
+	}
+	// meme-vote hands are per-player state that must survive refresh and
+	// reconnect. Emit the recipient's current hand whenever the room is
+	// playing (not just mid-round) so the client can render the tray on the
+	// lobby-to-round transition without waiting for round_started.
+	if hand := h.memeVoteHandPayload(recipientUserID); hand != nil {
+		out["my_hand"] = hand
 	}
 	// Mid-round rehydration: a client that refreshes or joins late needs
 	// enough state to render the in-flight phase. Only emitted when a round

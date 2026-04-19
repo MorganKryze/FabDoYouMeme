@@ -6,6 +6,11 @@ export interface User {
   created_at: string; // ISO 8601 UTC timestamp
 }
 
+export interface RequiredPack {
+  role: 'image' | 'text';
+  payload_versions: number[];
+}
+
 export interface GameType {
   id: string;
   slug: string;
@@ -14,7 +19,7 @@ export interface GameType {
   version: string;
   supports_solo: boolean;
   config: GameTypeConfig;
-  supported_payload_versions: number[];
+  required_packs: RequiredPack[];
 }
 
 export interface GameTypeConfig {
@@ -29,6 +34,11 @@ export interface GameTypeConfig {
   min_round_count: number;
   max_round_count: number;
   default_round_count: number;
+  /** Hand-size bounds are only present for game types that deal a per-player
+   *  hand of items (e.g. meme-vote). Omitted for game types that don't. */
+  min_hand_size?: number;
+  max_hand_size?: number;
+  default_hand_size?: number;
 }
 
 export interface Pack {
@@ -51,6 +61,7 @@ export interface Room {
   game_type_slug: string;
   game_type?: GameType | null;
   pack_id: string;
+  text_pack_id: string | null;
   host_id: string;
   mode: 'multiplayer' | 'solo';
   state: 'lobby' | 'playing' | 'finished';
@@ -69,6 +80,9 @@ export interface RoomConfig {
   joker_count: number;
   /** When true, players may abstain from voting in a round. Defaults to true. */
   allow_skip_vote: boolean;
+  /** Per-player hand of items dealt each round — only present for game types
+   *  whose manifest declares hand-size bounds (e.g. meme-vote). */
+  hand_size?: number;
 }
 
 export interface Invite {
@@ -170,7 +184,14 @@ export interface Submission {
   id: string;
   user_id: string;
   username: string;
-  caption: string;
+  // Either field is present depending on game type:
+  //  - meme-caption → `caption`
+  //  - meme-vote    → `text`
+  // Components under `lib/games/<slug>/` read whichever field their handler
+  // emits. Keeping both optional here avoids a discriminated union that would
+  // leak game-type concerns into every consumer of the shared type.
+  caption?: string;
+  text?: string;
   votes_received?: number;
   points_awarded?: number;
 }

@@ -21,7 +21,7 @@
           <th class="text-left px-4 py-3">Slug</th>
           <th class="text-left px-4 py-3">Name</th>
           <th class="text-left px-4 py-3">Description</th>
-          <th class="text-left px-4 py-3">Payload Versions</th>
+          <th class="text-left px-4 py-3">Required Packs</th>
           <th class="text-left px-4 py-3">Supports Solo</th>
         </tr>
       </thead>
@@ -32,7 +32,13 @@
             <td class="px-4 py-3 font-medium">{gt.name}</td>
             <td class="px-4 py-3 text-brand-text-muted">{gt.description}</td>
             <td class="px-4 py-3 text-brand-text-muted font-mono text-xs">
-              [{(gt.supported_payload_versions ?? []).join(', ')}]
+              {#if (gt.required_packs ?? []).length === 0}
+                —
+              {:else}
+                {(gt.required_packs ?? [])
+                  .map((p) => `${p.role}:[${(p.payload_versions ?? []).join(',')}]`)
+                  .join(' · ')}
+              {/if}
             </td>
             <td class="px-4 py-3">
               <span class="text-xs px-2 py-0.5 rounded-full {gt.supports_solo ? 'bg-green-100 text-green-800' : 'bg-muted text-brand-text-muted'}">

@@ -118,6 +118,7 @@ type Room struct {
 	CreatedAt              time.Time          `json:"created_at"`
 	FinishedAt             pgtype.Timestamptz `json:"finished_at"`
 	RematchWindowExpiresAt pgtype.Timestamptz `json:"rematch_window_expires_at"`
+	TextPackID             pgtype.UUID        `json:"text_pack_id"`
 }
 
 type RoomBan struct {

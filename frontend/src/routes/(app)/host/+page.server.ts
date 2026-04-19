@@ -27,24 +27,27 @@ export const actions: Actions = {
     const data = await request.formData();
     const game_type_id = data.get('game_type_id') as string;
     const pack_id = data.get('pack_id') as string;
+    const text_pack_id = (data.get('text_pack_id') as string | null) || '';
     const is_solo = data.get('is_solo') === 'true';
 
     // Defaults only — host tunes rounds/durations/host_paced inside the
     // room's staging area (WaitingStage) via PATCH /api/rooms/{code}/config.
+    const payload: Record<string, unknown> = {
+      game_type_id,
+      pack_id,
+      is_solo,
+      config: {
+        round_count: 5,
+        round_duration_seconds: 60,
+        voting_duration_seconds: 30,
+        host_paced: false
+      }
+    };
+    if (text_pack_id) payload.text_pack_id = text_pack_id;
     const res = await fetch(`${API_BASE}/api/rooms`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        game_type_id,
-        pack_id,
-        is_solo,
-        config: {
-          round_count: 5,
-          round_duration_seconds: 60,
-          voting_duration_seconds: 30,
-          host_paced: false
-        }
-      })
+      body: JSON.stringify(payload)
     });
 
     if (!res.ok) {
@@ -56,10 +59,20 @@ export const actions: Actions = {
         /**/
       }
       const messages: Record<string, string> = {
-        pack_no_supported_items:
+        image_pack_no_supported_items:
           'This pack has no items compatible with the selected game type.',
-        pack_insufficient_items:
+        image_pack_insufficient:
           'This pack does not have enough items for the selected round count.',
+        image_pack_required: 'This game type requires an image pack.',
+        image_pack_not_applicable:
+          'This game type does not use an image pack.',
+        text_pack_no_supported_items:
+          'The selected text pack has no compatible captions.',
+        text_pack_insufficient:
+          'The selected text pack does not have enough captions for the configured hand size and round count.',
+        text_pack_required: 'This game type requires a text pack.',
+        text_pack_not_applicable:
+          'This game type does not use a text pack.',
         invalid_game_type: 'Invalid game type selected.',
         already_in_active_room:
           "You're already in a room — return to it or leave it first."

@@ -42,11 +42,24 @@ type Handler struct{}
 // which keeps game_types.config and the shipped handler code in lock-step.
 func New() *Handler { return &Handler{} }
 
-func (h *Handler) Slug() string                    { return manifest.Slug }
-func (h *Handler) SupportedPayloadVersions() []int { return manifest.PayloadVersions }
-func (h *Handler) SupportsSolo() bool              { return manifest.SupportsSolo }
-func (h *Handler) MaxPlayers() int                 { return manifest.MaxPlayersOrDefault() }
-func (h *Handler) Manifest() *game.Manifest        { return manifest }
+func (h *Handler) Slug() string             { return manifest.Slug }
+func (h *Handler) SupportsSolo() bool       { return manifest.SupportsSolo }
+func (h *Handler) MaxPlayers() int          { return manifest.MaxPlayersOrDefault() }
+func (h *Handler) Manifest() *game.Manifest { return manifest }
+
+// RequiredPacks declares the one image pack meme-caption consumes. The pack
+// must contain at least RoundCount items compatible with payload_version 1.
+func (h *Handler) RequiredPacks() []game.PackRequirement {
+	return []game.PackRequirement{
+		{
+			Role:            game.PackRoleImage,
+			PayloadVersions: []int{1},
+			MinItemsFn: func(cfg game.RoomConfig, _ int) int {
+				return cfg.RoundCount
+			},
+		},
+	}
+}
 
 type submitPayload struct {
 	Caption string `json:"caption"`
@@ -168,6 +181,10 @@ func (h *Handler) BuildVoteResultsPayload(
 	})
 	return json.RawMessage(payload), err
 }
+
+// PersonalisesRoundStart returns false: meme-caption broadcasts a single
+// round_started payload to every player.
+func (h *Handler) PersonalisesRoundStart() bool { return false }
 
 // Compile-time interface check
 var _ game.GameTypeHandler = (*Handler)(nil)

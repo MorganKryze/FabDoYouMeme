@@ -5,6 +5,7 @@ export const roomsApi = {
   create: (body: {
     game_type_id: string;
     pack_id: string;
+    text_pack_id?: string;
     mode?: 'multiplayer' | 'solo';
     config?: Partial<RoomConfig>;
   }) => api.post<Room>('/api/rooms', body),

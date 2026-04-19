@@ -118,17 +118,18 @@ export async function uploadFileToBackend(
   return res.json();
 }
 
-// Creates a new version row with media_key attached. This replaces the old
-// confirmUpload that tried to PATCH the item directly — the backend's item
-// PATCH only accepts current_version_id, not media_key.
+// Creates a new version row. For image items, pass `media_key` (the asset key
+// returned by uploadFileToBackend). For text items, pass `payload` (the JSON
+// blob the game handler will read at round time, e.g. `{ text: "..." }`). The
+// backend stores whichever is set; the other defaults to NULL/`{}`.
 export async function createItemVersion(
   packId: string,
   itemId: string,
-  mediaKey: string
+  body: { media_key?: string; payload?: unknown }
 ): Promise<ItemVersion> {
   return api.post<ItemVersion>(
     `/api/packs/${packId}/items/${itemId}/versions`,
-    { media_key: mediaKey }
+    body
   );
 }
 
@@ -180,7 +181,7 @@ export async function uploadImageItem(
       file.name
     );
 
-    const version = await createItemVersion(packId, item.id, media_key);
+    const version = await createItemVersion(packId, item.id, { media_key });
     const promoted = await promoteVersion(packId, item.id, version.id);
     // The backend /items list endpoint injects `thumbnail_url` server-side,
     // but the single-item endpoints (createItem / promoteVersion) don't.
@@ -204,6 +205,59 @@ export async function uploadImageItem(
   }
 }
 
+// Text counterpart to uploadImageItem. Steps: create item (payload_version 2)
+// → create version with `{ text }` payload → PATCH item to point at the new
+// version. No asset upload, so one fewer network round-trip than the image
+// flow.
+const MAX_TEXT_LENGTH = 500;
+
+export function validateItemText(text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) return 'text is required';
+  if (trimmed.length > MAX_TEXT_LENGTH) return `exceeds ${MAX_TEXT_LENGTH} characters`;
+  return null;
+}
+
+export async function uploadTextItem(
+  packId: string,
+  name: string,
+  text: string
+): Promise<UploadOutcome> {
+  const invalid = validateItemText(text);
+  if (invalid) return { ok: false, error: invalid, filename: name };
+
+  let itemId: string | null = null;
+  try {
+    const item = await createItem(packId, { name, payload_version: 2 });
+    itemId = item.id;
+
+    const payload = { text: text.trim() };
+    const version = await createItemVersion(packId, item.id, { payload });
+    const promoted = await promoteVersion(packId, item.id, version.id);
+    return {
+      ok: true,
+      item: {
+        ...promoted,
+        payload,
+        version_number: version.version_number
+      }
+    };
+  } catch (err) {
+    if (itemId) {
+      try {
+        await deleteItem(packId, itemId);
+      } catch {
+        /* non-fatal: admin can hand-clean from /admin/packs/[id] */
+      }
+    }
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      filename: name
+    };
+  }
+}
+
 export async function bulkUploadImageItems(
   packId: string,
   files: File[],
@@ -218,6 +272,64 @@ export async function bulkUploadImageItems(
       file.name.replace(/\.[^.]+$/, ''),
       file
     );
+    if (result.ok) outcome.succeeded.push(result.item);
+    else outcome.failed.push({ filename: result.filename, reason: result.error });
+  }
+  return outcome;
+}
+
+// ── Bulk text import via JSON ─────────────────────────────────────────────
+// Accepted shape: a top-level array of `{ name, text }` objects. Anything else
+// (object wrapper, missing fields, wrong types) is rejected with a precise
+// reason so the caller can show one toast per row, matching the image flow.
+export interface ParsedTextItem {
+  name: string;
+  text: string;
+}
+
+export type ParsedTextItems =
+  | { ok: true; items: ParsedTextItem[] }
+  | { ok: false; error: string };
+
+export function parseTextItemsJson(raw: string): ParsedTextItems {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    return { ok: false, error: `invalid JSON: ${err instanceof Error ? err.message : String(err)}` };
+  }
+  if (!Array.isArray(parsed)) {
+    return { ok: false, error: 'expected a top-level JSON array of { name, text } objects' };
+  }
+  const items: ParsedTextItem[] = [];
+  for (let i = 0; i < parsed.length; i++) {
+    const row = parsed[i];
+    if (!row || typeof row !== 'object') {
+      return { ok: false, error: `entry ${i + 1}: expected an object with name and text` };
+    }
+    const name = (row as { name?: unknown }).name;
+    const text = (row as { text?: unknown }).text;
+    if (typeof name !== 'string' || !name.trim()) {
+      return { ok: false, error: `entry ${i + 1}: name is required` };
+    }
+    if (typeof text !== 'string') {
+      return { ok: false, error: `entry ${i + 1} ("${name}"): text must be a string` };
+    }
+    items.push({ name: name.trim(), text });
+  }
+  return { ok: true, items };
+}
+
+export async function bulkUploadTextItems(
+  packId: string,
+  items: ParsedTextItem[],
+  onProgress?: (done: number, total: number, currentName: string) => void
+): Promise<BulkUploadOutcome> {
+  const outcome: BulkUploadOutcome = { succeeded: [], failed: [] };
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    onProgress?.(i, items.length, it.name);
+    const result = await uploadTextItem(packId, it.name, it.text);
     if (result.ok) outcome.succeeded.push(result.item);
     else outcome.failed.push({ filename: result.filename, reason: result.error });
   }

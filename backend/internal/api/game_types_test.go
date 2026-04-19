@@ -79,8 +79,8 @@ func TestGetGameType_BySlug(t *testing.T) {
 	if resp["slug"] != "meme-caption" {
 		t.Errorf("want slug=meme-caption, got %v", resp["slug"])
 	}
-	if _, ok := resp["supported_payload_versions"]; !ok {
-		t.Error("expected supported_payload_versions in response")
+	if _, ok := resp["required_packs"]; !ok {
+		t.Error("expected required_packs in response")
 	}
 }
 

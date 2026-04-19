@@ -45,6 +45,19 @@ DELETE FROM game_item_versions WHERE id = $1;
 -- name: ReorderItems :exec
 UPDATE game_items SET position = $2 WHERE id = $1 AND pack_id = $3;
 
+-- name: ListPackItemsByPayloadVersion :many
+-- Returns every non-deleted item in a pack whose current version payload
+-- matches a specific payload_version. Used by the hub to build per-game
+-- decks (e.g. the text-caption deck for meme-vote) where one item per row
+-- is enough and a single random-pick is not.
+SELECT gi.id, giv.payload
+FROM game_items gi
+JOIN game_item_versions giv ON giv.id = gi.current_version_id
+WHERE gi.pack_id = $1
+  AND gi.deleted_at IS NULL
+  AND giv.deleted_at IS NULL
+  AND gi.payload_version = $2;
+
 -- name: GetRandomUnplayedItems :many
 SELECT gi.*, giv.media_key, giv.payload, giv.id AS version_id
 FROM game_items gi

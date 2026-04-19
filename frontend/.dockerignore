@@ -1,0 +1,12 @@
+.git
+.gitignore
+.vscode
+.idea
+node_modules
+.svelte-kit
+build
+coverage
+*.log
+Dockerfile
+.dockerignore
+README.md

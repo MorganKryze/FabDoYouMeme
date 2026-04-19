@@ -59,6 +59,15 @@
       gameType?.config.default_voting_duration_seconds ??
       30
   );
+  // Hand-size is opt-in per game type (manifest must declare bounds). When
+  // the manifest doesn't, both the server and this UI treat hand_size as
+  // absent — the stepper never renders.
+  const handSizeMax = $derived(gameType?.config.max_hand_size ?? 0);
+  const handSize = $derived(
+    pageRoom?.config.hand_size ??
+      gameType?.config.default_hand_size ??
+      0
+  );
 
   let codeCopied = $state(false);
   let linkCopied = $state(false);
@@ -135,6 +144,7 @@
   let settingsHostPaced = $state(false);
   let settingsJokerCount = $state(0);
   let settingsAllowSkipVote = $state(true);
+  let settingsHandSize = $state(0);
   let settingsSaving = $state(false);
 
   $effect(() => {
@@ -144,6 +154,7 @@
     settingsHostPaced = pageRoom?.config.host_paced ?? false;
     settingsJokerCount = pageRoom?.config.joker_count ?? Math.ceil(roundCount / 5);
     settingsAllowSkipVote = pageRoom?.config.allow_skip_vote ?? true;
+    settingsHandSize = handSize;
   });
 
   // Bounds come from the game type manifest (backend/internal/game/types/
@@ -157,6 +168,8 @@
   const submitMax = $derived(gameType?.config.max_round_duration_seconds ?? 300);
   const voteMin = $derived(gameType?.config.min_voting_duration_seconds ?? 10);
   const voteMax = $derived(gameType?.config.max_voting_duration_seconds ?? 120);
+  const handSizeMin = $derived(gameType?.config.min_hand_size ?? 1);
+  const handSizeMaxBound = $derived(gameType?.config.max_hand_size ?? 1);
 
   // The server merges this partial patch over the room's current config
   // and re-validates against the manifest bounds, so we only send the
@@ -214,6 +227,12 @@
     const checked = (e.currentTarget as HTMLInputElement).checked;
     settingsAllowSkipVote = checked;
     void saveSettings({ allow_skip_vote: checked });
+  }
+
+  function commitHandSize() {
+    const v = clamp(settingsHandSize, handSizeMin, handSizeMaxBound);
+    settingsHandSize = v;
+    if (v !== handSize) void saveSettings({ hand_size: v });
   }
 
   // ─── Kick flow (host-only, lobby-only) ──────────────────────────────
@@ -563,7 +582,11 @@
         {/if}
       </div>
 
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div
+        class={handSizeMax > 0
+          ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3'
+          : 'grid grid-cols-2 sm:grid-cols-4 gap-3'}
+      >
         <div class="flex flex-col gap-1.5">
           <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
             Rounds
@@ -688,6 +711,39 @@
             0 disables · rec. {Math.ceil(settingsRoundCount / 5)}
           </span>
         </div>
+        {#if handSizeMax > 0}
+          <div class="flex flex-col gap-1.5">
+            <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+              Hand size
+            </span>
+            <div class="stepper">
+              <button
+                type="button"
+                aria-label="Decrease hand size"
+                disabled={settingsHandSize <= handSizeMin}
+                onclick={() => { settingsHandSize = Math.max(handSizeMin, settingsHandSize - 1); commitHandSize(); }}
+              >−</button>
+              <input
+                type="number"
+                min={handSizeMin}
+                max={handSizeMaxBound}
+                bind:value={settingsHandSize}
+                onblur={commitHandSize}
+                onchange={commitHandSize}
+                aria-label="Hand size"
+              />
+              <button
+                type="button"
+                aria-label="Increase hand size"
+                disabled={settingsHandSize >= handSizeMaxBound}
+                onclick={() => { settingsHandSize = Math.min(handSizeMaxBound, settingsHandSize + 1); commitHandSize(); }}
+              >+</button>
+            </div>
+            <span class="text-[0.6rem] font-semibold text-brand-text-muted tabular-nums">
+              {handSizeMin}–{handSizeMaxBound} cards
+            </span>
+          </div>
+        {/if}
       </div>
 
       <label class="flex items-start gap-3 cursor-pointer rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white px-4 py-3">

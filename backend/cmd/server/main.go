@@ -30,6 +30,7 @@ import (
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/email"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/game"
 	memecaption "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_caption"
+	memevote "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_vote"
 	mw "github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/storage"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/systempack"
@@ -106,6 +107,11 @@ func main() {
 		logger.Error("startup: system pack sync", "error", err)
 		// Non-fatal — a RustFS blip or migration gap shouldn't stop the server.
 	}
+	if err := systempack.SyncText(context.Background(), queries, logger); err != nil {
+		logger.Error("startup: system text pack sync", "error", err)
+		// Non-fatal — text sync touches no external storage, but a corrupt
+		// items.json shouldn't block boot.
+	}
 
 	// ── Game registry ─────────────────────────────────────────────────────────
 	// Handlers carry their own manifest (see each handler's manifest.yaml).
@@ -114,6 +120,7 @@ func main() {
 	// restarting — no migration needed.
 	registry := game.NewRegistry()
 	registry.Register(memecaption.New())
+	registry.Register(memevote.New())
 
 	if err := game.SyncGameTypes(context.Background(), queries, registry, logger); err != nil {
 		logger.Error("game type sync failed", "error", err)
@@ -140,7 +147,7 @@ func main() {
 	exportLimiter := mw.NewRateLimiter(5, 3600, clk, cfg.TrustedProxies)
 
 	// ── HTTP handlers ─────────────────────────────────────────────────────────
-	packHandler      := api.NewPackHandler(pool, cfg, store)
+	packHandler      := api.NewPackHandler(pool, cfg, store, registry)
 	roomHandler      := api.NewRoomHandler(pool, cfg, manager, logger)
 	assetHandler     := api.NewAssetHandler(pool, cfg, store)
 	gameTypeHandler  := api.NewGameTypeHandler(pool, registry)

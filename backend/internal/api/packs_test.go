@@ -26,7 +26,7 @@ func newPackHandler(t *testing.T) (*api.PackHandler, *db.Queries) {
 	t.Helper()
 	pool := testutil.Pool()
 	cfg := &config.Config{MaxUploadSizeBytes: 2097152}
-	h := api.NewPackHandler(pool, cfg, nil) // nil storage — not needed for pack CRUD
+	h := api.NewPackHandler(pool, cfg, nil, nil) // nil storage + registry — not needed for pack CRUD
 	return h, db.New(pool)
 }
 

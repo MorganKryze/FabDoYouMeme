@@ -107,16 +107,21 @@
     audioEl.play()
       .then(() => fadeTo(() => volumeFor(level), fadeMs))
       .catch((err) => {
-        if (err?.name === 'NotAllowedError') {
-          if (!audioEl) return;
-          audioEl.muted = true;
-          audioEl.play().catch(() => {});
-          gestureCleanup?.();
-          gestureCleanup = armGestureUnmute();
-        } else {
-          error = `Audio: ${err?.message ?? err}`;
-          console.warn('[bg-music] play() rejected', err);
-        }
+        // Any pre-gesture rejection is almost certainly an autoplay block.
+        // Mobile browsers don't all name it NotAllowedError (Samsung Internet,
+        // older WebViews, iOS versions differ), so we always try the muted
+        // fallback and only surface a banner if that ALSO fails.
+        if (!audioEl) return;
+        audioEl.muted = true;
+        audioEl.play()
+          .then(() => {
+            gestureCleanup?.();
+            gestureCleanup = armGestureUnmute();
+          })
+          .catch((mutedErr) => {
+            error = `Audio: ${mutedErr?.message ?? err?.message ?? err}`;
+            console.warn('[bg-music] play() rejected', { err, mutedErr });
+          });
       });
   }
 
@@ -224,6 +229,7 @@
   loop
   preload="auto"
   onerror={onAudioError}
+  onplaying={() => (error = null)}
 ></audio>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->

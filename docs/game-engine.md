@@ -237,7 +237,10 @@ name: Trivia
 description: Answer questions fastest for the most points.
 version: "1.0.0"
 supports_solo: true
-payload_versions: [1]
+
+required_packs:
+  - role: image
+    payload_versions: [1]
 
 config:
   min_round_duration_seconds: 10
@@ -279,10 +282,24 @@ var manifest = func() *game.Manifest {
 type Handler struct{}
 func New() *Handler                          { return &Handler{} }
 func (h *Handler) Slug() string              { return manifest.Slug }
-func (h *Handler) SupportedPayloadVersions() []int { return manifest.PayloadVersions }
 func (h *Handler) SupportsSolo() bool        { return manifest.SupportsSolo }
 func (h *Handler) MaxPlayers() int           { return manifest.MaxPlayersOrDefault() }
 func (h *Handler) Manifest() *game.Manifest  { return manifest }
+
+// RequiredPacks declares every pack role the game type consumes. `MinItemsFn`
+// computes the minimum item count the pack must contain (e.g. one per round)
+// and is evaluated at POST /api/rooms time against the chosen RoomConfig.
+func (h *Handler) RequiredPacks() []game.PackRequirement {
+    return []game.PackRequirement{
+        {
+            Role:            game.PackRoleImage,
+            PayloadVersions: []int{1},
+            MinItemsFn: func(cfg game.RoomConfig, _ int) int {
+                return cfg.RoundCount
+            },
+        },
+    }
+}
 
 // ... game-specific methods: ValidateSubmission, ValidateVote,
 // CalculateRoundScores, BuildSubmissionsShownPayload, BuildVoteResultsPayload ...
@@ -291,6 +308,8 @@ var _ game.GameTypeHandler = (*Handler)(nil) // compile-time interface check
 ```
 
 **`handler_test.go`** (recommended) — unit-test the scoring and payload builders. The hub is single-threaded per room, so no concurrency scaffolding is needed.
+
+If your game type needs more than one content stream (e.g. images **and** captions), extend the `required_packs:` block in the manifest with an extra role entry and return a matching `PackRequirement` from `RequiredPacks()`. The API layer iterates the list and enforces compatibility per role; `rooms.text_pack_id` stores the second pack. `MinItemsFn` is Go-only — it reads `RoomConfig` + `max_players` to return the minimum item count the pack must contain for the room to be creatable.
 
 #### 2. Register at startup — one line in `backend/cmd/server/main.go`
 
@@ -361,11 +380,37 @@ A player cannot vote for their own submission. The hub pre-validates this before
 
 ---
 
+## Meme-vote game type
+
+A twist on the caption game: players pick a caption from a dealt hand instead of typing one. Gameplay per round:
+
+1. At game start, every player is dealt a hand of captions (`default_hand_size: 5`, bounded by `min_hand_size` and `max_hand_size`). Each caption is a text-pack item with `payload_version: 2`.
+2. All players see the same image with a prompt. Each player plays one caption from their hand — sent as `meme-vote:submit` with `{ "card_id": "<uuid>" }`.
+3. The played card is consumed; the hand is refilled from the text pack at the start of the next round.
+4. Submissions close when time runs out or all players submit. Captions are shown anonymously; players vote for the funniest with `meme-vote:vote`.
+5. Authors are revealed after voting closes; scoring is identical to `meme-caption` (1 point per vote received, ties both get full points).
+
+Two pack roles are required per room:
+
+- `pack_id` — the image pack (`payload_version: 1`, same format as `meme-caption`)
+- `text_pack_id` — the caption pack (`payload_version: 2`, `{ "text": "..." }`)
+
+The hub personalises `round_started` for this game type (`PersonalisesRoundStart() returns true`): each player receives their own `hand` array inside `round_started.data` so the frontend can render the dealt cards. The hub maintains per-player hand state across reconnects and replays it in `room_state.data.my_hand` when a player rejoins mid-game.
+
+`supports_solo` is `false` — voting requires at least two distinct players.
+
+---
+
 ## Pack compatibility
 
-Packs are game-type-agnostic — the same pack of meme images can be used across `meme-caption`, `meme-vote`, or any future type. Compatibility is checked at room creation by counting items with a `payload_version` supported by the chosen game type's handler. If the pack has zero compatible items or fewer than the configured round count, room creation is rejected with a specific error.
+Packs are game-type-agnostic at the item-payload level — item payloads are versioned JSONB and compatibility is decided per item by `payload_version`. A game type declares one or more **pack roles** it consumes via `GameTypeHandler.RequiredPacks()`. Each requirement names a role (`image`, `text`, …) and the `payload_version` set it accepts. A room references one pack per declared role (`rooms.pack_id` for image; `rooms.text_pack_id` for text). At creation, the API counts compatible items per role and rejects the room if any pack is missing, empty of compatible items, or smaller than the role's `MinItemsFn` sizing.
 
-Item payloads are JSONB; the structure is defined per game type. `meme-caption` uses `{ "image_url": "...", "prompt": "..." }`.
+Example item payloads:
+
+- `payload_version: 1` (image) — `{ "image_url": "...", "prompt": "..." }`
+- `payload_version: 2` (text)  — `{ "text": "..." }`
+
+`meme-caption` declares `[{image, [1]}]`. `meme-vote` declares `[{image, [1]}, {text, [2]}]`. Existing image packs are compatible with both game types as-is; a text pack is additionally required to host a `meme-vote` room.
 
 ---
 

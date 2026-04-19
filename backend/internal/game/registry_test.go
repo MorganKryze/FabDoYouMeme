@@ -13,12 +13,21 @@ import (
 // stubHandler is a minimal GameTypeHandler for registry tests.
 type stubHandler struct{ slug string }
 
-func (s *stubHandler) Slug() string                    { return s.slug }
-func (s *stubHandler) SupportedPayloadVersions() []int { return []int{1} }
-func (s *stubHandler) SupportsSolo() bool              { return false }
-func (s *stubHandler) MaxPlayers() int                 { return 0 }
+func (s *stubHandler) Slug() string { return s.slug }
+func (s *stubHandler) RequiredPacks() []game.PackRequirement {
+	return []game.PackRequirement{{Role: game.PackRoleImage, PayloadVersions: []int{1}}}
+}
+func (s *stubHandler) SupportsSolo() bool { return false }
+func (s *stubHandler) MaxPlayers() int    { return 0 }
 func (s *stubHandler) Manifest() *game.Manifest {
-	return &game.Manifest{Slug: s.slug, Name: s.slug, Version: "1.0.0", PayloadVersions: []int{1}}
+	return &game.Manifest{
+		Slug:    s.slug,
+		Name:    s.slug,
+		Version: "1.0.0",
+		RequiredPacks: []game.ManifestPackRequirement{
+			{Role: game.PackRoleImage, PayloadVersions: []int{1}},
+		},
+	}
 }
 func (s *stubHandler) ValidateSubmission(_ game.Round, _ json.RawMessage) error { return nil }
 func (s *stubHandler) ValidateVote(_ game.Round, _ game.Submission, _ uuid.UUID, _ json.RawMessage) error {
@@ -33,6 +42,7 @@ func (s *stubHandler) BuildSubmissionsShownPayload(_ []game.Submission) (json.Ra
 func (s *stubHandler) BuildVoteResultsPayload(_ []game.Submission, _ []game.Vote, _ map[uuid.UUID]int) (json.RawMessage, error) {
 	return json.RawMessage(`{}`), nil
 }
+func (s *stubHandler) PersonalisesRoundStart() bool { return false }
 
 func TestRegistry_RegisterAndGet(t *testing.T) {
 	r := game.NewRegistry()

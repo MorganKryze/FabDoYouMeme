@@ -158,15 +158,16 @@ func (q *Queries) CreateGuestVote(ctx context.Context, arg CreateGuestVoteParams
 
 const createRoom = `-- name: CreateRoom :one
 
-INSERT INTO rooms (code, game_type_id, pack_id, host_id, mode, config)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at
+INSERT INTO rooms (code, game_type_id, pack_id, text_pack_id, host_id, mode, config)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at, text_pack_id
 `
 
 type CreateRoomParams struct {
 	Code       string          `json:"code"`
 	GameTypeID uuid.UUID       `json:"game_type_id"`
 	PackID     uuid.UUID       `json:"pack_id"`
+	TextPackID pgtype.UUID     `json:"text_pack_id"`
 	HostID     pgtype.UUID     `json:"host_id"`
 	Mode       string          `json:"mode"`
 	Config     json.RawMessage `json:"config"`
@@ -178,6 +179,7 @@ func (q *Queries) CreateRoom(ctx context.Context, arg CreateRoomParams) (Room, e
 		arg.Code,
 		arg.GameTypeID,
 		arg.PackID,
+		arg.TextPackID,
 		arg.HostID,
 		arg.Mode,
 		arg.Config,
@@ -195,6 +197,7 @@ func (q *Queries) CreateRoom(ctx context.Context, arg CreateRoomParams) (Room, e
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.RematchWindowExpiresAt,
+		&i.TextPackID,
 	)
 	return i, err
 }
@@ -466,7 +469,7 @@ func (q *Queries) GetRecentRoomsForUser(ctx context.Context, arg GetRecentRoomsF
 }
 
 const getRoomByCode = `-- name: GetRoomByCode :one
-SELECT r.id, r.code, r.game_type_id, r.pack_id, r.host_id, r.mode, r.state, r.config, r.created_at, r.finished_at, r.rematch_window_expires_at, gt.slug AS game_type_slug FROM rooms r
+SELECT r.id, r.code, r.game_type_id, r.pack_id, r.host_id, r.mode, r.state, r.config, r.created_at, r.finished_at, r.rematch_window_expires_at, r.text_pack_id, gt.slug AS game_type_slug FROM rooms r
 JOIN game_types gt ON r.game_type_id = gt.id
 WHERE r.code = $1
 `
@@ -483,6 +486,7 @@ type GetRoomByCodeRow struct {
 	CreatedAt              time.Time          `json:"created_at"`
 	FinishedAt             pgtype.Timestamptz `json:"finished_at"`
 	RematchWindowExpiresAt pgtype.Timestamptz `json:"rematch_window_expires_at"`
+	TextPackID             pgtype.UUID        `json:"text_pack_id"`
 	GameTypeSlug           string             `json:"game_type_slug"`
 }
 
@@ -501,13 +505,14 @@ func (q *Queries) GetRoomByCode(ctx context.Context, code string) (GetRoomByCode
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.RematchWindowExpiresAt,
+		&i.TextPackID,
 		&i.GameTypeSlug,
 	)
 	return i, err
 }
 
 const getRoomByID = `-- name: GetRoomByID :one
-SELECT id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at FROM rooms WHERE id = $1
+SELECT id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at, text_pack_id FROM rooms WHERE id = $1
 `
 
 func (q *Queries) GetRoomByID(ctx context.Context, id uuid.UUID) (Room, error) {
@@ -525,6 +530,7 @@ func (q *Queries) GetRoomByID(ctx context.Context, id uuid.UUID) (Room, error) {
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.RematchWindowExpiresAt,
+		&i.TextPackID,
 	)
 	return i, err
 }
@@ -815,7 +821,7 @@ func (q *Queries) RemoveRoomPlayer(ctx context.Context, arg RemoveRoomPlayerPara
 
 const setRoomState = `-- name: SetRoomState :one
 UPDATE rooms SET state = $2, finished_at = CASE WHEN $2 = 'finished' THEN now() ELSE NULL END
-WHERE id = $1 RETURNING id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at
+WHERE id = $1 RETURNING id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at, text_pack_id
 `
 
 type SetRoomStateParams struct {
@@ -838,6 +844,7 @@ func (q *Queries) SetRoomState(ctx context.Context, arg SetRoomStateParams) (Roo
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.RematchWindowExpiresAt,
+		&i.TextPackID,
 	)
 	return i, err
 }
@@ -911,7 +918,7 @@ func (q *Queries) UpdatePlayerScore(ctx context.Context, arg UpdatePlayerScorePa
 }
 
 const updateRoomConfig = `-- name: UpdateRoomConfig :one
-UPDATE rooms SET config = $2 WHERE id = $1 AND state = 'lobby' RETURNING id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at
+UPDATE rooms SET config = $2 WHERE id = $1 AND state = 'lobby' RETURNING id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at, text_pack_id
 `
 
 type UpdateRoomConfigParams struct {
@@ -934,6 +941,7 @@ func (q *Queries) UpdateRoomConfig(ctx context.Context, arg UpdateRoomConfigPara
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.RematchWindowExpiresAt,
+		&i.TextPackID,
 	)
 	return i, err
 }

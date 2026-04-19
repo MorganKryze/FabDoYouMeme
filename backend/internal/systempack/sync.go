@@ -21,15 +21,24 @@ import (
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/storage"
 )
 
-// SystemPackID is the fixed sentinel UUID of the bundled demo pack.
+// SystemPackID is the fixed sentinel UUID of the bundled image demo pack.
 // Stable across reboots so the RustFS object keys (packs/{packID}/...) are
 // also stable, which in turn keeps round history pointing at valid blobs.
 var SystemPackID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
 
+// SystemTextPackID is the sibling sentinel for the bundled text demo pack.
+// Same stability contract as SystemPackID — text items don't store assets,
+// but rounds still reference them by item id.
+var SystemTextPackID = uuid.MustParse("00000000-0000-0000-0000-000000000002")
+
 const (
-	systemPackName        = "Demo Pack"
-	systemPackDescription = "Bundled sample images to get you started."
-	demoPackDir           = "demo-pack"
+	systemPackName            = "Demo Pack"
+	systemPackDescription     = "Bundled sample images to get you started."
+	demoPackDir               = "demo-pack"
+	systemTextPackName        = "Demo Text Pack"
+	systemTextPackDescription = "Bundled sample text prompts to get you started."
+	demoTextPackDir           = "demo-text-pack"
+	demoTextPackFile          = "items.json"
 )
 
 var allowedExts = map[string]string{
@@ -268,4 +277,172 @@ func strPtr(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+// ── Text demo pack ───────────────────────────────────────────────────────
+
+// SyncText runs the startup sync for the bundled text pack using the
+// embedded demo-text-pack/items.json. Symmetric to Sync but with no asset
+// storage — text content lives in version.payload as `{text, sha256}`.
+func SyncText(ctx context.Context, q *db.Queries, logger *slog.Logger) error {
+	return SyncTextFS(ctx, q, DemoTextPackFS, logger)
+}
+
+// SyncTextFS is SyncText's testable core.
+func SyncTextFS(ctx context.Context, q *db.Queries, srcFS fs.FS, logger *slog.Logger) error {
+	start := time.Now()
+
+	pack, err := q.UpsertSystemPack(ctx, db.UpsertSystemPackParams{
+		ID:          SystemTextPackID,
+		Name:        systemTextPackName,
+		Description: strPtr(systemTextPackDescription),
+	})
+	if err != nil {
+		return fmt.Errorf("upsert system text pack: %w", err)
+	}
+
+	entries, err := readTextEntries(srcFS, logger)
+	if err != nil {
+		return fmt.Errorf("read text entries: %w", err)
+	}
+
+	existing, err := loadExisting(ctx, q, pack.ID)
+	if err != nil {
+		return fmt.Errorf("load existing text items: %w", err)
+	}
+
+	seen := map[string]bool{}
+	stats := syncStats{}
+
+	for _, e := range entries {
+		stem := strings.ToLower(strings.TrimSpace(e.Name))
+		if stem == "" {
+			logger.Warn("systempack sync", "event", "text.entry_skipped_no_name")
+			continue
+		}
+		seen[stem] = true
+		hashHex := sha256Hex([]byte(e.Text))
+
+		if cur, ok := existing[stem]; ok {
+			if cur.hash == hashHex {
+				stats.unchanged++
+				continue
+			}
+			if err := applyNewTextVersion(ctx, q, cur.itemID, e.Text, hashHex); err != nil {
+				logger.Error("systempack sync", "event", "text.update_failed", "name", stem, "error", err)
+				continue
+			}
+			stats.updated++
+			logger.Info("systempack sync", "event", "text.update", "name", stem, "new_hash", hashHex[:8])
+			continue
+		}
+
+		if err := createNewTextItem(ctx, q, pack.ID, stem, e.Text, hashHex); err != nil {
+			logger.Error("systempack sync", "event", "text.create_failed", "name", stem, "error", err)
+			continue
+		}
+		stats.created++
+		logger.Info("systempack sync", "event", "text.create", "name", stem)
+	}
+
+	for stem, cur := range existing {
+		if seen[stem] {
+			continue
+		}
+		if err := q.SoftDeleteItem(ctx, cur.itemID); err != nil {
+			logger.Error("systempack sync", "event", "text.retire_failed", "name", stem, "error", err)
+			continue
+		}
+		stats.retired++
+		logger.Info("systempack sync", "event", "text.retire", "name", stem)
+	}
+
+	logger.Info("systempack sync",
+		"event", "text_summary",
+		"created", stats.created,
+		"updated", stats.updated,
+		"retired", stats.retired,
+		"unchanged", stats.unchanged,
+		"duration", time.Since(start).String())
+
+	return nil
+}
+
+type textEntry struct {
+	Name string `json:"name"`
+	Text string `json:"text"`
+}
+
+// readTextEntries loads and parses items.json. A missing file is treated as
+// "no entries" so a fresh checkout without bundled content still upserts the
+// pack row (consistent with how the image sync handles a missing folder).
+func readTextEntries(srcFS fs.FS, logger *slog.Logger) ([]textEntry, error) {
+	data, err := fs.ReadFile(srcFS, demoTextPackDir+"/"+demoTextPackFile)
+	if err != nil {
+		logger.Warn("systempack sync", "event", "text.read_failed", "error", err)
+		return nil, nil
+	}
+	var entries []textEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return nil, fmt.Errorf("parse items.json: %w", err)
+	}
+	return entries, nil
+}
+
+func createNewTextItem(
+	ctx context.Context,
+	q *db.Queries,
+	packID uuid.UUID,
+	stem, text, hashHex string,
+) error {
+	item, err := q.CreateItem(ctx, db.CreateItemParams{
+		PackID:         packID,
+		Name:           stem,
+		PayloadVersion: 2,
+	})
+	if err != nil {
+		return fmt.Errorf("create text item row: %w", err)
+	}
+	payload, _ := json.Marshal(map[string]string{"text": text, "sha256": hashHex})
+	ver, err := q.CreateItemVersion(ctx, db.CreateItemVersionParams{
+		ItemID:   item.ID,
+		MediaKey: nil,
+		Payload:  payload,
+	})
+	if err != nil {
+		// Roll back the orphan item row so the next sync retries cleanly.
+		_ = q.SoftDeleteItem(ctx, item.ID)
+		return fmt.Errorf("create text version: %w", err)
+	}
+	if _, err := q.SetCurrentVersion(ctx, db.SetCurrentVersionParams{
+		ID:               item.ID,
+		CurrentVersionID: pgtype.UUID{Bytes: ver.ID, Valid: true},
+	}); err != nil {
+		return fmt.Errorf("set current text version: %w", err)
+	}
+	return nil
+}
+
+func applyNewTextVersion(
+	ctx context.Context,
+	q *db.Queries,
+	itemID uuid.UUID,
+	text, hashHex string,
+) error {
+	payload, _ := json.Marshal(map[string]string{"text": text, "sha256": hashHex})
+	ver, err := q.CreateItemVersion(ctx, db.CreateItemVersionParams{
+		ItemID:   itemID,
+		MediaKey: nil,
+		Payload:  payload,
+	})
+	if err != nil {
+		return fmt.Errorf("create text version: %w", err)
+	}
+	if _, err := q.SetCurrentVersion(ctx, db.SetCurrentVersionParams{
+		ID:               itemID,
+		CurrentVersionID: pgtype.UUID{Bytes: ver.ID, Valid: true},
+	}); err != nil {
+		return fmt.Errorf("set current text version: %w", err)
+	}
+	return nil
 }

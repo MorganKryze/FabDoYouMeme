@@ -52,7 +52,7 @@ describe('RoomState.handleMessage', () => {
           max_round_count: 10,
           default_round_count: 3
         },
-        supported_payload_versions: [1]
+        required_packs: [{ role: 'image', payload_versions: [1] }]
       },
       state: 'lobby',
       players: [makePlayer('u1', 'alice')],

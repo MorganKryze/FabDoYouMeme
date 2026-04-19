@@ -20,6 +20,7 @@ import (
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/config"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/game"
 	memecaption "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_caption"
+	memevote "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_vote"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/testutil"
 )
 
@@ -28,10 +29,60 @@ func newRoomHandler(t *testing.T) (*api.RoomHandler, *db.Queries) {
 	pool := testutil.Pool()
 	registry := game.NewRegistry()
 	registry.Register(memecaption.New())
+	registry.Register(memevote.New())
 	q := db.New(pool)
+	// Sync handlers into game_types so tests that POST /api/rooms with the
+	// meme-vote slug find the row — matches the production boot flow.
+	if err := game.SyncGameTypes(context.Background(), q, registry, slog.Default()); err != nil {
+		t.Fatalf("sync game types: %v", err)
+	}
 	cfg := &config.Config{}
 	manager := game.NewManager(context.Background(), registry, q, cfg, slog.Default(), clock.Real{})
 	return api.NewRoomHandler(pool, cfg, manager, slog.Default()), q
+}
+
+// seedPackWithItems creates a pack and N items whose current version payload
+// is `{"text":"tN"}` for payload_version=2 or `{"caption":"cN"}` for v1 (the
+// shape doesn't matter to the count check — only payload_version does).
+func seedPackWithItems(t *testing.T, q *db.Queries, ctx context.Context, namePrefix string, payloadVersion int32, count int) db.GamePack {
+	t.Helper()
+	pack, err := q.CreatePack(ctx, db.CreatePackParams{
+		Name:       testutil.SeedName(t) + "_" + namePrefix,
+		Visibility: "private",
+	})
+	if err != nil {
+		t.Fatalf("create pack: %v", err)
+	}
+	for i := 0; i < count; i++ {
+		item, err := q.CreateItem(ctx, db.CreateItemParams{
+			PackID:         pack.ID,
+			Name:           fmt.Sprintf("%s-%d", namePrefix, i),
+			PayloadVersion: payloadVersion,
+		})
+		if err != nil {
+			t.Fatalf("create item: %v", err)
+		}
+		var payload json.RawMessage
+		if payloadVersion == 2 {
+			payload = json.RawMessage(fmt.Sprintf(`{"text":"t%d"}`, i))
+		} else {
+			payload = json.RawMessage(fmt.Sprintf(`{"caption":"c%d"}`, i))
+		}
+		key := fmt.Sprintf("test/%s/%d.png", pack.ID, i)
+		ver, err := q.CreateItemVersion(ctx, db.CreateItemVersionParams{
+			ItemID: item.ID, MediaKey: &key, Payload: payload,
+		})
+		if err != nil {
+			t.Fatalf("create item version: %v", err)
+		}
+		if _, err := q.SetCurrentVersion(ctx, db.SetCurrentVersionParams{
+			ID:               item.ID,
+			CurrentVersionID: pgtype.UUID{Bytes: ver.ID, Valid: true},
+		}); err != nil {
+			t.Fatalf("set current version: %v", err)
+		}
+	}
+	return pack
 }
 
 func seedRoomUser(t *testing.T, q *db.Queries) db.User {
@@ -50,7 +101,7 @@ func seedRoomUser(t *testing.T, q *db.Queries) db.User {
 	return u
 }
 
-func TestCreateRoom_PackNoSupportedItems(t *testing.T) {
+func TestCreateRoom_ImagePackNoSupportedItems(t *testing.T) {
 	h, q := newRoomHandler(t)
 	user := seedRoomUser(t, q)
 
@@ -85,12 +136,12 @@ func TestCreateRoom_PackNoSupportedItems(t *testing.T) {
 	}
 	var resp map[string]string
 	json.NewDecoder(rec.Body).Decode(&resp)
-	if resp["code"] != "pack_no_supported_items" {
-		t.Errorf("want pack_no_supported_items, got %s", resp["code"])
+	if resp["code"] != "image_pack_no_supported_items" {
+		t.Errorf("want image_pack_no_supported_items, got %s", resp["code"])
 	}
 }
 
-func TestCreateRoom_PackInsufficientItems(t *testing.T) {
+func TestCreateRoom_ImagePackInsufficient(t *testing.T) {
 	h, q := newRoomHandler(t)
 	user := seedRoomUser(t, q)
 	ctx := context.Background()
@@ -120,8 +171,8 @@ func TestCreateRoom_PackInsufficientItems(t *testing.T) {
 	}
 	var resp map[string]string
 	json.NewDecoder(rec.Body).Decode(&resp)
-	if resp["code"] != "pack_insufficient_items" {
-		t.Errorf("want pack_insufficient_items, got %s", resp["code"])
+	if resp["code"] != "image_pack_insufficient" {
+		t.Errorf("want image_pack_insufficient, got %s", resp["code"])
 	}
 }
 
@@ -259,7 +310,7 @@ func TestCreateRoom_DefaultsJokerCountAndAllowSkipVote(t *testing.T) {
 
 	gt, _ := q.GetGameTypeBySlug(ctx, "meme-caption")
 
-	// Seed a pack with enough items to satisfy pack_insufficient_items.
+	// Seed a pack with enough items to satisfy image_pack_insufficient.
 	pack, _ := q.CreatePack(ctx, db.CreatePackParams{
 		Name:       testutil.SeedName(t) + "_dflt",
 		Visibility: "private",
@@ -348,5 +399,133 @@ func TestGetRoom_ByCode_Found(t *testing.T) {
 	json.NewDecoder(rec.Body).Decode(&resp)
 	if resp["code"] != room.Code {
 		t.Errorf("want room code %s, got %v", room.Code, resp["code"])
+	}
+}
+
+func TestCreateRoom_MemeVote_RequiresTextPack(t *testing.T) {
+	h, q := newRoomHandler(t)
+	user := seedRoomUser(t, q)
+	ctx := context.Background()
+
+	gt, _ := q.GetGameTypeBySlug(ctx, "meme-vote")
+	imgPack := seedPackWithItems(t, q, ctx, "img", 1, 10)
+
+	body, _ := json.Marshal(map[string]any{
+		"game_type_id": gt.ID.String(),
+		"pack_id":      imgPack.ID.String(),
+		"mode":         "multiplayer",
+		"config":       json.RawMessage(`{"round_count":5,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5}`),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
+	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
+	rec := httptest.NewRecorder()
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("want 400, got %d — body: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]string
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["code"] != "text_pack_required" {
+		t.Errorf("want text_pack_required, got %s", resp["code"])
+	}
+}
+
+func TestCreateRoom_MemeCaption_RejectsTextPack(t *testing.T) {
+	h, q := newRoomHandler(t)
+	user := seedRoomUser(t, q)
+	ctx := context.Background()
+
+	gt, _ := q.GetGameTypeBySlug(ctx, "meme-caption")
+	imgPack := seedPackWithItems(t, q, ctx, "img", 1, 10)
+	textPack := seedPackWithItems(t, q, ctx, "txt", 2, 5)
+
+	body, _ := json.Marshal(map[string]any{
+		"game_type_id":  gt.ID.String(),
+		"pack_id":       imgPack.ID.String(),
+		"text_pack_id":  textPack.ID.String(),
+		"mode":          "multiplayer",
+		"config":        json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
+	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
+	rec := httptest.NewRecorder()
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("want 400, got %d — body: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]string
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["code"] != "text_pack_not_applicable" {
+		t.Errorf("want text_pack_not_applicable, got %s", resp["code"])
+	}
+}
+
+func TestCreateRoom_MemeVote_TextPackInsufficient(t *testing.T) {
+	h, q := newRoomHandler(t)
+	user := seedRoomUser(t, q)
+	ctx := context.Background()
+
+	gt, _ := q.GetGameTypeBySlug(ctx, "meme-vote")
+	imgPack := seedPackWithItems(t, q, ctx, "img", 1, 10)
+	// meme-vote worst-case: hand_size * max_players + (round_count-1) *
+	// max_players = 5*12 + 4*12 = 108. Seed only 2 to trigger insufficient.
+	textPack := seedPackWithItems(t, q, ctx, "txt", 2, 2)
+
+	body, _ := json.Marshal(map[string]any{
+		"game_type_id":  gt.ID.String(),
+		"pack_id":       imgPack.ID.String(),
+		"text_pack_id":  textPack.ID.String(),
+		"mode":          "multiplayer",
+		"config":        json.RawMessage(`{"round_count":5,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5}`),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
+	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
+	rec := httptest.NewRecorder()
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("want 422, got %d — body: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]string
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["code"] != "text_pack_insufficient" {
+		t.Errorf("want text_pack_insufficient, got %s", resp["code"])
+	}
+}
+
+func TestCreateRoom_MemeVote_Success(t *testing.T) {
+	h, q := newRoomHandler(t)
+	user := seedRoomUser(t, q)
+	ctx := context.Background()
+
+	gt, _ := q.GetGameTypeBySlug(ctx, "meme-vote")
+	imgPack := seedPackWithItems(t, q, ctx, "img", 1, 10)
+	textPack := seedPackWithItems(t, q, ctx, "txt", 2, 120)
+
+	body, _ := json.Marshal(map[string]any{
+		"game_type_id":  gt.ID.String(),
+		"pack_id":       imgPack.ID.String(),
+		"text_pack_id":  textPack.ID.String(),
+		"mode":          "multiplayer",
+		"config":        json.RawMessage(`{"round_count":5,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5}`),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
+	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
+	rec := httptest.NewRecorder()
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("want 201, got %d — body: %s", rec.Code, rec.Body.String())
+	}
+	var resp struct {
+		TextPackID pgtype.UUID `json:"text_pack_id"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !resp.TextPackID.Valid || resp.TextPackID.Bytes != textPack.ID {
+		t.Errorf("text_pack_id not echoed: %+v (want %s)", resp.TextPackID, textPack.ID)
 	}
 }

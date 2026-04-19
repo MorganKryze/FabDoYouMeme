@@ -5,12 +5,14 @@
   import { toast } from '$lib/state/toast.svelte';
   import { createPack, deletePack, listItems, updatePack } from '$lib/api/studio';
   import { pressPhysics } from '$lib/actions/pressPhysics';
-  import { Plus, Trash2, XCircle, Edit2 } from '$lib/icons';
+  import { Plus, Trash2, XCircle, Edit2, ImageIcon, Type } from '$lib/icons';
   import type { Pack } from '$lib/api/types';
+  import type { PackKind } from '$lib/state/studio.svelte';
 
   let showNewPackForm = $state(false);
   let newPackName = $state('');
   let newPackDesc = $state('');
+  let newPackKind = $state<PackKind>('image');
   let creating = $state(false);
   // Imperative focus replaces the raw `autofocus` attribute so screen
   // readers announce the focus change when the inline form opens
@@ -87,11 +89,16 @@
     creating = true;
     try {
       const pack = await createPack({ name: newPackName.trim(), description: newPackDesc.trim() || undefined });
+      // Pack kind isn't a backend column — items carry payload_version. Stash
+      // the user's intent so the right-pane editor opens in the correct mode
+      // before any items exist (lost on reload, then re-inferred from items).
+      studio.rememberKind(pack.id, newPackKind);
       studio.packs = [...studio.packs, pack];
       await selectPack(pack.id);
       showNewPackForm = false;
       newPackName = '';
       newPackDesc = '';
+      newPackKind = 'image';
     } catch {
       toast.show('Failed to create pack.', 'error');
     } finally {
@@ -123,6 +130,7 @@
     try {
       await deletePack(pack.id);
       studio.packs = studio.packs.filter((p) => p.id !== pack.id);
+      studio.forgetKind(pack.id);
       if (studio.selectedPackId === pack.id) {
         studio.selectedPackId = null;
         studio.items = [];
@@ -254,6 +262,28 @@
           placeholder="Description (optional)"
           class="h-8 rounded border border-brand-border-heavy bg-brand-white px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
         />
+        <fieldset class="flex gap-1" aria-label="Pack content type">
+          <label
+            class="flex-1 h-8 rounded border text-xs cursor-pointer inline-flex items-center justify-center gap-1
+              {newPackKind === 'image'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-brand-white border-brand-border text-brand-text-muted hover:text-brand-text'}"
+          >
+            <input type="radio" bind:group={newPackKind} value="image" class="sr-only" />
+            <ImageIcon size={12} strokeWidth={2.5} />
+            Image
+          </label>
+          <label
+            class="flex-1 h-8 rounded border text-xs cursor-pointer inline-flex items-center justify-center gap-1
+              {newPackKind === 'text'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-brand-white border-brand-border text-brand-text-muted hover:text-brand-text'}"
+          >
+            <input type="radio" bind:group={newPackKind} value="text" class="sr-only" />
+            <Type size={12} strokeWidth={2.5} />
+            Text
+          </label>
+        </fieldset>
         <div class="flex gap-1">
           <button
             type="button"

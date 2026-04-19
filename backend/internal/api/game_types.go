@@ -33,7 +33,29 @@ func (h *GameTypeHTTPHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to list game types")
 		return
 	}
-	writeJSON(w, http.StatusOK, types)
+	out := make([]map[string]any, 0, len(types))
+	for _, gt := range types {
+		requiredPacks := []game.ManifestPackRequirement{}
+		if handler, ok := h.registry.Get(gt.Slug); ok {
+			for _, pr := range handler.RequiredPacks() {
+				requiredPacks = append(requiredPacks, game.ManifestPackRequirement{
+					Role:            pr.Role,
+					PayloadVersions: pr.PayloadVersions,
+				})
+			}
+		}
+		out = append(out, map[string]any{
+			"id":             gt.ID,
+			"slug":           gt.Slug,
+			"name":           gt.Name,
+			"description":    gt.Description,
+			"version":        gt.Version,
+			"supports_solo":  gt.SupportsSolo,
+			"config":         gt.Config,
+			"required_packs": requiredPacks,
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // GetBySlug handles GET /api/game-types/:slug. Intentionally unauthenticated
@@ -48,18 +70,23 @@ func (h *GameTypeHTTPHandler) GetBySlug(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	handler, ok := h.registry.Get(slug)
-	var supportedVersions []int
+	requiredPacks := []game.ManifestPackRequirement{}
 	if ok {
-		supportedVersions = handler.SupportedPayloadVersions()
+		for _, pr := range handler.RequiredPacks() {
+			requiredPacks = append(requiredPacks, game.ManifestPackRequirement{
+				Role:            pr.Role,
+				PayloadVersions: pr.PayloadVersions,
+			})
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"id":                         gt.ID,
-		"slug":                       gt.Slug,
-		"name":                       gt.Name,
-		"description":                gt.Description,
-		"version":                    gt.Version,
-		"supports_solo":              gt.SupportsSolo,
-		"config":                     gt.Config,
-		"supported_payload_versions": supportedVersions,
+		"id":             gt.ID,
+		"slug":           gt.Slug,
+		"name":           gt.Name,
+		"description":    gt.Description,
+		"version":        gt.Version,
+		"supports_solo":  gt.SupportsSolo,
+		"config":         gt.Config,
+		"required_packs": requiredPacks,
 	})
 }

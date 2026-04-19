@@ -7,55 +7,89 @@
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { ArrowLeft, Plus, Package, Check } from '$lib/icons';
   import type { ActionData, PageData } from './$types';
-  import type { Pack, PaginatedResponse, GameType } from '$lib/api/types';
+  import type { Pack, PaginatedResponse, GameType, RequiredPack } from '$lib/api/types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
   type Step = 'game' | 'pack';
 
   let selectedGameTypeId = $state(untrack(() => data.preselectedId));
-  let selectedPackId = $state('');
+  // One selection per declared pack role. Role names mirror RequiredPack.role
+  // ('image', 'text', …). Empty string means "not yet picked" so the submit
+  // button can check with `selectedPacks[role]` without undefined juggling.
+  let selectedPacks = $state<Record<string, string>>({});
   let isSolo = $state(false);
-  let packs = $state<Pack[]>([]);
-  let loadingPacks = $state(false);
+  // One catalogue per role so pickers can display side by side without fighting
+  // over a shared array.
+  let packsByRole = $state<Record<string, Pack[]>>({});
+  let loadingRoles = $state<Record<string, boolean>>({});
   let step = $state<Step>(untrack(() => (data.preselectedId ? 'pack' : 'game')));
 
   const selectedGameType = $derived<GameType | null>(
     data.gameTypes.find((gt) => gt.id === selectedGameTypeId) ?? null
   );
 
-  const officialPacks = $derived(packs.filter((p) => p.is_official || p.is_system));
-  const personalPacks = $derived(packs.filter((p) => !(p.is_official || p.is_system)));
+  const requiredPacks = $derived<RequiredPack[]>(
+    selectedGameType?.required_packs ?? []
+  );
 
-  let packAbort: AbortController | null = null;
+  const allPacksPicked = $derived(
+    requiredPacks.length > 0 && requiredPacks.every((r) => !!selectedPacks[r.role])
+  );
 
-  async function loadPacks() {
-    if (!selectedGameTypeId) { packs = []; return; }
-    packAbort?.abort();
-    packAbort = new AbortController();
-    loadingPacks = true;
+  const packAborts: Record<string, AbortController | null> = {};
+
+  function roleLabel(role: string): string {
+    if (role === 'image') return 'Image pack';
+    if (role === 'text') return 'Caption pack';
+    return `${role.charAt(0).toUpperCase()}${role.slice(1)} pack`;
+  }
+
+  async function loadPacksForRole(role: string) {
+    if (!selectedGameType) return;
+    packAborts[role]?.abort();
+    const ctrl = new AbortController();
+    packAborts[role] = ctrl;
+    loadingRoles[role] = true;
     try {
-      const res = await fetch(`/api/packs?game_type_id=${selectedGameTypeId}`, {
-        signal: packAbort.signal
-      });
-      if (!res.ok) { packs = []; return; }
+      const url = `/api/packs?game_type=${encodeURIComponent(selectedGameType.slug)}&role=${encodeURIComponent(role)}`;
+      const res = await fetch(url, { signal: ctrl.signal });
+      if (!res.ok) {
+        packsByRole[role] = [];
+        return;
+      }
       const body: PaginatedResponse<Pack> = await res.json();
-      packs = body.data ?? [];
-      selectedPackId = '';
+      packsByRole[role] = body.data ?? [];
+      // Clear any stale selection that is no longer in the filtered list.
+      if (selectedPacks[role] && !(body.data ?? []).some((p) => p.id === selectedPacks[role])) {
+        selectedPacks[role] = '';
+      }
     } catch (err) {
-      if ((err as Error).name !== 'AbortError') packs = [];
+      if ((err as Error).name !== 'AbortError') packsByRole[role] = [];
     } finally {
-      loadingPacks = false;
+      loadingRoles[role] = false;
     }
   }
 
   $effect(() => {
-    if (step === 'pack') void loadPacks();
+    if (step !== 'pack' || !selectedGameType) return;
+    // Reset when the game type switches so previous role caches do not leak.
+    selectedPacks = {};
+    for (const req of requiredPacks) {
+      void loadPacksForRole(req.role);
+    }
   });
 
   function pickGame(id: string) {
     selectedGameTypeId = id;
     step = 'pack';
+  }
+
+  function officialOf(role: string): Pack[] {
+    return (packsByRole[role] ?? []).filter((p) => p.is_official || p.is_system);
+  }
+  function personalOf(role: string): Pack[] {
+    return (packsByRole[role] ?? []).filter((p) => !(p.is_official || p.is_system));
   }
 </script>
 
@@ -117,11 +151,14 @@
     {:else}
       <form method="POST" action="?/createRoom" use:enhance class="flex flex-col gap-5">
         <input type="hidden" name="game_type_id" value={selectedGameTypeId} />
-        <input type="hidden" name="pack_id" value={selectedPackId} />
+        <input type="hidden" name="pack_id" value={selectedPacks.image ?? ''} />
+        <input type="hidden" name="text_pack_id" value={selectedPacks.text ?? ''} />
         <input type="hidden" name="is_solo" value={String(isSolo)} />
 
         <div class="flex items-center justify-between">
-          <p class="text-sm font-semibold text-brand-text-muted uppercase tracking-[0.2em]">Pick a pack</p>
+          <p class="text-sm font-semibold text-brand-text-muted uppercase tracking-[0.2em]">
+            {requiredPacks.length > 1 ? 'Pick your packs' : 'Pick a pack'}
+          </p>
           <button
             type="button"
             onclick={() => (step = 'game')}
@@ -131,13 +168,13 @@
           </button>
         </div>
 
-        {#snippet packCard(p: Pack, i: number)}
-          {@const selected = selectedPackId === p.id}
+        {#snippet packCard(p: Pack, role: string, i: number)}
+          {@const selected = selectedPacks[role] === p.id}
           <button
             type="button"
             use:reveal={{ delay: i + 1 }}
             use:physCard
-            onclick={() => (selectedPackId = p.id)}
+            onclick={() => (selectedPacks[role] = p.id)}
             aria-pressed={selected}
             class="relative text-left rounded-[22px] border-[2.5px] p-5 flex flex-col gap-2 cursor-pointer transition-all
                    {selected
@@ -171,34 +208,43 @@
           </button>
         {/snippet}
 
-        {#if loadingPacks}
-          <p class="text-sm font-semibold text-brand-text-muted">Loading packs…</p>
-        {:else if packs.length === 0}
-          <p class="text-sm font-semibold text-brand-text-muted">No compatible packs for {selectedGameType?.name ?? 'this game'}.</p>
-        {:else}
-          <div class="flex flex-col gap-6">
-            {#if officialPacks.length > 0}
-              <div class="flex flex-col gap-3">
-                <p class="text-[0.7rem] font-bold text-brand-text-muted uppercase tracking-[0.2em]">Official</p>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {#each officialPacks as p, i (p.id)}
-                    {@render packCard(p, i)}
-                  {/each}
-                </div>
-              </div>
+        {#each requiredPacks as req (req.role)}
+          <div class="flex flex-col gap-3">
+            {#if requiredPacks.length > 1}
+              <p class="text-[0.7rem] font-bold text-brand-text uppercase tracking-[0.2em]">{roleLabel(req.role)}</p>
             {/if}
-            {#if personalPacks.length > 0}
-              <div class="flex flex-col gap-3">
-                <p class="text-[0.7rem] font-bold text-brand-text-muted uppercase tracking-[0.2em]">Personal</p>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {#each personalPacks as p, i (p.id)}
-                    {@render packCard(p, i + officialPacks.length)}
-                  {/each}
-                </div>
+            {#if loadingRoles[req.role]}
+              <p class="text-sm font-semibold text-brand-text-muted">Loading packs…</p>
+            {:else if (packsByRole[req.role] ?? []).length === 0}
+              <p class="text-sm font-semibold text-brand-text-muted">
+                No compatible {req.role} packs for {selectedGameType?.name ?? 'this game'}.
+              </p>
+            {:else}
+              <div class="flex flex-col gap-6">
+                {#if officialOf(req.role).length > 0}
+                  <div class="flex flex-col gap-3">
+                    <p class="text-[0.7rem] font-bold text-brand-text-muted uppercase tracking-[0.2em]">Official</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {#each officialOf(req.role) as p, i (p.id)}
+                        {@render packCard(p, req.role, i)}
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
+                {#if personalOf(req.role).length > 0}
+                  <div class="flex flex-col gap-3">
+                    <p class="text-[0.7rem] font-bold text-brand-text-muted uppercase tracking-[0.2em]">Personal</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {#each personalOf(req.role) as p, i (p.id)}
+                        {@render packCard(p, req.role, i + officialOf(req.role).length)}
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
               </div>
             {/if}
           </div>
-        {/if}
+        {/each}
 
         {#if selectedGameType?.supports_solo}
           <label class="flex items-center gap-2 cursor-pointer">
@@ -211,7 +257,7 @@
           use:pressPhysics={'dark'}
           use:hoverEffect={'gradient'}
           type="submit"
-          disabled={!selectedPackId}
+          disabled={!allPacksPicked}
           class="h-14 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-50 cursor-pointer inline-flex items-center justify-center gap-2"
         >
           <Plus size={18} strokeWidth={2.5} />

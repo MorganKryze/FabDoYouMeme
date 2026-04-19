@@ -254,6 +254,50 @@ func (q *Queries) ListItemsForPack(ctx context.Context, arg ListItemsForPackPara
 	return items, nil
 }
 
+const listPackItemsByPayloadVersion = `-- name: ListPackItemsByPayloadVersion :many
+SELECT gi.id, giv.payload
+FROM game_items gi
+JOIN game_item_versions giv ON giv.id = gi.current_version_id
+WHERE gi.pack_id = $1
+  AND gi.deleted_at IS NULL
+  AND giv.deleted_at IS NULL
+  AND gi.payload_version = $2
+`
+
+type ListPackItemsByPayloadVersionParams struct {
+	PackID         uuid.UUID `json:"pack_id"`
+	PayloadVersion int32     `json:"payload_version"`
+}
+
+type ListPackItemsByPayloadVersionRow struct {
+	ID      uuid.UUID       `json:"id"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+// Returns every non-deleted item in a pack whose current version payload
+// matches a specific payload_version. Used by the hub to build per-game
+// decks (e.g. the text-caption deck for meme-vote) where one item per row
+// is enough and a single random-pick is not.
+func (q *Queries) ListPackItemsByPayloadVersion(ctx context.Context, arg ListPackItemsByPayloadVersionParams) ([]ListPackItemsByPayloadVersionRow, error) {
+	rows, err := q.db.Query(ctx, listPackItemsByPayloadVersion, arg.PackID, arg.PayloadVersion)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPackItemsByPayloadVersionRow
+	for rows.Next() {
+		var i ListPackItemsByPayloadVersionRow
+		if err := rows.Scan(&i.ID, &i.Payload); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listVersionsForItem = `-- name: ListVersionsForItem :many
 SELECT id, item_id, version_number, media_key, payload, created_at, deleted_at FROM game_item_versions WHERE item_id = $1 ORDER BY version_number DESC
 `

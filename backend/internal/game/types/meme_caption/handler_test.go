@@ -23,19 +23,28 @@ func TestSlug(t *testing.T) {
 	}
 }
 
-func TestSupportedPayloadVersions(t *testing.T) {
-	versions := newHandler().SupportedPayloadVersions()
-	if len(versions) == 0 {
-		t.Error("expected at least one supported payload version")
+func TestRequiredPacks(t *testing.T) {
+	reqs := newHandler().RequiredPacks()
+	if len(reqs) != 1 {
+		t.Fatalf("expected one required pack, got %d", len(reqs))
+	}
+	if reqs[0].Role != game.PackRoleImage {
+		t.Errorf("expected image role, got %q", reqs[0].Role)
 	}
 	found := false
-	for _, v := range versions {
+	for _, v := range reqs[0].PayloadVersions {
 		if v == 1 {
 			found = true
 		}
 	}
 	if !found {
-		t.Error("expected version 1 to be supported")
+		t.Error("expected payload_version 1 to be supported")
+	}
+	if reqs[0].MinItemsFn == nil {
+		t.Fatal("expected MinItemsFn to be set")
+	}
+	if got := reqs[0].MinItemsFn(game.RoomConfig{RoundCount: 7}, 0); got != 7 {
+		t.Errorf("MinItemsFn(round_count=7) = %d, want 7", got)
 	}
 }
 

@@ -40,8 +40,8 @@ Requires session.
 
 | Method  | Path                           | Description                                               |
 | ------- | ------------------------------ | --------------------------------------------------------- |
-| `POST`  | `/api/rooms`                   | Create a room with game type, pack, mode, and config. Config accepts `round_count`, `round_duration_seconds`, `voting_duration_seconds`, `host_paced`, `joker_count` (default `ceil(round_count/5)`, `0` disables), and `allow_skip_vote` (default `true`) |
-| `GET`   | `/api/rooms/:code`             | Get room info — state, players, config, game type         |
+| `POST`  | `/api/rooms`                   | Create a room with game type, pack(s), mode, and config. Body requires one `pack_id` per role declared by the game type: `pack_id` (role `image`, required by every game type) and `text_pack_id` (role `text`, required only by `meme-vote`). Config accepts `round_count`, `round_duration_seconds`, `voting_duration_seconds`, `host_paced`, `joker_count` (default `ceil(round_count/5)`, `0` disables), `allow_skip_vote` (default `true`), and — for `meme-vote` — `hand_size` |
+| `GET`   | `/api/rooms/:code`             | Get room info — state, players, config, game type, `pack_id`, and `text_pack_id` (nullable) |
 | `PATCH` | `/api/rooms/:code/config`      | Update room config (host only, lobby state only). Accepts a **partial patch** — send only the fields you changed. `joker_count` must satisfy `0 ≤ joker_count ≤ round_count`; violations return `422 invalid_config` |
 | `POST`  | `/api/rooms/:code/leave`       | Leave the room (lobby only; host leaving closes the room) |
 | `POST`  | `/api/rooms/:code/kick`        | Remove a player (host or admin, **lobby only**). Body: exactly one of `{ "user_id": "<uuid>" }` or `{ "guest_player_id": "<uuid>" }`. Writes a `room_bans` row so the player cannot rejoin (WS handshake returns `409 banned_from_room`). Errors: `403 forbidden`, `409 room_not_in_lobby`, `409 cannot_kick_self` (host used `/end` instead), `400 bad_request` (neither or both id fields supplied) |
@@ -54,8 +54,8 @@ Requires session.
 
 | Method | Path                    | Description                                                         |
 | ------ | ----------------------- | ------------------------------------------------------------------- |
-| `GET`  | `/api/game-types`       | List all registered game types                                      |
-| `GET`  | `/api/game-types/:slug` | Details, config schema, and supported payload versions for one type |
+| `GET`  | `/api/game-types`       | List all registered game types. Each entry includes `required_packs: [{ role, payload_versions }]` so the UI knows which pack slots to render per type |
+| `GET`  | `/api/game-types/:slug` | Details, config schema, and `required_packs` for one type           |
 
 ### Packs, items, and versions
 
@@ -63,7 +63,7 @@ Requires session (read); owner or admin (write).
 
 | Method   | Path                                                  | Description                                     |
 | -------- | ----------------------------------------------------- | ----------------------------------------------- |
-| `GET`    | `/api/packs`                                          | List packs — visibility rules apply (see below) |
+| `GET`    | `/api/packs`                                          | List packs — visibility rules apply (see below). Supports filtering via `?game_type=<slug>&role=<image\|text>`; the handler drops packs that contain zero items compatible with the role's payload-version set |
 | `POST`   | `/api/packs`                                          | Create a pack                                   |
 | `GET`    | `/api/packs/:id`                                      | Get pack details                                |
 | `PATCH`  | `/api/packs/:id`                                      | Update name, description, or visibility         |

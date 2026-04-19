@@ -16,7 +16,10 @@ name: Meme Caption
 description: Write the funniest caption for an image. Others vote for their favourite.
 version: "1.0.0"
 supports_solo: false
-payload_versions: [1]
+
+required_packs:
+  - role: image
+    payload_versions: [1]
 
 config:
   # Per-round submit phase.
