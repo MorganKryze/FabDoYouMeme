@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
-  import { Volume2, VolumeX } from '$lib/icons';
+  import { Volume2, VolumeX, XCircle } from '$lib/icons';
   import { pressPhysics } from '$lib/actions/pressPhysics';
 
   const TRACK_AMBIENT = '/audio/monument_music-pure-159612.mp3';
@@ -17,6 +17,10 @@
   const CROSSFADE_IN_MS = 450;
 
   let playing = $state(true);
+  // Tracks the *audible* state, not user intent. When the browser forces a
+  // muted-autoplay fallback, `playing` stays true (user wants music) but
+  // `muted` flips so the icon reflects reality until a gesture unmutes us.
+  let muted = $state(false);
   let level = $state(DEFAULT_LEVEL);
   let showSlider = $state(false);
   let error = $state<string | null>(null);
@@ -103,6 +107,7 @@
   function startPlayback(fadeMs: number = CROSSFADE_IN_MS) {
     if (!audioEl) return;
     audioEl.muted = false;
+    muted = false;
     audioEl.volume = 0;
     audioEl.play()
       .then(() => fadeTo(() => volumeFor(level), fadeMs))
@@ -113,6 +118,7 @@
         // fallback and only surface a banner if that ALSO fails.
         if (!audioEl) return;
         audioEl.muted = true;
+        muted = true;
         audioEl.play()
           .then(() => {
             gestureCleanup?.();
@@ -165,10 +171,12 @@
     const unmute = () => {
       if (!audioEl || !playing) return;
       if (!audioEl.muted && !audioEl.paused) {
+        muted = false;
         cleanup();
         return;
       }
       audioEl.muted = false;
+      muted = false;
       if (audioEl.paused) {
         audioEl.volume = 0;
         audioEl.play()
@@ -208,6 +216,7 @@
     level = Math.min(LEVELS, Math.max(1, n));
     if (audioEl && playing) {
       audioEl.muted = false;
+      muted = false;
       if (audioEl.paused) {
         startPlayback(FADE_MS);
       }
@@ -236,10 +245,18 @@
 <div class="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">
   {#if error}
     <div
-      class="bg-brand-white border-[2.5px] border-red-400 rounded-2xl px-3 py-2 text-xs font-semibold text-red-600 max-w-xs"
+      class="bg-brand-white border-[2.5px] border-red-400 rounded-2xl pl-3 pr-2 py-2 text-xs font-semibold text-red-600 max-w-xs inline-flex items-start gap-2"
       style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
     >
-      {error}
+      <span class="leading-snug">{error}</span>
+      <button
+        type="button"
+        onclick={() => (error = null)}
+        class="shrink-0 opacity-50 hover:opacity-100 transition-opacity inline-flex items-center cursor-pointer"
+        aria-label="Dismiss"
+      >
+        <XCircle size={14} strokeWidth={2.5} />
+      </button>
     </div>
   {/if}
 
@@ -290,7 +307,7 @@
       aria-label={playing ? 'Mute background music' : 'Play background music'}
       aria-pressed={playing}
     >
-      {#if playing}
+      {#if playing && !muted}
         <Volume2 size={18} strokeWidth={2.5} />
       {:else}
         <VolumeX size={18} strokeWidth={2.5} />
