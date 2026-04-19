@@ -18,7 +18,7 @@ import (
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/clock"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/config"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/game"
-	memecaption "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_caption"
+	memefreestyle "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_freestyle"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/testutil"
 )
 
@@ -31,7 +31,7 @@ func newWSHandlerForTest(t *testing.T) (*api.WSHandler, *db.Queries) {
 	pool := testutil.Pool()
 	q := db.New(pool)
 	registry := game.NewRegistry()
-	registry.Register(memecaption.New())
+	registry.Register(memefreestyle.New())
 	cfg := &config.Config{}
 	manager := game.NewManager(context.Background(), registry, q, cfg, slog.Default(), clock.Real{})
 	return api.NewWSHandler(manager, q, []string{""}), q

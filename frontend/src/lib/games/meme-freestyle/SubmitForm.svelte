@@ -50,7 +50,7 @@
   function submit() {
     if (submitted || isExpired || caption.trim().length === 0) return;
     const trimmed = caption.trim();
-    ws.send('meme-caption:submit', { caption: trimmed });
+    ws.send('meme-freestyle:submit', { caption: trimmed });
     submitted = true;
   }
 
@@ -340,7 +340,7 @@
     style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
   >
     <div class="flex items-center justify-between gap-2">
-      <label for="meme-caption-input" class="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-text-mid">
+      <label for="meme-freestyle-input" class="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-text-mid">
         Your caption
       </label>
       <span
@@ -374,7 +374,7 @@
       </p>
     {:else}
       <textarea
-        id="meme-caption-input"
+        id="meme-freestyle-input"
         bind:value={caption}
         disabled={isExpired}
         maxlength={MAX_CHARS}

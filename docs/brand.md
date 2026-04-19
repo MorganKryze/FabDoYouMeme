@@ -100,11 +100,11 @@ The visual language is **neo-retro capsule design**: pill shapes, thick borders,
 
 ## Color Palette
 
-### Time-Aware Gradient System
+### Light/Dark Gradient System
 
-The background is a **multi-color animated gradient** that shifts based on time of day. The gradient flows slowly (30s cycle, `background-size: 400% 400%`) and is overlaid with a **grain texture** (SVG `fractalNoise` filter at `opacity: 0.22`) for the tactile "reality" feel.
+The background is a **multi-color animated gradient** that swaps between a light and a dark palette based on clock band (auto) or explicit user preference. The gradient flows slowly (30s cycle, `background-size: 400% 400%`) and is overlaid with a **grain texture** (SVG `fractalNoise` filter at `opacity: 0.22`) for the tactile "reality" feel.
 
-#### Daytime — Mint Garden
+#### Light — Mint Garden
 
 Fresh, bright, sun-through-the-window energy.
 
@@ -115,29 +115,21 @@ Fresh, bright, sun-through-the-window energy.
 | Mid text       | Dark grey                 | `#3A3A3A`                                  |
 | Muted text     | Transparent dark          | `rgba(26,26,26,0.4)`                       |
 | Surface        | White                     | `#FEFEFE`                                  |
-| Border         | Dark translucent          | `rgba(26,26,26,0.7)`                       |
+| Border heavy   | Dark translucent          | `rgba(26,26,26,0.7)`                       |
+| Accent         | Coral                     | `#E76F51`                                  |
 
-#### Evening — Warm Sunset
-
-Cozy, peach, winding-down-into-good-conversation energy.
-
-| Role           | Color                     | Hex                                        |
-| -------------- | ------------------------- | ------------------------------------------ |
-| Gradient stops | Peach, Blush, Mauve, Mint | `#FDDCB5`, `#F9B4AB`, `#D4A5C9`, `#B5E2D0` |
-| Text           | Near black                | `#1A1A1A`                                  |
-| Accent         | Coral                     | `#E8937F`                                  |
-
-#### Night — Lavender Dusk
+#### Dark — Lavender Dusk
 
 Deep, dreamy, creative-studio-at-night energy.
 
-| Role           | Color                                | Hex                                        |
-| -------------- | ------------------------------------ | ------------------------------------------ |
-| Gradient stops | Deep purple, Indigo, Plum, Dark teal | `#1E1A2B`, `#2A2040`, `#3D2B5A`, `#1B2838` |
-| Text           | Light lavender                       | `#E0D6F0`                                  |
-| Mid text       | Muted purple                         | `#B8AED0`                                  |
-| Surface        | Dark purple                          | `#2A2040`                                  |
-| Border         | Light translucent                    | `rgba(255,255,255,0.4)`                    |
+| Role           | Color                              | Hex                                        |
+| -------------- | ---------------------------------- | ------------------------------------------ |
+| Gradient stops | Deep plum, Indigo, Violet, Teal    | `#2A2040`, `#3D2B5A`, `#4A3470`, `#1B2838` |
+| Text           | Light lavender                     | `#F2EBFF`                                  |
+| Mid text       | Muted purple                       | `#C8BCE0`                                  |
+| Surface        | Lifted dark purple                 | `#3A2D55`                                  |
+| Border heavy   | Light translucent                  | `rgba(255,255,255,0.55)`                   |
+| Accent         | Soft violet                        | `#C9A6FF`                                  |
 
 ### Gradient Animation
 
@@ -165,16 +157,14 @@ animation: gradientFlow 30s ease-in-out infinite;
 }
 ```
 
-### Time-of-Day Logic
+### Auto Band Logic
 
 ```
-06:00–12:00 → Mint Garden (morning)
-12:00–17:00 → Warm transition (afternoon blend)
-17:00–21:00 → Warm Sunset (evening)
-21:00–06:00 → Lavender Dusk (night)
+07:00–19:00 → Mint Garden (light)
+19:00–07:00 → Lavender Dusk (dark)
 ```
 
-Transitions between time bands must be **imperceptible** — CSS custom properties updated via JS interval every few minutes, with CSS `transition` on all color values. The user should never see colors "jump."
+Transitions between bands must be **imperceptible** — CSS custom properties updated via JS interval every few minutes, with CSS `transition` on all color values. The user should never see colors "jump."
 
 ### Grain Texture
 
@@ -189,7 +179,7 @@ background-image: url('data:image/svg+xml,...feTurbulence fractalNoise...');
 background-size: 128px 128px;
 ```
 
-Stays constant across all time-of-day palettes for visual continuity.
+Stays constant across both palettes for visual continuity.
 
 ---
 
@@ -376,7 +366,6 @@ These need user or designer input before locking in:
 - [ ] **Tagline** — pick one of the five candidates, or workshop more
 - [ ] **Vocabulary lock-in** — which of the community terms ship in v1 copy, which stay as flavour text
 - [ ] **"Do You Meme?" proximity** — decide if the name similarity to the Fuckjerry card game needs any explicit disclaimer or differentiation in public-facing copy
-- [ ] **Afternoon palette** — blend of morning + evening, or its own identity?
-- [x] **Dark mode toggle** — resolved 2026-04-12. Users override the auto time-based theme via a four-way segmented pill on the profile page (`auto` / `morning` / `evening` / `night`). Preference is persisted in `localStorage` under `fdym:theme` and hydrated before `TimeBackground` mounts to prevent flash. Implemented in `frontend/src/lib/state/theme.svelte.ts` and `frontend/src/lib/components/ThemeToggle.svelte`.
+- [x] **Dark mode toggle** — resolved 2026-04-12, simplified 2026-04-19. Users override the auto clock-based theme via a three-way segmented pill on the profile page (`auto` / `light` / `dark`). Preference is persisted in `localStorage` under `fdym:theme` and hydrated before `TimeBackground` mounts to prevent flash. Implemented in `frontend/src/lib/state/theme.svelte.ts` and `frontend/src/lib/components/ThemeToggle.svelte`.
 - [x] **Mobile adaptations** — resolved 2026-04-12. `physCard` branches on `(hover: hover) and (pointer: fine)`. Touch devices get a tap-scale-press fallback (`translateY(1px) scale(0.97)` on `pointerdown`, spring release on `pointerup` using the same `cubic-bezier(0.22, 1, 0.36, 1)` curve). Cursor-tracked 3D tilt is disabled on non-hover devices. No DeviceOrientation, no haptics. Tap targets already ≥44px per the spec.
 - [ ] **Sound design** — audio to accompany visual transitions

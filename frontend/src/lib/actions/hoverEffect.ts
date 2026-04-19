@@ -57,10 +57,10 @@ export function hoverEffect(node: HTMLElement, style: HoverStyle = 'swap') {
 
       case 'gradient':
         node.style.transition = 'background 0.4s ease, color 0.3s ease, transform 0.1s, box-shadow 0.1s';
-        // Reuse the live time-of-day palette rather than hardcoding colors —
-        // otherwise the hover state stays evening-pink regardless of the
+        // Reuse the live theme palette rather than hardcoding colors —
+        // otherwise the hover gradient stays fixed regardless of the
         // active theme. Text is forced to --brand-text so dark cards using
-        // `text-brand-white` (which inverts in night mode) don't become
+        // `text-brand-white` (which inverts in dark mode) don't become
         // dark-on-dark once the gradient replaces their background.
         node.style.background =
           'linear-gradient(135deg, var(--brand-grad-2), var(--brand-grad-3), var(--brand-grad-4))';

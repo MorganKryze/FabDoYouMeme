@@ -20,7 +20,7 @@ Round phases (repeating N times):
 
 A room is created by an authenticated user who becomes the host. At creation, the host chooses:
 
-- **Game type** (e.g. `meme-caption`)
+- **Game type** (e.g. `meme-freestyle`)
 - **Pack** of content items to play with
 - **Mode** — multiplayer or solo (only if the game type supports it)
 - **Config** — round count, round duration, voting duration (constrained by the game type's min/max)
@@ -108,9 +108,9 @@ Game types are registered handler units. The entire backend game logic is contai
 Every game type ships a `manifest.yaml` embedded next to its Go handler (`backend/internal/game/types/{slug}/manifest.yaml`). The manifest is the **single source of truth** for the game type's identity, capabilities, and tunable bounds:
 
 ```yaml
-# backend/internal/game/types/meme_caption/manifest.yaml
-slug: meme-caption
-name: Meme Caption
+# backend/internal/game/types/meme_freestyle/manifest.yaml
+slug: meme-freestyle
+name: Meme Freestyle
 description: Write the funniest caption for an image. Others vote for their favourite.
 version: "1.0.0"
 supports_solo: false
@@ -133,13 +133,13 @@ config:
 The file is embedded into the Go binary at build time via `//go:embed manifest.yaml` in the handler package. Parsing and validation happen at package init; a malformed manifest (missing slug, default outside min/max, min > max, etc.) **panics at startup** so a broken handler cannot silently corrupt running rooms.
 
 ```go
-// backend/internal/game/types/meme_caption/handler.go
+// backend/internal/game/types/meme_freestyle/handler.go
 //go:embed manifest.yaml
 var manifestYAML []byte
 
 var manifest = func() *game.Manifest {
     m, err := game.LoadManifest(manifestYAML)
-    if err != nil { panic(fmt.Sprintf("meme_caption: load manifest: %v", err)) }
+    if err != nil { panic(fmt.Sprintf("meme_freestyle: load manifest: %v", err)) }
     return m
 }()
 
@@ -159,7 +159,7 @@ func (h *Handler) Manifest() *game.Manifest  { return manifest }
 ```go
 // backend/cmd/server/main.go
 registry := game.NewRegistry()
-registry.Register(memecaption.New())
+registry.Register(memefreestyle.New())
 // registry.Register(trivia.New())   // future game types added here
 
 if err := game.SyncGameTypes(ctx, queries, registry, logger); err != nil {
@@ -170,7 +170,7 @@ if err := game.SyncGameTypes(ctx, queries, registry, logger); err != nil {
 
 Effect: editing `manifest.yaml` and restarting the backend is all it takes to lower `max_round_duration_seconds` from 300 to 180 or bump `max_players` from 12 to 16. No migration, no manual DB edit, no frontend change — the frontend reads the same bounds via `GET /api/game-types`.
 
-Migration `002_seed_game_types.up.sql` still seeds the initial `meme-caption` row on a fresh DB so the UUID is stable from first boot. Every subsequent field (name, description, version, `supports_solo`, `config`) is reconciled from the in-binary manifest on every startup — the migration is a first-boot seed, not an ongoing source of truth.
+Migration `002_seed_game_types.up.sql` still seeds the initial `meme-freestyle` row on a fresh DB so the UUID is stable from first boot. Every subsequent field (name, description, version, `supports_solo`, `config`) is reconciled from the in-binary manifest on every startup — the migration is a first-boot seed, not an ongoing source of truth.
 
 ### Authoritative bounds enforcement
 
@@ -204,11 +204,11 @@ The frontend never enforces bounds as a contract — it reads them from `gameTyp
 
 The interface defines ten methods. The hub calls them during gameplay and never knows which game type it is running.
 
-**Event naming convention:** phase-transition events (`round_started`, `submissions_closed`, `vote_results`, `game_ended`) are **universal** — every game type uses the same event names. Incoming game-specific messages are slug-prefixed (`meme-caption:submit`, `meme-caption:vote`). The handler-produced blobs are embedded inside the universal events: `submissions_closed.data.submissions_shown` and `vote_results.data.results`.
+**Event naming convention:** phase-transition events (`round_started`, `submissions_closed`, `vote_results`, `game_ended`) are **universal** — every game type uses the same event names. Incoming game-specific messages are slug-prefixed (`meme-freestyle:submit`, `meme-freestyle:vote`). The handler-produced blobs are embedded inside the universal events: `submissions_closed.data.submissions_shown` and `vote_results.data.results`.
 
 | Method                           | Purpose                                                                                        |
 | -------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `Slug()`                         | Matches `game_types.slug` in the DB (e.g. `"meme-caption"`); also the registry key. Read from `manifest.yaml`. |
+| `Slug()`                         | Matches `game_types.slug` in the DB (e.g. `"meme-freestyle"`); also the registry key. Read from `manifest.yaml`. |
 | `SupportedPayloadVersions()`     | Item payload versions this handler can process. Read from `manifest.yaml`.                     |
 | `SupportsSolo()`                 | Whether the handler permits single-player rooms. Read from `manifest.yaml`.                    |
 | `MaxPlayers()`                   | Per-room cap from `manifest.config.max_players`; `0` means no cap (manifest value `null`). Checked in `handleRegister` before allocating state. |
@@ -229,7 +229,7 @@ Adding a game type is a **three-directory edit**. You do not touch the schema, t
 
 Drop three files in a new directory:
 
-**`manifest.yaml`** — the single source of truth for identity and bounds. Copy `meme_caption/manifest.yaml` as a starting point and tune the numbers:
+**`manifest.yaml`** — the single source of truth for identity and bounds. Copy `meme_freestyle/manifest.yaml` as a starting point and tune the numbers:
 
 ```yaml
 slug: trivia
@@ -315,7 +315,7 @@ If your game type needs more than one content stream (e.g. images **and** captio
 
 ```go
 registry := game.NewRegistry()
-registry.Register(memecaption.New())
+registry.Register(memefreestyle.New())
 registry.Register(trivia.New())         // ← new line
 
 if err := game.SyncGameTypes(ctx, queries, registry, logger); err != nil { ... }
@@ -367,9 +367,9 @@ Everything else — DB sync, PATCH merging, validation error codes — is alread
 The launch game type. Gameplay per round:
 
 1. All players see the same image with a prompt
-2. Each writes a caption (max 200 characters, Enter submits) — sent as `meme-caption:submit`
+2. Each writes a caption (max 200 characters, Enter submits) — sent as `meme-freestyle:submit`
 3. Submissions close when time runs out or all players submit
-4. All captions are shown anonymously — players vote for the funniest with `meme-caption:vote`
+4. All captions are shown anonymously — players vote for the funniest with `meme-freestyle:vote`
 5. Voting closes when time runs out or all players vote
 6. Authors are revealed; each player receives 1 point per vote they received
 7. Tied captions both receive full points (no tiebreaker)
@@ -385,14 +385,14 @@ A player cannot vote for their own submission. The hub pre-validates this before
 A twist on the caption game: players pick a caption from a dealt hand instead of typing one. Gameplay per round:
 
 1. At game start, every player is dealt a hand of captions (`default_hand_size: 5`, bounded by `min_hand_size` and `max_hand_size`). Each caption is a text-pack item with `payload_version: 2`.
-2. All players see the same image with a prompt. Each player plays one caption from their hand — sent as `meme-vote:submit` with `{ "card_id": "<uuid>" }`.
+2. All players see the same image with a prompt. Each player plays one caption from their hand — sent as `meme-showdown:submit` with `{ "card_id": "<uuid>" }`.
 3. The played card is consumed; the hand is refilled from the text pack at the start of the next round.
-4. Submissions close when time runs out or all players submit. Captions are shown anonymously; players vote for the funniest with `meme-vote:vote`.
-5. Authors are revealed after voting closes; scoring is identical to `meme-caption` (1 point per vote received, ties both get full points).
+4. Submissions close when time runs out or all players submit. Captions are shown anonymously; players vote for the funniest with `meme-showdown:vote`.
+5. Authors are revealed after voting closes; scoring is identical to `meme-freestyle` (1 point per vote received, ties both get full points).
 
 Two pack roles are required per room:
 
-- `pack_id` — the image pack (`payload_version: 1`, same format as `meme-caption`)
+- `pack_id` — the image pack (`payload_version: 1`, same format as `meme-freestyle`)
 - `text_pack_id` — the caption pack (`payload_version: 2`, `{ "text": "..." }`)
 
 The hub personalises `round_started` for this game type (`PersonalisesRoundStart() returns true`): each player receives their own `hand` array inside `round_started.data` so the frontend can render the dealt cards. The hub maintains per-player hand state across reconnects and replays it in `room_state.data.my_hand` when a player rejoins mid-game.
@@ -410,7 +410,7 @@ Example item payloads:
 - `payload_version: 1` (image) — `{ "image_url": "...", "prompt": "..." }`
 - `payload_version: 2` (text)  — `{ "text": "..." }`
 
-`meme-caption` declares `[{image, [1]}]`. `meme-vote` declares `[{image, [1]}, {text, [2]}]`. Existing image packs are compatible with both game types as-is; a text pack is additionally required to host a `meme-vote` room.
+`meme-freestyle` declares `[{image, [1]}]`. `meme-showdown` declares `[{image, [1]}, {text, [2]}]`. Existing image packs are compatible with both game types as-is; a text pack is additionally required to host a `meme-showdown` room.
 
 ---
 

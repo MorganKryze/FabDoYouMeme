@@ -219,7 +219,7 @@ type Hub struct {
 	// the Run() goroutine, so no mutex is needed despite the function type.
 	roundsCancel context.CancelFunc
 
-	// memeVote owns the text-deck and per-player hands for a meme-vote
+	// memeVote owns the text-deck and per-player hands for a meme-showdown
 	// room; nil for any other game type. Populated by startGame and only
 	// ever read/written on the Run goroutine.
 	memeVote *handState
@@ -638,7 +638,7 @@ func (h *Hub) handleRoundCtrl(ctx context.Context, ctrl roundCtrlMsg) {
 		h.resultsLeaderboard = nil
 		h.roundResultsEndsAt = time.Time{}
 		h.roundPausedFlag = false
-		// Refill meme-vote hands before emitting round_started. Round 1 is a
+		// Refill meme-showdown hands before emitting round_started. Round 1 is a
 		// no-op because DealInitial already filled every hand in startGame;
 		// subsequent rounds top every player back to hand_size. Exhaustion
 		// here is surfaced as pack_exhausted end-of-game so the client sees a
@@ -819,7 +819,7 @@ func (h *Hub) startGame(ctx context.Context) {
 	}); err != nil {
 		h.log.Error("hub: set room state playing", "error", err)
 	}
-	if h.gameTypeSlug == "meme-vote" {
+	if h.gameTypeSlug == "meme-showdown" {
 		if !h.initMemeVoteHands(ctx) {
 			return
 		}
@@ -1594,7 +1594,7 @@ func (h *Hub) sendPerPlayer(msgType string, base map[string]any, perPlayer func(
 
 // personalRoundStartData returns the player-specific fields that should be
 // merged into round_started. Only called for handlers whose
-// PersonalisesRoundStart()==true. For meme-vote it carries the player's
+// PersonalisesRoundStart()==true. For meme-showdown it carries the player's
 // hand; other personalised game types would add their own fields here.
 func (h *Hub) personalRoundStartData(playerID string) map[string]any {
 	if hand := h.memeVoteHandPayload(playerID); hand != nil {
@@ -1665,7 +1665,7 @@ func (h *Hub) buildRoomState(recipientUserID string) map[string]any {
 		"players": players,
 		"host_id": h.hostUserID,
 	}
-	// meme-vote hands are per-player state that must survive refresh and
+	// meme-showdown hands are per-player state that must survive refresh and
 	// reconnect. Emit the recipient's current hand whenever the room is
 	// playing (not just mid-round) so the client can render the tray on the
 	// lobby-to-round transition without waiting for round_started.

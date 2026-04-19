@@ -36,7 +36,7 @@ type historySeed struct {
 // registered because these tests run inside a rolled-back transaction.
 func seedGameHistory(t *testing.T, ctx context.Context, q *db.Queries, slug string) historySeed {
 	t.Helper()
-	gt, err := q.GetGameTypeBySlug(ctx, "meme-caption")
+	gt, err := q.GetGameTypeBySlug(ctx, "meme-freestyle")
 	if err != nil {
 		t.Fatalf("GetGameTypeBySlug: %v", err)
 	}
@@ -399,7 +399,7 @@ func TestFullReset_PreservesSentinelAndBootstrapAndActing(t *testing.T) {
 		t.Errorf("acting admin should survive FullReset: %v", err)
 	}
 	// Invariant 4: game_types seed data is untouched.
-	if _, err := q.GetGameTypeBySlug(ctx, "meme-caption"); err != nil {
+	if _, err := q.GetGameTypeBySlug(ctx, "meme-freestyle"); err != nil {
 		t.Errorf("game_types should survive FullReset: %v", err)
 	}
 	// Invariant 5: acting admin's session survives.

@@ -159,7 +159,7 @@
 
   // Bounds come from the game type manifest (backend/internal/game/types/
   // <slug>/manifest.yaml), exposed here via gameType.config. We never
-  // hardcode these in the UI — a host editing meme-caption sees meme
+  // hardcode these in the UI — a host editing meme-freestyle sees meme
   // bounds, match-the-meme sees match bounds, etc. The server enforces
   // the same bounds on every PATCH, so the clamps below are just UX.
   const roundCountMin = $derived(gameType?.config.min_round_count ?? 1);

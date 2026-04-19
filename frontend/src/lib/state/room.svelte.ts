@@ -2,7 +2,7 @@ import { goto } from '$app/navigation';
 import type { GameType, Player, LeaderboardEntry, Submission, Round, WsMessage } from '$lib/api/types';
 import { toast } from './toast.svelte';
 import { ws } from './ws.svelte';
-import { handStore } from '$lib/games/meme-vote/handStore.svelte';
+import { handStore } from '$lib/games/meme-showdown/handStore.svelte';
 
 type RoomPhase = 'idle' | 'countdown' | 'submitting' | 'voting' | 'results';
 type RoomStatus = 'lobby' | 'playing' | 'finished';
@@ -146,7 +146,7 @@ export class RoomState {
         this.ownSkippedVote = false;
         this.skippedSubmitIds = new Set();
         this.skippedVoteIds = new Set();
-        // meme-vote personalises this frame with a `hand` field. Other game
+        // meme-showdown personalises this frame with a `hand` field. Other game
         // types leave it absent; the store no-ops in that case.
         handStore.onRoundStarted(msg.data as { hand?: { card_id: string; text: string }[] });
         break;
@@ -272,7 +272,7 @@ export class RoomState {
           submitted_player_ids?: string[];
           skipped_submit_ids?: string[];
           skipped_vote_ids?: string[];
-          // meme-vote-only: the caller's current caption hand, sent on
+          // meme-showdown-only: the caller's current caption hand, sent on
           // reconnect so the SubmitForm doesn't render empty while the
           // client waits for the next round.
           my_hand?: { card_id: string; text: string }[];

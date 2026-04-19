@@ -1,4 +1,4 @@
-// backend/internal/game/hub_memevote.go
+// backend/internal/game/hub_memeshowdown.go
 package game
 
 import (
@@ -21,7 +21,7 @@ type textCard struct {
 	Text   string
 }
 
-// handState owns the text-deck and per-player hands for a meme-vote room.
+// handState owns the text-deck and per-player hands for a meme-showdown room.
 // It is accessed only from the hub goroutine; no locking.
 type handState struct {
 	deck     []uuid.UUID
@@ -145,12 +145,12 @@ func shuffleDeck(deck []uuid.UUID) {
 // initMemeVoteHands loads the text deck, initialises h.memeVote, and deals
 // the initial hand to every seated player. Returns false (and ends the room
 // with reason "pack_exhausted") if anything goes wrong — the caller in
-// startGame must abort. Called only for meme-vote rooms.
+// startGame must abort. Called only for meme-showdown rooms.
 func (h *Hub) initMemeVoteHands(ctx context.Context) bool {
 	room, err := h.db.GetRoomByID(ctx, h.roomID)
 	if err != nil {
 		if h.log != nil {
-			h.log.Error("hub: meme-vote get room", "error", err, "room", h.roomCode)
+			h.log.Error("hub: meme-showdown get room", "error", err, "room", h.roomCode)
 		}
 		h.finishRoom(ctx, "pack_exhausted", nil)
 		return false
@@ -165,7 +165,7 @@ func (h *Hub) initMemeVoteHands(ctx context.Context) bool {
 	deck, textFor, err := loadTextDeck(ctx, h.db, room.TextPackID)
 	if err != nil {
 		if h.log != nil {
-			h.log.Error("hub: meme-vote load text deck", "error", err, "room", h.roomCode)
+			h.log.Error("hub: meme-showdown load text deck", "error", err, "room", h.roomCode)
 		}
 		h.finishRoom(ctx, "pack_exhausted", nil)
 		return false
@@ -177,7 +177,7 @@ func (h *Hub) initMemeVoteHands(ctx context.Context) bool {
 }
 
 // seatedPlayerIDs returns the playerIDs of every currently-known player. Used
-// to deal and refill meme-vote hands; a reconnecting player is still
+// to deal and refill meme-showdown hands; a reconnecting player is still
 // considered seated so their hand survives the grace window.
 func (h *Hub) seatedPlayerIDs() []string {
 	ids := make([]string, 0, len(h.players))
@@ -189,7 +189,7 @@ func (h *Hub) seatedPlayerIDs() []string {
 
 // memeVoteHandPayload is the per-player hand projection used in both
 // round_started and room_state.my_hand. Returns nil when there is no
-// meme-vote state (i.e. any other game type).
+// meme-showdown state (i.e. any other game type).
 func (h *Hub) memeVoteHandPayload(playerID string) []map[string]string {
 	if h.memeVote == nil {
 		return nil

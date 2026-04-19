@@ -21,7 +21,7 @@ import (
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/clock"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/config"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/game"
-	memecaption "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_caption"
+	memefreestyle "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_freestyle"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/testutil"
 )
@@ -120,7 +120,7 @@ func newHubEnvWith(t *testing.T, opts hubEnvOpts) *hubEnv {
 		t.Fatalf("newHubEnvWith: create host: %v", err)
 	}
 
-	gt, err := q.GetGameTypeBySlug(ctx, "meme-caption")
+	gt, err := q.GetGameTypeBySlug(ctx, "meme-freestyle")
 	if err != nil {
 		t.Fatalf("newHubEnvWith: get game type: %v", err)
 	}
@@ -190,7 +190,7 @@ func newHubEnvWith(t *testing.T, opts hubEnvOpts) *hubEnv {
 		WSReadLimitBytes:     4096,
 	}
 	registry := game.NewRegistry()
-	registry.Register(memecaption.New())
+	registry.Register(memefreestyle.New())
 	clk := opts.clk
 	if clk == nil {
 		clk = clock.Real{}

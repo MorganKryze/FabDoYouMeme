@@ -1,5 +1,5 @@
-// backend/internal/game/types/meme_vote/handler_test.go
-package memevote
+// backend/internal/game/types/meme_showdown/handler_test.go
+package memeshowdown
 
 import (
 	"encoding/json"
@@ -12,7 +12,7 @@ import (
 )
 
 func TestMemeVote_Slug(t *testing.T) {
-	if New().Slug() != "meme-vote" {
+	if New().Slug() != "meme-showdown" {
 		t.Fatalf("Slug = %q", New().Slug())
 	}
 }

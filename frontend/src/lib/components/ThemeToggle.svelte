@@ -1,14 +1,13 @@
 <script lang="ts">
   import { theme, type ThemePref } from '$lib/state/theme.svelte';
-  import { Sparkles, Sunrise, Sunset, Moon } from '$lib/icons';
+  import { Sparkles, Sun, Moon } from '$lib/icons';
 
   type Option = { value: ThemePref; label: string; Icon: typeof Sparkles };
 
   const options: Option[] = [
     { value: 'auto', label: 'Auto', Icon: Sparkles },
-    { value: 'morning', label: 'Morning', Icon: Sunrise },
-    { value: 'evening', label: 'Evening', Icon: Sunset },
-    { value: 'night', label: 'Night', Icon: Moon },
+    { value: 'light', label: 'Light', Icon: Sun },
+    { value: 'dark', label: 'Dark', Icon: Moon },
   ];
 </script>
 

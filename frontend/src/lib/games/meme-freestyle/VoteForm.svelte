@@ -19,6 +19,9 @@
     ($page.data as any)?.room?.config?.allow_skip_vote ?? true
   );
 
+  // When the only submission in the pool is the player's own (e.g. 2-player
+  // room where the other player used a joker), the player has no real vote
+  // to cast — skip would be a vote-against-no-one, so we hide it.
   const hasVoteable = $derived(
     submissions.some((s) => s.id !== room.ownSubmissionId)
   );
@@ -28,11 +31,17 @@
     ws.send('skip_vote');
   }
 
+  const promptText = $derived(
+    round ? (round.item?.payload as { prompt?: string } | undefined)?.prompt ?? null : null
+  );
+
+  // A/B/C/D letter labels — useful as a compact identifier when narrating
+  // votes in chat or screenshots.
   const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
 
   function vote() {
     if (!selectedId || voted) return;
-    ws.send('meme-vote:vote', { submission_id: selectedId });
+    ws.send('meme-freestyle:vote', { submission_id: selectedId });
     voted = true;
   }
 </script>
@@ -47,7 +56,7 @@
     </div>
   {/if}
 
-  <!-- Image + vote header -->
+  <!-- Prompt split -->
   <div class="grid gap-4 md:grid-cols-[1fr_1.2fr] items-stretch">
     <div
       use:dealCard={{ delay: 80, rotate: -1.2 }}
@@ -61,7 +70,7 @@
         >
           <img
             src={mediaSrc(round.item.media_url, room.code)}
-            alt="Round meme"
+            alt="Round prompt"
             class="block w-full h-auto max-h-[55vh] object-cover"
           />
         </div>
@@ -70,7 +79,7 @@
         {#if round}
           <span>Round {round.round_number}</span>
         {/if}
-        <span>{submissions.length} plays</span>
+        <span>{submissions.length} captions</span>
       </div>
     </div>
 
@@ -98,10 +107,10 @@
         class="relative m-0 font-bold leading-tight tracking-tight"
         style="font-size: clamp(1.5rem, 2.4vw, 2rem);"
       >
-        Cards are in. Time to vote.
+        {promptText ? `"${promptText}"` : 'Captions are in. Time to vote.'}
       </p>
       <span class="relative text-[11px] font-bold uppercase tracking-[0.2em] opacity-70 mt-auto">
-        One vote each · your own card is locked
+        One vote each · your own caption is locked
       </span>
     </div>
   </div>
@@ -118,7 +127,7 @@
         type="button"
         onclick={() => { if (!voted && !isOwn) selectedId = sub.id; }}
         disabled={voted || isOwn}
-        aria-label="Caption {letter}: {sub.text ?? ''}"
+        aria-label="Caption {letter}: {sub.caption}"
         aria-pressed={isSelected}
         class="relative rounded-[20px] p-3 flex flex-col gap-2.5 text-left transition-all duration-150"
         class:cursor-pointer={!isOwn && !voted}
@@ -133,6 +142,7 @@
           opacity: {isOwn ? 0.7 : 1};
         "
       >
+        <!-- Letter label + selection chip -->
         <div class="flex items-center justify-between gap-2">
           <span
             class="font-mono text-[11px] font-bold tracking-[0.2em] transition-colors"
@@ -141,12 +151,15 @@
             {letter} ·
           </span>
           {#if isSelected && !voted}
-            <span class="chip-picked inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em]">
+            <span
+              class="chip-picked inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em]"
+            >
               ♥ Picked
             </span>
           {/if}
         </div>
 
+        <!-- VOTED sticker (only after final vote, not on pre-select) -->
         {#if voted && isSelected}
           <span
             class="chip-voted absolute -top-2 right-2 z-20 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-[0.18em] uppercase"
@@ -156,6 +169,7 @@
           </span>
         {/if}
 
+        <!-- Own-caption marker -->
         {#if isOwn}
           <span class="absolute top-2 right-2 z-10 text-[10px] font-bold uppercase tracking-[0.18em] px-2 py-0.5 rounded-full bg-brand-white border-[2px] border-brand-border-heavy text-brand-text-muted">
             Yours
@@ -178,7 +192,7 @@
           class="w-full rounded-[12px] border-[2.5px] border-brand-border-heavy bg-brand-white px-3 py-2.5 text-sm font-bold text-brand-text flex-1 flex items-center leading-snug text-balance"
           style="box-shadow: 0 2px 0 rgba(0,0,0,0.04);"
         >
-          {sub.text ?? ''}
+          {sub.caption}
         </div>
       </button>
     {/each}

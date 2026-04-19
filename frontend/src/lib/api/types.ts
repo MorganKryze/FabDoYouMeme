@@ -35,7 +35,7 @@ export interface GameTypeConfig {
   max_round_count: number;
   default_round_count: number;
   /** Hand-size bounds are only present for game types that deal a per-player
-   *  hand of items (e.g. meme-vote). Omitted for game types that don't. */
+   *  hand of items (e.g. meme-showdown). Omitted for game types that don't. */
   min_hand_size?: number;
   max_hand_size?: number;
   default_hand_size?: number;
@@ -81,7 +81,7 @@ export interface RoomConfig {
   /** When true, players may abstain from voting in a round. Defaults to true. */
   allow_skip_vote: boolean;
   /** Per-player hand of items dealt each round — only present for game types
-   *  whose manifest declares hand-size bounds (e.g. meme-vote). */
+   *  whose manifest declares hand-size bounds (e.g. meme-showdown). */
   hand_size?: number;
 }
 
@@ -185,8 +185,8 @@ export interface Submission {
   user_id: string;
   username: string;
   // Either field is present depending on game type:
-  //  - meme-caption → `caption`
-  //  - meme-vote    → `text`
+  //  - meme-freestyle → `caption`
+  //  - meme-showdown    → `text`
   // Components under `lib/games/<slug>/` read whichever field their handler
   // emits. Keeping both optional here avoids a discriminated union that would
   // leak game-type concerns into every consumer of the shared type.

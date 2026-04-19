@@ -100,7 +100,7 @@ func TestValidateAndFill_JokerCountEqualToRoundCountOK(t *testing.T) {
 }
 
 // handBounds returns a Bounds with hand-size opted in. Game types that don't
-// deal hands (meme-caption) leave MinHandSize/MaxHandSize/DefaultHandSize
+// deal hands (meme-freestyle) leave MinHandSize/MaxHandSize/DefaultHandSize
 // at zero; hand-size tests below assert only those paths.
 func handBounds() game.Bounds {
 	b := validBounds()

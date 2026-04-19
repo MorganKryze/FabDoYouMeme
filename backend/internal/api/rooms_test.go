@@ -19,8 +19,8 @@ import (
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/clock"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/config"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/game"
-	memecaption "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_caption"
-	memevote "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_vote"
+	memefreestyle "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_freestyle"
+	memeshowdown "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_showdown"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/testutil"
 )
 
@@ -28,11 +28,11 @@ func newRoomHandler(t *testing.T) (*api.RoomHandler, *db.Queries) {
 	t.Helper()
 	pool := testutil.Pool()
 	registry := game.NewRegistry()
-	registry.Register(memecaption.New())
-	registry.Register(memevote.New())
+	registry.Register(memefreestyle.New())
+	registry.Register(memeshowdown.New())
 	q := db.New(pool)
 	// Sync handlers into game_types so tests that POST /api/rooms with the
-	// meme-vote slug find the row — matches the production boot flow.
+	// meme-showdown slug find the row — matches the production boot flow.
 	if err := game.SyncGameTypes(context.Background(), q, registry, slog.Default()); err != nil {
 		t.Fatalf("sync game types: %v", err)
 	}
@@ -105,8 +105,8 @@ func TestCreateRoom_ImagePackNoSupportedItems(t *testing.T) {
 	h, q := newRoomHandler(t)
 	user := seedRoomUser(t, q)
 
-	// Get the seeded meme-caption game type.
-	gt, err := q.GetGameTypeBySlug(context.Background(), "meme-caption")
+	// Get the seeded meme-freestyle game type.
+	gt, err := q.GetGameTypeBySlug(context.Background(), "meme-freestyle")
 	if err != nil {
 		t.Fatalf("get game type: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestCreateRoom_ImagePackInsufficient(t *testing.T) {
 	user := seedRoomUser(t, q)
 	ctx := context.Background()
 
-	gt, _ := q.GetGameTypeBySlug(ctx, "meme-caption")
+	gt, _ := q.GetGameTypeBySlug(ctx, "meme-freestyle")
 
 	// Create a pack with 1 item (fewer than round_count=3).
 	pack, _ := q.CreatePack(ctx, db.CreatePackParams{
@@ -200,7 +200,7 @@ func seedLobbyRoom(t *testing.T, configJSON string) (*api.RoomHandler, *db.Queri
 	h, q := newRoomHandler(t)
 	user := seedRoomUser(t, q)
 	ctx := context.Background()
-	gt, _ := q.GetGameTypeBySlug(ctx, "meme-caption")
+	gt, _ := q.GetGameTypeBySlug(ctx, "meme-freestyle")
 	pack, _ := q.CreatePack(ctx, db.CreatePackParams{
 		Name:       testutil.SeedName(t) + "_cfg",
 		Visibility: "private",
@@ -308,7 +308,7 @@ func TestCreateRoom_DefaultsJokerCountAndAllowSkipVote(t *testing.T) {
 	user := seedRoomUser(t, q)
 	ctx := context.Background()
 
-	gt, _ := q.GetGameTypeBySlug(ctx, "meme-caption")
+	gt, _ := q.GetGameTypeBySlug(ctx, "meme-freestyle")
 
 	// Seed a pack with enough items to satisfy image_pack_insufficient.
 	pack, _ := q.CreatePack(ctx, db.CreatePackParams{
@@ -366,7 +366,7 @@ func TestGetRoom_ByCode_Found(t *testing.T) {
 	user := seedRoomUser(t, q)
 	ctx := context.Background()
 
-	gt, _ := q.GetGameTypeBySlug(ctx, "meme-caption")
+	gt, _ := q.GetGameTypeBySlug(ctx, "meme-freestyle")
 	pack, _ := q.CreatePack(ctx, db.CreatePackParams{
 		Name:       testutil.SeedName(t) + "_gc",
 		Visibility: "private",
@@ -407,7 +407,7 @@ func TestCreateRoom_MemeVote_RequiresTextPack(t *testing.T) {
 	user := seedRoomUser(t, q)
 	ctx := context.Background()
 
-	gt, _ := q.GetGameTypeBySlug(ctx, "meme-vote")
+	gt, _ := q.GetGameTypeBySlug(ctx, "meme-showdown")
 	imgPack := seedPackWithItems(t, q, ctx, "img", 1, 10)
 
 	body, _ := json.Marshal(map[string]any{
@@ -436,7 +436,7 @@ func TestCreateRoom_MemeCaption_RejectsTextPack(t *testing.T) {
 	user := seedRoomUser(t, q)
 	ctx := context.Background()
 
-	gt, _ := q.GetGameTypeBySlug(ctx, "meme-caption")
+	gt, _ := q.GetGameTypeBySlug(ctx, "meme-freestyle")
 	imgPack := seedPackWithItems(t, q, ctx, "img", 1, 10)
 	textPack := seedPackWithItems(t, q, ctx, "txt", 2, 5)
 
@@ -467,9 +467,9 @@ func TestCreateRoom_MemeVote_TextPackInsufficient(t *testing.T) {
 	user := seedRoomUser(t, q)
 	ctx := context.Background()
 
-	gt, _ := q.GetGameTypeBySlug(ctx, "meme-vote")
+	gt, _ := q.GetGameTypeBySlug(ctx, "meme-showdown")
 	imgPack := seedPackWithItems(t, q, ctx, "img", 1, 10)
-	// meme-vote worst-case: hand_size * max_players + (round_count-1) *
+	// meme-showdown worst-case: hand_size * max_players + (round_count-1) *
 	// max_players = 5*12 + 4*12 = 108. Seed only 2 to trigger insufficient.
 	textPack := seedPackWithItems(t, q, ctx, "txt", 2, 2)
 
@@ -500,7 +500,7 @@ func TestCreateRoom_MemeVote_Success(t *testing.T) {
 	user := seedRoomUser(t, q)
 	ctx := context.Background()
 
-	gt, _ := q.GetGameTypeBySlug(ctx, "meme-vote")
+	gt, _ := q.GetGameTypeBySlug(ctx, "meme-showdown")
 	imgPack := seedPackWithItems(t, q, ctx, "img", 1, 10)
 	textPack := seedPackWithItems(t, q, ctx, "txt", 2, 120)
 

@@ -109,7 +109,7 @@ func MakeInvite(t *testing.T, createdBy db.User) db.Invite {
 // ─── Packs & items ───────────────────────────────────────────────────────────
 
 // MakePack creates a public, active game pack owned by owner. If withItems > 0,
-// N items are inserted with throwaway payloads so meme-caption rounds can pick
+// N items are inserted with throwaway payloads so meme-freestyle rounds can pick
 // a prompt.
 func MakePack(t *testing.T, owner db.User, withItems int) db.GamePack {
 	t.Helper()
@@ -147,14 +147,14 @@ func MakePack(t *testing.T, owner db.User, withItems int) db.GamePack {
 
 // ─── Rooms ───────────────────────────────────────────────────────────────────
 
-// MakeRoom creates a lobby-state room for gameTypeSlug (default "meme-caption"
+// MakeRoom creates a lobby-state room for gameTypeSlug (default "meme-freestyle"
 // if empty) hosted by host and backed by pack. The room config is a minimal
 // valid JSON object — callers that need specific round counts should update
 // the row themselves.
 func MakeRoom(t *testing.T, host db.User, pack db.GamePack, gameTypeSlug string) db.Room {
 	t.Helper()
 	if gameTypeSlug == "" {
-		gameTypeSlug = "meme-caption"
+		gameTypeSlug = "meme-freestyle"
 	}
 	q := db.New(Pool())
 	gt, err := q.GetGameTypeBySlug(context.Background(), gameTypeSlug)

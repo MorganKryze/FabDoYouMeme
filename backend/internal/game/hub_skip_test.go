@@ -179,8 +179,8 @@ func TestHub_SkipVote_UnlimitedAndBroadcasts(t *testing.T) {
 	readUntilType(t, p2, "round_started")
 
 	// Both submit so submissions phase closes and we enter voting.
-	sendMsg(t, host, "meme-caption:submit", map[string]string{"caption": "a"})
-	sendMsg(t, p2, "meme-caption:submit", map[string]string{"caption": "b"})
+	sendMsg(t, host, "meme-freestyle:submit", map[string]string{"caption": "a"})
+	sendMsg(t, p2, "meme-freestyle:submit", map[string]string{"caption": "b"})
 	readUntilType(t, host, "submissions_closed")
 	readUntilType(t, p2, "submissions_closed")
 
@@ -209,8 +209,8 @@ func TestHub_SkipVote_WhenDisabled_Rejected(t *testing.T) {
 	readUntilType(t, host, "round_started")
 	readUntilType(t, p2, "round_started")
 
-	sendMsg(t, host, "meme-caption:submit", map[string]string{"caption": "a"})
-	sendMsg(t, p2, "meme-caption:submit", map[string]string{"caption": "b"})
+	sendMsg(t, host, "meme-freestyle:submit", map[string]string{"caption": "a"})
+	sendMsg(t, p2, "meme-freestyle:submit", map[string]string{"caption": "b"})
 	readUntilType(t, host, "submissions_closed")
 
 	sendMsg(t, host, "skip_vote", nil)
@@ -264,7 +264,7 @@ func TestHub_Submit_AfterSkipSubmit_Rejected(t *testing.T) {
 	sendMsg(t, host, "skip_submit", nil)
 	readUntilType(t, host, "player_skipped_submit")
 
-	sendMsg(t, host, "meme-caption:submit", map[string]string{"caption": "late"})
+	sendMsg(t, host, "meme-freestyle:submit", map[string]string{"caption": "late"})
 	m := readUntilType(t, host, "error")
 	data, _ := m["data"].(map[string]any)
 	if data["code"] != "already_submitted" {
@@ -290,7 +290,7 @@ func TestHub_SkipSubmit_EarlyCloseMixedSubmitsAndSkips(t *testing.T) {
 
 	// host submits, p2 skips → the phase must close immediately without
 	// waiting for the 300s timer.
-	sendMsg(t, host, "meme-caption:submit", map[string]string{"caption": "a"})
+	sendMsg(t, host, "meme-freestyle:submit", map[string]string{"caption": "a"})
 	readUntilType(t, host, "submission_accepted")
 	sendMsg(t, p2, "skip_submit", nil)
 	readUntilType(t, p2, "player_skipped_submit")

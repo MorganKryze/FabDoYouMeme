@@ -5,12 +5,12 @@
   import { ws } from '$lib/state/ws.svelte';
   import { guest } from '$lib/state/guest.svelte';
   import { stage } from '$lib/motion/stage.svelte';
-  import MemeCaptionSubmitForm from '$lib/games/meme-caption/SubmitForm.svelte';
-  import MemeCaptionVoteForm from '$lib/games/meme-caption/VoteForm.svelte';
-  import MemeCaptionResultsView from '$lib/games/meme-caption/ResultsView.svelte';
-  import MemeVoteSubmitForm from '$lib/games/meme-vote/SubmitForm.svelte';
-  import MemeVoteVoteForm from '$lib/games/meme-vote/VoteForm.svelte';
-  import MemeVoteResultsView from '$lib/games/meme-vote/ResultsView.svelte';
+  import MemeCaptionSubmitForm from '$lib/games/meme-freestyle/SubmitForm.svelte';
+  import MemeCaptionVoteForm from '$lib/games/meme-freestyle/VoteForm.svelte';
+  import MemeCaptionResultsView from '$lib/games/meme-freestyle/ResultsView.svelte';
+  import MemeVoteSubmitForm from '$lib/games/meme-showdown/SubmitForm.svelte';
+  import MemeVoteVoteForm from '$lib/games/meme-showdown/VoteForm.svelte';
+  import MemeVoteResultsView from '$lib/games/meme-showdown/ResultsView.svelte';
   import WaitingStage from '$lib/components/room/WaitingStage.svelte';
   import EndStage from '$lib/components/room/EndStage.svelte';
   import RoomHeader from '$lib/components/room/RoomHeader.svelte';
@@ -39,12 +39,12 @@
   // component that understands the slug's payload shape. Keyed by slug so new
   // game types slot in without touching the room shell's render logic.
   const plugins = {
-    'meme-caption': {
+    'meme-freestyle': {
       Submit: MemeCaptionSubmitForm,
       Vote: MemeCaptionVoteForm,
       Results: MemeCaptionResultsView,
     },
-    'meme-vote': {
+    'meme-showdown': {
       Submit: MemeVoteSubmitForm,
       Vote: MemeVoteVoteForm,
       Results: MemeVoteResultsView,
@@ -52,7 +52,7 @@
   } as const;
 
   const plugin = $derived(
-    plugins[(room.gameType?.slug ?? 'meme-caption') as keyof typeof plugins] ?? plugins['meme-caption']
+    plugins[(room.gameType?.slug ?? 'meme-freestyle') as keyof typeof plugins] ?? plugins['meme-freestyle']
   );
 
   let prefersReducedMotion = $state(false);

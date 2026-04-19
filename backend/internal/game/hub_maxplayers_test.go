@@ -6,14 +6,14 @@ import (
 	"time"
 )
 
-// TestHub_RejectJoinWhenFull is the P2.3 acceptance test. The meme-caption
+// TestHub_RejectJoinWhenFull is the P2.3 acceptance test. The meme-freestyle
 // handler caps lobbies at 12 players (Handler.MaxPlayers). Before the fix
 // handleRegister only checked hub state, not population, so the 13th player
 // would silently join and bloat room_state. After the fix the 13th dial
 // receives a single `error` frame with code=room_full and the connection is
 // closed by the hub.
 //
-// We rely on the existing newHubEnv helper (which registers meme_caption)
+// We rely on the existing newHubEnv helper (which registers meme_freestyle)
 // plus the test-only X-Test-User-ID header path to dial 13 distinct users
 // without running auth. 12 joins must succeed, the 13th must error out.
 func TestHub_RejectJoinWhenFull(t *testing.T) {

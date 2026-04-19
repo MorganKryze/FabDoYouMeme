@@ -48,7 +48,7 @@ UPDATE game_items SET position = $2 WHERE id = $1 AND pack_id = $3;
 -- name: ListPackItemsByPayloadVersion :many
 -- Returns every non-deleted item in a pack whose current version payload
 -- matches a specific payload_version. Used by the hub to build per-game
--- decks (e.g. the text-caption deck for meme-vote) where one item per row
+-- decks (e.g. the text-caption deck for meme-showdown) where one item per row
 -- is enough and a single random-pick is not.
 SELECT gi.id, giv.payload
 FROM game_items gi

@@ -22,7 +22,7 @@ body:
     attributes:
       label: Game type
       options:
-        - "meme-caption"
+        - "meme-freestyle"
         - "other / not sure"
     validations:
       required: true

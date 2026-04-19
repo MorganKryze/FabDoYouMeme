@@ -31,7 +31,7 @@ var roomCodeSeq uint64
 func roomInState(t *testing.T, q *db.Queries, host db.User, state string) db.Room {
 	t.Helper()
 	ctx := context.Background()
-	gt, err := q.GetGameTypeBySlug(ctx, "meme-caption")
+	gt, err := q.GetGameTypeBySlug(ctx, "meme-freestyle")
 	if err != nil {
 		t.Fatalf("roomInState: get game type: %v", err)
 	}

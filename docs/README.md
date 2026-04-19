@@ -1,6 +1,6 @@
 # FabDoYouMeme — Documentation
 
-FabDoYouMeme is a self-hosted, invite-only multiplayer party game platform. It ships with meme-captioning games and is built to support any turn-based party game without schema or protocol changes.
+FabDoYouMeme is a self-hosted, invite-only multiplayer party game platform. It ships with meme-freestyleing games and is built to support any turn-based party game without schema or protocol changes.
 
 ---
 

@@ -27,7 +27,7 @@ func TestHub_KickPlayerRespectsContext(t *testing.T) {
 	hub := game.NewHub(game.HubConfig{
 		RoomCode:     "KICK",
 		RoomID:       uuid.New(),
-		GameTypeSlug: "meme-caption",
+		GameTypeSlug: "meme-freestyle",
 		HostUserID:   uuid.New().String(),
 		Registry:     game.NewRegistry(),
 		DB:           nil, // not touched — Run is never started
@@ -71,7 +71,7 @@ func TestHub_KickPlayerSucceedsWhenDrainable(t *testing.T) {
 	hub := game.NewHub(game.HubConfig{
 		RoomCode:     "KICK2",
 		RoomID:       uuid.New(),
-		GameTypeSlug: "meme-caption",
+		GameTypeSlug: "meme-freestyle",
 		HostUserID:   uuid.New().String(),
 		Registry:     game.NewRegistry(),
 		Cfg:          &config.Config{},

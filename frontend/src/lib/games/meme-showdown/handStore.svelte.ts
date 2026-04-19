@@ -1,4 +1,4 @@
-// Ephemeral text-card hand for the meme-vote game type.
+// Ephemeral text-card hand for the meme-showdown game type.
 //
 // The server owns the authoritative hand; the hub personalises `round_started`
 // with a `hand` field for every live player and rehydrates via `room_state`
@@ -34,6 +34,6 @@ export class HandStore {
   }
 }
 
-// Singleton instance shared by the meme-vote components. `RoomState` invokes
+// Singleton instance shared by the meme-showdown components. `RoomState` invokes
 // the mutators from its WS message dispatch; everyone else just reads `.cards`.
 export const handStore = new HandStore();

@@ -1,21 +1,16 @@
 <script lang="ts">
-  import { theme } from '$lib/state/theme.svelte';
+  import { theme, type Band } from '$lib/state/theme.svelte';
 
   /**
    * Time-aware animated gradient background + grain overlay.
    *
    * Reads `theme.active` (user-override aware) and smoothly transitions
-   * :root CSS custom properties between time bands. The 2s transition on
-   * :root (in app.css) ensures shifts are imperceptible.
+   * :root CSS custom properties between the two bands. The 2s transition
+   * on :root (in app.css) ensures shifts are imperceptible.
    *
    * The clock-to-band mapping and the clock tick both live in
    * `theme.svelte.ts` — this component only applies the palette when
    * `theme.active` changes.
-   *
-   * Note: the `afternoon` palette below is retained as a placeholder for
-   * the (still-pending) afternoon time band. ThemeState currently collapses
-   * 6:00–17:00 into `morning`, so `afternoon` is unreachable dead code
-   * until the afternoon palette decision lands.
    */
 
   interface TimePalette {
@@ -30,8 +25,8 @@
     accent: string;
   }
 
-  const palettes: Record<string, TimePalette> = {
-    morning: {
+  const palettes: Record<Band, TimePalette> = {
+    light: {
       grad: ['#D4EDDA', '#B5E2D0', '#FDDCB5', '#A8D8EA'],
       text: '#1A1A1A',
       textMid: '#3A3A3A',
@@ -42,36 +37,13 @@
       borderHeavy: 'rgba(26,26,26,0.7)',
       accent: '#E76F51',
     },
-    afternoon: {
-      // Blend of morning + evening gradient stops
-      grad: ['#E9E5CA', '#D7CBB1', '#ECBDB0', '#B5E2D0'],
-      text: '#1A1A1A',
-      textMid: '#3A3A3A',
-      textMuted: 'rgba(26,26,26,0.4)',
-      white: '#FEFEFE',
-      surface: 'rgba(255,255,255,0.82)',
-      border: 'rgba(26,26,26,0.18)',
-      borderHeavy: 'rgba(26,26,26,0.7)',
-      accent: '#D9654A',
-    },
-    evening: {
-      grad: ['#FDDCB5', '#F9B4AB', '#D4A5C9', '#B5E2D0'],
-      text: '#1A1A1A',
-      textMid: '#3A3A3A',
-      textMuted: 'rgba(26,26,26,0.4)',
-      white: '#FEFEFE',
-      surface: 'rgba(255,255,255,0.82)',
-      border: 'rgba(26,26,26,0.18)',
-      borderHeavy: 'rgba(26,26,26,0.7)',
-      accent: '#E8937F',
-    },
-    night: {
+    dark: {
       // Slightly lifted dark purples so the gradient stays visible (was nearly black)
       grad: ['#2A2040', '#3D2B5A', '#4A3470', '#1B2838'],
       text: '#F2EBFF',
       textMid: '#C8BCE0',
       textMuted: 'rgba(242,235,255,0.55)',
-      // bg-brand-white in night = lifted dark purple panel
+      // bg-brand-white in dark = lifted dark purple panel
       white: '#3A2D55',
       // Surface is the card body — needs real opacity to be readable
       surface: 'rgba(58,45,85,0.72)',
@@ -81,7 +53,7 @@
     },
   };
 
-  function applyPalette(band: string) {
+  function applyPalette(band: Band) {
     const p = palettes[band];
     const root = document.documentElement.style;
     root.setProperty('--brand-text', p.text);

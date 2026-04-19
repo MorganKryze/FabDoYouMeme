@@ -1,5 +1,5 @@
-// backend/internal/game/types/meme_caption/handler.go
-package memecaption
+// backend/internal/game/types/meme_showdown/handler.go
+package memeshowdown
 
 import (
 	_ "embed"
@@ -13,33 +13,26 @@ import (
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/game"
 )
 
-// ErrSelfVote is returned when a player tries to vote for their own submission.
+// ErrSelfVote is returned when a player votes for their own played caption.
 var ErrSelfVote = errors.New("cannot_vote_for_self")
 
 //go:embed manifest.yaml
 var manifestYAML []byte
 
-// manifest is loaded once at package init. A malformed manifest fails the
-// init — the binary will not start, which is the behavior we want: a
-// broken manifest can silently corrupt every room it touches.
 var manifest = func() *game.Manifest {
 	m, err := game.LoadManifest(manifestYAML)
 	if err != nil {
-		panic(fmt.Sprintf("meme_caption: load manifest: %v", err))
+		panic(fmt.Sprintf("meme_showdown: load manifest: %v", err))
 	}
 	return m
 }()
 
-// Handler implements game.GameTypeHandler for the meme-caption game type.
-// All identity/config metadata is delegated to the embedded manifest so
-// there is a single source of truth for bounds and defaults (see
-// manifest.yaml in this package).
+// Handler implements game.GameTypeHandler for the meme-showdown game type.
+// Each round pairs an image (from the image pack) with a hand of captions
+// (from the text pack). Every player plays one card; the anonymous reveal
+// is then voted on; one point per vote received.
 type Handler struct{}
 
-// New creates a Handler. Identity and caps are read from the embedded
-// manifest; there is no runtime-tunable knob here on purpose — deploying
-// a changed bound means rebuilding the binary with the edited manifest,
-// which keeps game_types.config and the shipped handler code in lock-step.
 func New() *Handler { return &Handler{} }
 
 func (h *Handler) Slug() string             { return manifest.Slug }
@@ -47,8 +40,10 @@ func (h *Handler) SupportsSolo() bool       { return manifest.SupportsSolo }
 func (h *Handler) MaxPlayers() int          { return manifest.MaxPlayersOrDefault() }
 func (h *Handler) Manifest() *game.Manifest { return manifest }
 
-// RequiredPacks declares the one image pack meme-caption consumes. The pack
-// must contain at least RoundCount items compatible with payload_version 1.
+// RequiredPacks declares the two packs this game type consumes. MinItemsFn
+// is evaluated against the normalised RoomConfig and the handler's max_players
+// cap — so the room-creation check is worst-case accurate regardless of the
+// actual lobby headcount.
 func (h *Handler) RequiredPacks() []game.PackRequirement {
 	return []game.PackRequirement{
 		{
@@ -58,30 +53,51 @@ func (h *Handler) RequiredPacks() []game.PackRequirement {
 				return cfg.RoundCount
 			},
 		},
+		{
+			Role:            game.PackRoleText,
+			PayloadVersions: []int{2},
+			MinItemsFn: func(cfg game.RoomConfig, maxPlayers int) int {
+				// Worst-case deck usage: initial hand_size × players, plus
+				// (round_count − 1) × players refills (one card played and
+				// replaced each subsequent round). round_count == 1 → no
+				// refills.
+				refills := 0
+				if cfg.RoundCount > 1 {
+					refills = (cfg.RoundCount - 1) * maxPlayers
+				}
+				return cfg.HandSize*maxPlayers + refills
+			},
+		},
 	}
 }
 
+// submitPayload is the body the client sends in meme-showdown:submit.
+// card_id is the game_items.id of the caption the player played. Text is
+// snapshotted at play time in the hub before persisting so the round history
+// is immune to later pack edits; clients never set it.
 type submitPayload struct {
-	Caption string `json:"caption"`
+	CardID string `json:"card_id"`
+	Text   string `json:"text,omitempty"`
 }
 
-// ValidateSubmission checks caption is non-empty and ≤200 chars.
+// ValidateSubmission checks body shape. The hub enforces hand-membership
+// (is card_id in the player's current hand?) before calling this, alongside
+// its existing phase + already-submitted checks.
 func (h *Handler) ValidateSubmission(_ game.Round, raw json.RawMessage) error {
 	var p submitPayload
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return fmt.Errorf("invalid submission payload: %w", err)
 	}
-	p.Caption = strings.TrimSpace(p.Caption)
-	if p.Caption == "" {
-		return fmt.Errorf("caption cannot be empty")
+	if strings.TrimSpace(p.CardID) == "" {
+		return fmt.Errorf("card_id is required")
 	}
-	if len([]rune(p.Caption)) > 200 {
-		return fmt.Errorf("caption exceeds 200 characters")
+	if _, err := uuid.Parse(p.CardID); err != nil {
+		return fmt.Errorf("card_id must be a UUID: %w", err)
 	}
 	return nil
 }
 
-// ValidateVote prevents self-vote. The vote payload for meme-caption is { submission_id }.
+// ValidateVote prevents self-vote. Hub has already verified phase + duplicate.
 func (h *Handler) ValidateVote(_ game.Round, submission game.Submission, voterID uuid.UUID, _ json.RawMessage) error {
 	if submission.UserID == voterID {
 		return ErrSelfVote
@@ -89,15 +105,12 @@ func (h *Handler) ValidateVote(_ game.Round, submission game.Submission, voterID
 	return nil
 }
 
-// CalculateRoundScores awards one point per vote received.
-// Tied submissions each receive full points — no tiebreaker.
+// CalculateRoundScores awards one point per vote received. Ties both score.
 func (h *Handler) CalculateRoundScores(submissions []game.Submission, votes []game.Vote) map[uuid.UUID]int {
-	// Map submission ID → author user ID
 	authorBySubmission := make(map[uuid.UUID]uuid.UUID, len(submissions))
 	for _, s := range submissions {
 		authorBySubmission[s.ID] = s.UserID
 	}
-
 	scores := make(map[uuid.UUID]int)
 	for _, v := range votes {
 		if authorID, ok := authorBySubmission[v.SubmissionID]; ok {
@@ -108,12 +121,13 @@ func (h *Handler) CalculateRoundScores(submissions []game.Submission, votes []ga
 }
 
 type submissionShown struct {
-	ID      string `json:"id"`
-	Caption string `json:"caption"`
-	// Note: no author fields — authors are hidden during voting phase
+	ID   string `json:"id"`
+	Text string `json:"text"`
+	// No author fields — hidden during voting phase.
 }
 
-// BuildSubmissionsShownPayload returns captions without author information.
+// BuildSubmissionsShownPayload reveals captions without authorship so the
+// voting UI stays anonymous. Authors are revealed in BuildVoteResultsPayload.
 func (h *Handler) BuildSubmissionsShownPayload(submissions []game.Submission) (json.RawMessage, error) {
 	shown := make([]submissionShown, 0, len(submissions))
 	for _, s := range submissions {
@@ -122,8 +136,8 @@ func (h *Handler) BuildSubmissionsShownPayload(submissions []game.Submission) (j
 			continue
 		}
 		shown = append(shown, submissionShown{
-			ID:      s.ID.String(),
-			Caption: strings.TrimSpace(p.Caption),
+			ID:   s.ID.String(),
+			Text: strings.TrimSpace(p.Text),
 		})
 	}
 	payload, err := json.Marshal(map[string]any{"submissions": shown})
@@ -132,41 +146,33 @@ func (h *Handler) BuildSubmissionsShownPayload(submissions []game.Submission) (j
 
 type submissionResult struct {
 	ID            string `json:"id"`
-	Caption       string `json:"caption"`
-	Username      string `json:"username,omitempty"` // revealed after voting
+	Text          string `json:"text"`
+	Username      string `json:"username,omitempty"`
 	VotesReceived int    `json:"votes_received"`
 	PointsAwarded int    `json:"points_awarded"`
 }
 
-// BuildVoteResultsPayload reveals authors and scores after voting closes.
-// The hub populates Submission.AuthorUsername before calling this method so
-// the reveal payload includes the display name. The result is embedded in
-// vote_results.data.results by the hub.
 func (h *Handler) BuildVoteResultsPayload(
 	submissions []game.Submission,
 	votes []game.Vote,
 	scores map[uuid.UUID]int,
 ) (json.RawMessage, error) {
-	// Count votes per submission
 	votesPerSub := make(map[uuid.UUID]int)
 	for _, v := range votes {
 		votesPerSub[v.SubmissionID]++
 	}
-
 	results := make([]submissionResult, 0, len(submissions))
 	for _, s := range submissions {
 		var p submitPayload
-		json.Unmarshal(s.Payload, &p) //nolint:errcheck
+		_ = json.Unmarshal(s.Payload, &p)
 		results = append(results, submissionResult{
 			ID:            s.ID.String(),
-			Caption:       strings.TrimSpace(p.Caption),
+			Text:          strings.TrimSpace(p.Text),
 			Username:      s.AuthorUsername,
 			VotesReceived: votesPerSub[s.ID],
 			PointsAwarded: scores[s.UserID],
 		})
 	}
-
-	// Round scores list
 	roundScores := make([]map[string]any, 0, len(scores))
 	for userID, pts := range scores {
 		roundScores = append(roundScores, map[string]any{
@@ -174,7 +180,6 @@ func (h *Handler) BuildVoteResultsPayload(
 			"points":  pts,
 		})
 	}
-
 	payload, err := json.Marshal(map[string]any{
 		"submissions":  results,
 		"round_scores": roundScores,
@@ -182,9 +187,9 @@ func (h *Handler) BuildVoteResultsPayload(
 	return json.RawMessage(payload), err
 }
 
-// PersonalisesRoundStart returns false: meme-caption broadcasts a single
-// round_started payload to every player.
-func (h *Handler) PersonalisesRoundStart() bool { return false }
+// PersonalisesRoundStart returns true: meme-showdown sends each player their own
+// round_started payload so the hand of caption cards stays private.
+func (h *Handler) PersonalisesRoundStart() bool { return true }
 
-// Compile-time interface check
+// Compile-time interface check.
 var _ game.GameTypeHandler = (*Handler)(nil)

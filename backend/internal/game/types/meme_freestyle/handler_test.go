@@ -1,5 +1,5 @@
-// backend/internal/game/types/meme_caption/handler_test.go
-package memecaption_test
+// backend/internal/game/types/meme_freestyle/handler_test.go
+package memefreestyle_test
 
 import (
 	"encoding/json"
@@ -10,16 +10,16 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/game"
-	memecaption "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_caption"
+	memefreestyle "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_freestyle"
 )
 
-func newHandler() *memecaption.Handler {
-	return memecaption.New()
+func newHandler() *memefreestyle.Handler {
+	return memefreestyle.New()
 }
 
 func TestSlug(t *testing.T) {
-	if newHandler().Slug() != "meme-caption" {
-		t.Error("expected slug 'meme-caption'")
+	if newHandler().Slug() != "meme-freestyle" {
+		t.Error("expected slug 'meme-freestyle'")
 	}
 }
 
@@ -83,7 +83,7 @@ func TestValidateVote_SelfVote(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for self-vote")
 	}
-	if !errors.Is(err, memecaption.ErrSelfVote) {
+	if !errors.Is(err, memefreestyle.ErrSelfVote) {
 		t.Errorf("expected ErrSelfVote, got %v", err)
 	}
 }

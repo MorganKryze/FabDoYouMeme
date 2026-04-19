@@ -99,7 +99,7 @@ func (h *PackHandler) Create(w http.ResponseWriter, r *http.Request) {
 // Optional query params:
 //   - game_type=<slug>  scope picker to a single game type
 //   - role=image|text   scope picker to one of that game type's required pack
-//     roles (meme-vote needs both image and text, rendered as two pickers)
+//     roles (meme-showdown needs both image and text, rendered as two pickers)
 //
 // When both are present and the slug is registered, packs with zero items of
 // the role's supported payload versions are dropped. Missing or unregistered

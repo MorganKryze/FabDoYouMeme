@@ -7,7 +7,7 @@ const baseUser = { created_at: '2026-01-15T09:30:00Z' };
 function makeRoom(rank: number): HistoryRoom {
   return {
     code: 'ABCD',
-    game_type_slug: 'meme-caption',
+    game_type_slug: 'meme-freestyle',
     pack_name: 'Pack',
     started_at: '2026-02-01T00:00:00Z',
     score: 0,

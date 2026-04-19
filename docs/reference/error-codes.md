@@ -85,7 +85,7 @@ Sent to the originating connection as `{ "type": "error", "data": { "code": "...
 | `jokers_exhausted`     | Hub                          | `skip_submit` received after the player has used every joker for this game — no further skips accepted          |
 | `already_submitted`    | Hub                          | Submit or skip_submit received after the player already submitted or skipped this round                         |
 | `already_voted`        | Hub                          | Vote or skip_vote received after the player already voted or abstained this round                               |
-| `invalid_card`         | Hub                          | `meme-vote:submit { card_id }` references a card not in the player's current hand                               |
+| `invalid_card`         | Hub                          | `meme-showdown:submit { card_id }` references a card not in the player's current hand                               |
 
 ### WebSocket `room_closed` reasons
 

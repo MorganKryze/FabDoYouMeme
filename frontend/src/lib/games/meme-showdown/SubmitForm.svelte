@@ -16,7 +16,7 @@
   let selectedCardId = $state<string | null>(null);
   let submitted = $state(false);
 
-  // Joker plumbing mirrors meme-caption.SubmitForm. Two-step confirm: arm on
+  // Joker plumbing mirrors meme-freestyle.SubmitForm. Two-step confirm: arm on
   // first tap, fire on second tap within 3s. Prevents a stray touch from
   // costing a joker silently.
   let jokerArmed = $state(false);
@@ -48,7 +48,7 @@
   function submit() {
     if (submitted || isExpired || !selectedCardId) return;
     const cardId = selectedCardId;
-    ws.send('meme-vote:submit', { card_id: cardId });
+    ws.send('meme-showdown:submit', { card_id: cardId });
     handStore.onSubmit(cardId);
     submitted = true;
   }
@@ -97,7 +97,7 @@
     </div>
   {/if}
 
-  <!-- Image + prompt split (matches meme-caption visual grammar) -->
+  <!-- Image + prompt split (matches meme-freestyle visual grammar) -->
   <div class="grid gap-4 md:grid-cols-[1fr_1.2fr] items-stretch">
     <div
       use:dealCard={{ delay: 80, rotate: -1.2 }}

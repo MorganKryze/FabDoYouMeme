@@ -55,11 +55,11 @@ func TestSentinelRowExists(t *testing.T) {
 
 func TestMemeCaptionGameTypeSeeded(t *testing.T) {
 	q := queries()
-	gt, err := q.GetGameTypeBySlug(context.Background(), "meme-caption")
+	gt, err := q.GetGameTypeBySlug(context.Background(), "meme-freestyle")
 	if err != nil {
 		t.Fatalf("game type not found: %v", err)
 	}
-	if gt.Slug != "meme-caption" {
+	if gt.Slug != "meme-freestyle" {
 		t.Errorf("unexpected slug: %s", gt.Slug)
 	}
 }
@@ -127,7 +127,7 @@ func TestHardDeleteUser_ReplacesSubmissionsWithSentinel(t *testing.T) {
 	q := db.New(pool)
 
 	// Seed: user, game type (already seeded), pack, item, room, round, submission.
-	gt, err := q.GetGameTypeBySlug(ctx, "meme-caption")
+	gt, err := q.GetGameTypeBySlug(ctx, "meme-freestyle")
 	if err != nil {
 		t.Fatalf("get game type: %v", err)
 	}
@@ -412,7 +412,7 @@ func TestInvite_MaxUsesExhausted(t *testing.T) {
 func TestStartupCleanup_MarksPlayingAsFinished(t *testing.T) {
 	testutil.WithTx(t, func(q *db.Queries) {
 		ctx := context.Background()
-		gt, _ := q.GetGameTypeBySlug(ctx, "meme-caption")
+		gt, _ := q.GetGameTypeBySlug(ctx, "meme-freestyle")
 		slug := "cleanup_play_" + uuid.New().String()[:8]
 		user := createUser(t, q, slug, slug+"@test.com")
 		pack, _ := q.CreatePack(ctx, db.CreatePackParams{
@@ -459,7 +459,7 @@ func TestStartupCleanup_ClosesStaleLobbies(t *testing.T) {
 	pool := testutil.Pool()
 	q := db.New(pool)
 
-	gt, _ := q.GetGameTypeBySlug(ctx, "meme-caption")
+	gt, _ := q.GetGameTypeBySlug(ctx, "meme-freestyle")
 	slug := testutil.SeedName(t)
 	user, err := q.CreateUser(ctx, db.CreateUserParams{
 		Username:  slug,
@@ -514,7 +514,7 @@ func TestStartupCleanup_ClosesStaleLobbies(t *testing.T) {
 func TestCreateRoom_StateIsLobby(t *testing.T) {
 	testutil.WithTx(t, func(q *db.Queries) {
 		ctx := context.Background()
-		gt, _ := q.GetGameTypeBySlug(ctx, "meme-caption")
+		gt, _ := q.GetGameTypeBySlug(ctx, "meme-freestyle")
 		slug := "lobby_" + uuid.New().String()[:8]
 		user := createUser(t, q, slug, slug+"@test.com")
 		pack, _ := q.CreatePack(ctx, db.CreatePackParams{Name: slug, Visibility: "private"})

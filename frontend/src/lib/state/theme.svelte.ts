@@ -2,8 +2,8 @@
  * Theme preference state.
  *
  * Reconciles three inputs into one output:
- *   - `preference`: user's explicit choice (auto/morning/evening/night)
- *   - `timeOfDay`:  clock-driven band (morning/evening/night)
+ *   - `preference`: user's explicit choice (auto/light/dark)
+ *   - `timeOfDay`:  clock-driven band (light/dark)
  *   - `active`:     derived — preference if not 'auto', otherwise timeOfDay
  *
  * `preference` is persisted to localStorage under 'fdym:theme'.
@@ -11,11 +11,11 @@
  * every 5 minutes) from the root layout.
  */
 
-export type Band = 'morning' | 'evening' | 'night';
+export type Band = 'light' | 'dark';
 export type ThemePref = 'auto' | Band;
 
 const STORAGE_KEY = 'fdym:theme';
-const VALID_PREFS: readonly ThemePref[] = ['auto', 'morning', 'evening', 'night'] as const;
+const VALID_PREFS: readonly ThemePref[] = ['auto', 'light', 'dark'] as const;
 
 function isValidPref(v: unknown): v is ThemePref {
   return typeof v === 'string' && (VALID_PREFS as readonly string[]).includes(v);
@@ -33,7 +33,7 @@ function safeStorage(): Storage | null {
 
 export class ThemeState {
   preference = $state<ThemePref>('auto');
-  timeOfDay = $state<Band>('morning');
+  timeOfDay = $state<Band>('light');
 
   active = $derived<Band>(
     this.preference === 'auto' ? this.timeOfDay : this.preference
@@ -58,13 +58,7 @@ export class ThemeState {
 
   tickTimeOfDay(): void {
     const h = new Date().getHours();
-    if (h >= 6 && h < 17) {
-      this.timeOfDay = 'morning';
-    } else if (h >= 17 && h < 21) {
-      this.timeOfDay = 'evening';
-    } else {
-      this.timeOfDay = 'night';
-    }
+    this.timeOfDay = h >= 7 && h < 19 ? 'light' : 'dark';
   }
 }
 

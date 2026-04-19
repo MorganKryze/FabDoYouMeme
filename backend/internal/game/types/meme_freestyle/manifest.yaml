@@ -1,4 +1,4 @@
-# Meme Caption — handler manifest.
+# Meme Freestyle — handler manifest.
 #
 # This file is the single source of truth for the game type's identity,
 # capabilities, and tunable config bounds. It is embedded into the Go
@@ -11,8 +11,8 @@
 # the Room Settings inputs; the API layer enforces them on Create and
 # every PATCH /api/rooms/{code}/config.
 
-slug: meme-caption
-name: Meme Caption
+slug: meme-freestyle
+name: Meme Freestyle
 description: Write the funniest caption for an image. Others vote for their favourite.
 version: "1.0.0"
 supports_solo: false

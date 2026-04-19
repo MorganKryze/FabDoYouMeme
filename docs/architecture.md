@@ -55,7 +55,7 @@ The backend is a single Go binary. `cmd/server/main.go` wires all components tog
 Current migrations:
 
 - `001_initial_schema` — full table definitions, sentinel user row
-- `002_seed_game_types` — seeds the `meme-caption` game type row
+- `002_seed_game_types` — seeds the `meme-freestyle` game type row
 - `003_schema_fixes` — FK constraint corrections, performance indexes
 
 ### Startup behaviour
@@ -125,7 +125,7 @@ Typed fetch wrappers for every REST endpoint live in `lib/api/`. They share erro
 
 ### Game plugins
 
-Each game type has a self-contained UI plugin in `lib/games/<slug>/`. The meme-caption plugin exports four components: `SubmitForm`, `VoteForm`, `ResultsView`, and `GameRules`. The room page dynamically loads the plugin matching the room's `game_type_slug`. Adding a new game type requires adding a new directory here — no changes to the room shell.
+Each game type has a self-contained UI plugin in `lib/games/<slug>/`. The meme-freestyle plugin exports four components: `SubmitForm`, `VoteForm`, `ResultsView`, and `GameRules`. The room page dynamically loads the plugin matching the room's `game_type_slug`. Adding a new game type requires adding a new directory here — no changes to the room shell.
 
 ---
 
@@ -240,7 +240,7 @@ Registry of available game types. Seeded by migrations; new types require a new 
 | Column          | Type          | Notes                                                                 |
 | --------------- | ------------- | --------------------------------------------------------------------- |
 | `id`            | UUID PK       |                                                                       |
-| `slug`          | TEXT UNIQUE   | e.g. `'meme-caption'`                                                 |
+| `slug`          | TEXT UNIQUE   | e.g. `'meme-freestyle'`                                                 |
 | `name`          | TEXT          | Display name                                                          |
 | `description`   | TEXT nullable |                                                                       |
 | `version`       | TEXT          | Semantic version                                                      |

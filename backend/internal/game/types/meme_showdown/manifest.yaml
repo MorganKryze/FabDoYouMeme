@@ -1,4 +1,4 @@
-# Meme Vote — handler manifest.
+# Meme Showdown — handler manifest.
 #
 # Pick the funniest caption for the meme. Each player is dealt a hand of
 # captions from a text pack and plays one per round. Authors are revealed
@@ -7,8 +7,8 @@
 # This file is the single source of truth for identity and bounds. Edit
 # and restart to tune a bound; no DB migration needed.
 
-slug: meme-vote
-name: Meme Vote
+slug: meme-showdown
+name: Meme Showdown
 description: Pick the funniest caption for the meme. Others vote for the best.
 version: "1.0.0"
 supports_solo: false

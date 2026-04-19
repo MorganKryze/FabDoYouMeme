@@ -34,8 +34,8 @@ describe('RoomState.handleMessage', () => {
       code: 'ABCD',
       game_type: {
         id: 'g1',
-        slug: 'meme-caption',
-        name: 'Meme Caption',
+        slug: 'meme-freestyle',
+        name: 'Meme Freestyle',
         description: null,
         version: '1',
         supports_solo: true,

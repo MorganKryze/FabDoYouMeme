@@ -276,7 +276,7 @@ type ListPackItemsByPayloadVersionRow struct {
 
 // Returns every non-deleted item in a pack whose current version payload
 // matches a specific payload_version. Used by the hub to build per-game
-// decks (e.g. the text-caption deck for meme-vote) where one item per row
+// decks (e.g. the text-caption deck for meme-showdown) where one item per row
 // is enough and a single random-pick is not.
 func (q *Queries) ListPackItemsByPayloadVersion(ctx context.Context, arg ListPackItemsByPayloadVersionParams) ([]ListPackItemsByPayloadVersionRow, error) {
 	rows, err := q.db.Query(ctx, listPackItemsByPayloadVersion, arg.PackID, arg.PayloadVersion)

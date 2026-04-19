@@ -29,8 +29,8 @@ import (
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/config"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/email"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/game"
-	memecaption "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_caption"
-	memevote "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_vote"
+	memefreestyle "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_freestyle"
+	memeshowdown "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_showdown"
 	mw "github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/storage"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/systempack"
@@ -119,8 +119,8 @@ func main() {
 	// on every boot, so changing a bound means editing one YAML and
 	// restarting — no migration needed.
 	registry := game.NewRegistry()
-	registry.Register(memecaption.New())
-	registry.Register(memevote.New())
+	registry.Register(memefreestyle.New())
+	registry.Register(memeshowdown.New())
 
 	if err := game.SyncGameTypes(context.Background(), queries, registry, logger); err != nil {
 		logger.Error("game type sync failed", "error", err)

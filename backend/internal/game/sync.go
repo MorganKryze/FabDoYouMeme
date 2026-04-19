@@ -15,7 +15,7 @@ import (
 // rooms.game_type_id foreign keys stay valid across restarts.
 //
 // This is the authoritative write path for game_types metadata at
-// runtime. Migration 002 still seeds meme-caption on a fresh DB so the
+// runtime. Migration 002 still seeds meme-freestyle on a fresh DB so the
 // initial UUID is stable, but every subsequent field (name, description,
 // version, supports_solo, config bounds) is reconciled from the
 // in-binary manifests on each boot. A malformed manifest has already

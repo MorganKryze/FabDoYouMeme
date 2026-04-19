@@ -50,7 +50,7 @@ type Bounds struct {
 	MaxPlayers                   *int `yaml:"max_players"                     json:"max_players"`
 
 	// Hand-size bounds are optional — only game types that deal a hand of
-	// items per player (e.g. meme-vote) declare them. A zero MaxHandSize
+	// items per player (e.g. meme-showdown) declare them. A zero MaxHandSize
 	// means the manifest has opted out and ValidateAndFill skips hand_size
 	// altogether. omitempty keeps these fields out of the game_types.config
 	// JSONB row for game types that don't use them.
@@ -71,7 +71,7 @@ type RoomConfig struct {
 	AllowSkipVote         bool `json:"allow_skip_vote"`
 
 	// HandSize is only set for game types that deal a per-player hand of
-	// items (e.g. meme-vote). omitempty keeps rooms.config compact for
+	// items (e.g. meme-showdown). omitempty keeps rooms.config compact for
 	// game types that do not use a hand.
 	HandSize int `json:"hand_size,omitempty"`
 }
@@ -135,7 +135,7 @@ func (b Bounds) selfCheck(slug string) error {
 		return fmt.Errorf("manifest %q: max_players (%d) < min_players (%d)", slug, *b.MaxPlayers, b.MinPlayers)
 	}
 	// Hand-size bounds are opted into by setting MaxHandSize > 0. Game types
-	// that don't deal hands (meme-caption) omit all three and selfCheck skips
+	// that don't deal hands (meme-freestyle) omit all three and selfCheck skips
 	// the block — the zero values are not treated as a bug.
 	if b.MaxHandSize > 0 {
 		if b.MinHandSize <= 0 || b.MinHandSize > b.MaxHandSize {
@@ -216,7 +216,7 @@ func (b Bounds) ValidateAndFill(raw json.RawMessage) (json.RawMessage, error) {
 		return nil, &ValidationError{Field: "joker_count", Reason: fmt.Sprintf("must be between 0 and %d", out.RoundCount)}
 	}
 	// hand_size is only enforced when the manifest opted in via MaxHandSize>0.
-	// Game types that don't deal hands (meme-caption) skip this block entirely
+	// Game types that don't deal hands (meme-freestyle) skip this block entirely
 	// and HandSize stays 0 in the canonical config.
 	if b.MaxHandSize > 0 {
 		out.HandSize = intOr(in.HandSize, b.DefaultHandSize)

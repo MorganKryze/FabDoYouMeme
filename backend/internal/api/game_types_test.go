@@ -12,13 +12,13 @@ import (
 
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/api"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/game"
-	memecaption "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_caption"
+	memefreestyle "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_freestyle"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/testutil"
 )
 
 func newGameTypeHandler() *api.GameTypeHTTPHandler {
 	registry := game.NewRegistry()
-	registry.Register(memecaption.New())
+	registry.Register(memefreestyle.New())
 	return api.NewGameTypeHandler(testutil.Pool(), registry)
 }
 
@@ -38,12 +38,12 @@ func TestListGameTypes_ReturnsMemeCaption(t *testing.T) {
 	}
 	var found bool
 	for _, gt := range types {
-		if gt["slug"] == "meme-caption" {
+		if gt["slug"] == "meme-freestyle" {
 			found = true
 		}
 	}
 	if !found {
-		t.Error("expected meme-caption in game types list")
+		t.Error("expected meme-freestyle in game types list")
 	}
 }
 
@@ -62,8 +62,8 @@ func TestGetGameType_BySlug(t *testing.T) {
 	h := newGameTypeHandler()
 
 	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("slug", "meme-caption")
-	req := httptest.NewRequest(http.MethodGet, "/api/game-types/meme-caption", nil)
+	rctx.URLParams.Add("slug", "meme-freestyle")
+	req := httptest.NewRequest(http.MethodGet, "/api/game-types/meme-freestyle", nil)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 	req = withUser(req, "00000000-0000-0000-0000-000000000002", "testuser", "t@t.com", "player")
 	rec := httptest.NewRecorder()
@@ -76,8 +76,8 @@ func TestGetGameType_BySlug(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if resp["slug"] != "meme-caption" {
-		t.Errorf("want slug=meme-caption, got %v", resp["slug"])
+	if resp["slug"] != "meme-freestyle" {
+		t.Errorf("want slug=meme-freestyle, got %v", resp["slug"])
 	}
 	if _, ok := resp["required_packs"]; !ok {
 		t.Error("expected required_packs in response")

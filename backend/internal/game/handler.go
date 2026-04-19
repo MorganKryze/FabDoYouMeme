@@ -43,7 +43,7 @@ type Vote struct {
 // concurrent calls from the hub goroutine only (no additional locking needed
 // since the hub is single-threaded per room).
 type GameTypeHandler interface {
-	// Slug returns the game type slug matching game_types.slug (e.g. "meme-caption").
+	// Slug returns the game type slug matching game_types.slug (e.g. "meme-freestyle").
 	Slug() string
 
 	// RequiredPacks describes every pack the game type needs to run a room.
@@ -91,7 +91,7 @@ type GameTypeHandler interface {
 
 	// PersonalisesRoundStart signals whether the hub must emit round_started
 	// with per-player data (e.g. to include a hand of cards). Handlers that
-	// broadcast a single payload (meme-caption) return false and keep the
+	// broadcast a single payload (meme-freestyle) return false and keep the
 	// hub on the broadcast fast path. The actual per-player data lives on
 	// the hub — see Hub.personalRoundStartData.
 	PersonalisesRoundStart() bool

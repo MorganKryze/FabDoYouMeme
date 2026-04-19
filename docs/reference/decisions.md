@@ -96,11 +96,11 @@ The contradictory note in the pre-redesign `04-api.md` ("backend sets user_id = 
 
 **Status**: Accepted
 
-**Context**: packs are game-type-agnostic. A pack of meme images can be used for `meme-caption`, `meme-vote`, or any future type. Two options for enforcing compatibility at room creation: (a) junction table `pack_game_type_support`, (b) dynamic check via the handler's declared pack requirements at room creation.
+**Context**: packs are game-type-agnostic. A pack of meme images can be used for `meme-freestyle`, `meme-showdown`, or any future type. Two options for enforcing compatibility at room creation: (a) junction table `pack_game_type_support`, (b) dynamic check via the handler's declared pack requirements at room creation.
 
 **Decision**: no junction table. Compatibility is determined at `POST /api/rooms` by counting `game_items WHERE payload_version = ANY($role_versions)` for each role declared in the handler's `RequiredPacks()`. The frontend additionally filters the pack dropdown to only show packs with ≥1 compatible item via `GET /api/packs?game_type=<slug>&role=<role>`.
 
-**Consequences**: admins do not need to tag packs per game type. New game types work with existing packs immediately. The API exposes `required_packs` in `GET /api/game-types/:slug` so the frontend can filter. The room creation endpoint returns per-role error codes (`image_pack_no_supported_items`, `image_pack_insufficient`, `text_pack_no_supported_items`, `text_pack_insufficient`, and the companion `*_required` / `*_not_applicable` codes — see `ref-error-codes.md`) on failure. See [ADR-013](#adr-013--multi-pack-rooms-via-explicit-role-columns) for how multi-role game types (e.g. `meme-vote`) extend this model without a junction table.
+**Consequences**: admins do not need to tag packs per game type. New game types work with existing packs immediately. The API exposes `required_packs` in `GET /api/game-types/:slug` so the frontend can filter. The room creation endpoint returns per-role error codes (`image_pack_no_supported_items`, `image_pack_insufficient`, `text_pack_no_supported_items`, `text_pack_insufficient`, and the companion `*_required` / `*_not_applicable` codes — see `ref-error-codes.md`) on failure. See [ADR-013](#adr-013--multi-pack-rooms-via-explicit-role-columns) for how multi-role game types (e.g. `meme-showdown`) extend this model without a junction table.
 
 ---
 
@@ -168,9 +168,9 @@ The contradictory note in the pre-redesign `04-api.md` ("backend sets user_id = 
 
 **Status**: Accepted
 
-**Context**: `meme-vote` needs two content streams — the image stack (same as `meme-caption`) and a caption pack dealt to players. The schema had one `rooms.pack_id`. Three options for associating a room with N packs: (a) add a nullable `rooms.text_pack_id` column referencing `game_packs(id)` and let handlers declare the roles they consume, (b) generalise to a `room_packs(room_id, role, pack_id)` join table, (c) store the secondary pack ID inside `rooms.config` JSON.
+**Context**: `meme-showdown` needs two content streams — the image stack (same as `meme-freestyle`) and a caption pack dealt to players. The schema had one `rooms.pack_id`. Three options for associating a room with N packs: (a) add a nullable `rooms.text_pack_id` column referencing `game_packs(id)` and let handlers declare the roles they consume, (b) generalise to a `room_packs(room_id, role, pack_id)` join table, (c) store the secondary pack ID inside `rooms.config` JSON.
 
-**Decision**: option (a). `rooms.text_pack_id` is a nullable FK to `game_packs(id)`. Game-type handlers declare their pack roles via `GameTypeHandler.RequiredPacks() []PackRequirement`; the API layer iterates this list at `POST /api/rooms` to validate each pack's compatibility (count items matching `payload_version = ANY($role_versions)`) and minimum size (`MinItemsFn(cfg, maxPlayers)`). Single-role game types (`meme-caption`) leave `text_pack_id` null; two-role types (`meme-vote`) populate it. The frontend renders one pack picker per declared role using `GET /api/packs?game_type=<slug>&role=<role>`.
+**Decision**: option (a). `rooms.text_pack_id` is a nullable FK to `game_packs(id)`. Game-type handlers declare their pack roles via `GameTypeHandler.RequiredPacks() []PackRequirement`; the API layer iterates this list at `POST /api/rooms` to validate each pack's compatibility (count items matching `payload_version = ANY($role_versions)`) and minimum size (`MinItemsFn(cfg, maxPlayers)`). Single-role game types (`meme-freestyle`) leave `text_pack_id` null; two-role types (`meme-showdown`) populate it. The frontend renders one pack picker per declared role using `GET /api/packs?game_type=<slug>&role=<role>`.
 
 **Consequences**:
 

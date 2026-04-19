@@ -58,7 +58,7 @@ body:
       label: Does it need media / assets?
       options:
         - "No, text only"
-        - "Yes, images (like meme-caption)"
+        - "Yes, images (like meme-freestyle)"
         - "Yes, audio"
         - "Yes, something else"
     validations:
