@@ -992,6 +992,14 @@ func (h *Hub) runRounds(ctx context.Context) {
 			h.sendRoundCtrl(ctx, roundCtrlEndGame{reason: "pack_exhausted"})
 			return
 		}
+		// Mark the round as actually started — the post-game history and
+		// replay queries filter on started_at IS NOT NULL to skip rounds
+		// created by lobbies that never got this far. A failure here
+		// degrades history/replay for this round but should not abort the
+		// game in flight; CreateRound already succeeded on the same pool.
+		if _, err := h.db.StartRound(ctx, dbRound.ID); err != nil && h.log != nil {
+			h.log.Error("runRounds: mark round started", "error", err)
+		}
 
 		mediaURL := ""
 		if item.MediaKey != nil && *item.MediaKey != "" {

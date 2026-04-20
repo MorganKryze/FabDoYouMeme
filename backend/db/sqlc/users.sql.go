@@ -200,7 +200,13 @@ FROM room_players rp
 JOIN rooms r ON rp.room_id = r.id
 JOIN game_types gt ON r.game_type_id = gt.id
 JOIN game_packs gp ON r.pack_id = gp.id
-WHERE rp.user_id = $1 AND r.state = 'finished'
+WHERE rp.user_id = $1
+  AND r.state = 'finished'
+  AND EXISTS (
+    SELECT 1 FROM submissions s
+    JOIN rounds rnd ON s.round_id = rnd.id
+    WHERE rnd.room_id = r.id
+  )
 ORDER BY r.finished_at DESC NULLS LAST
 LIMIT $3 OFFSET $2
 `
@@ -223,6 +229,13 @@ type GetUserGameHistoryRow struct {
 	PlayerCount  int64              `json:"player_count"`
 }
 
+// Lists finished rooms the user participated in. Excludes rooms that
+// carry no actual gameplay: the replay screen would render an empty
+// stepper for these, which looks like a broken link. Concretely: a
+// room only appears here if at least one submission landed in it.
+// This covers 24h-auto-closed lobbies (no rounds at all), rooms killed
+// mid-round-zero via host_disconnected/pack_exhausted, and rounds that
+// started but got aborted before anyone could submit.
 func (q *Queries) GetUserGameHistory(ctx context.Context, arg GetUserGameHistoryParams) ([]GetUserGameHistoryRow, error) {
 	rows, err := q.db.Query(ctx, getUserGameHistory, arg.UserID, arg.Off, arg.Lim)
 	if err != nil {

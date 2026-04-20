@@ -24,3 +24,12 @@ export function mediaSrc(mediaUrl: string | null | undefined, roomCode: string |
   const sep = mediaUrl.includes('?') ? '&' : '?';
   return `${mediaUrl}${sep}guest_token=${encodeURIComponent(token)}`;
 }
+
+/**
+ * Build the backend media URL for a raw object key. The live-room path gets a
+ * pre-built `media_url` from the server; replay responses carry only the raw
+ * `media_key`, so this reconstructs the same `/api/assets/media?key=…` URL.
+ */
+export function mediaUrl(key: string): string {
+  return `/api/assets/media?key=${encodeURIComponent(key)}`;
+}

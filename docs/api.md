@@ -47,6 +47,7 @@ Requires session.
 | `POST`  | `/api/rooms/:code/kick`        | Remove a player (host or admin, **lobby only**). Body: exactly one of `{ "user_id": "<uuid>" }` or `{ "guest_player_id": "<uuid>" }`. Writes a `room_bans` row so the player cannot rejoin (WS handshake returns `409 banned_from_room`). Errors: `403 forbidden`, `409 room_not_in_lobby`, `409 cannot_kick_self` (host used `/end` instead), `400 bad_request` (neither or both id fields supplied) |
 | `POST`  | `/api/rooms/:code/end`         | End the room (host or admin): lobby→hard-delete, playing→persist as finished |
 | `GET`   | `/api/rooms/:code/leaderboard` | Final leaderboard (finished rooms only)                   |
+| `GET`   | `/api/rooms/:code/replay`      | Full round-by-round replay of a finished room (caller must be admin or a registered participant) |
 
 ### Game types (`/api/game-types/*`)
 
@@ -242,3 +243,59 @@ Every timed event includes both `duration_seconds` (server-authoritative) and `e
 - Max message rate: `WS_RATE_LIMIT` per second (default 20) — exceeding this disconnects the client
 
 For game-specific message payloads and the room/round lifecycle behind these messages, see `docs/game-engine.md`.
+
+---
+
+## GET /api/users/me/history — filter note
+
+The list excludes finished rooms that never had a round start (abandoned lobbies auto-closed by the 24 h sweep, or rooms ended via `host_disconnected` / `pack_exhausted` before round 1). Only rooms where at least one round actually began appear in the history feed.
+
+---
+
+## GET /api/rooms/:code/replay
+
+Returns a full round-by-round replay of a finished room. Caller must be an admin or have participated as a registered user; guests have no login and are therefore excluded from replays even if they played.
+
+**Auth:** session required.
+
+**Response 200:**
+
+```json
+{
+  "room": {
+    "code": "ABCD",
+    "game_type_slug": "meme-freestyle",
+    "pack_name": "Doge Classics",
+    "started_at": "2026-04-18T20:12:03Z",
+    "finished_at": "2026-04-18T20:34:41Z",
+    "player_count": 5,
+    "config": { "round_count": 5, "host_paced": false, "... other room config fields": "..." }
+  },
+  "rounds": [
+    {
+      "round_number": 1,
+      "prompt": { "payload_version": 1, "media_key": "packs/.../xyz.png", "prompt": "..." },
+      "submissions": [
+        {
+          "id": "<uuid>",
+          "author": { "display_name": "alice", "kind": "user" },
+          "payload": { "caption": "One does not simply…" },
+          "votes_received": 4,
+          "points_awarded": 4
+        }
+      ]
+    }
+  ],
+  "leaderboard": [
+    { "rank": 1, "display_name": "alice", "score": 12, "kind": "user" }
+  ]
+}
+```
+
+**Errors:**
+
+- `401 unauthorized` — no session.
+- `403 not_a_player` — authenticated but neither admin nor in `room_players`.
+- `404 not_found` — code unknown or room not in `finished` state.
+
+Rounds with `started_at IS NULL` are filtered server-side; `round_number` may therefore be non-contiguous. `submissions[].payload` is the opaque per-game-type blob; for `meme-showdown` the server resolves `card_id` to the card's `text` so the frontend does not need a second round-trip. Voter → submission mapping is never exposed, consistent with the live `vote_results` event. The `author.kind` field is one of `user`, `guest`, or `deleted` (the last maps to the GDPR sentinel user after hard-delete).

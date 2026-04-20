@@ -105,6 +105,13 @@ UPDATE submissions SET user_id = '00000000-0000-0000-0000-000000000001' WHERE us
 UPDATE votes SET voter_id = '00000000-0000-0000-0000-000000000001' WHERE voter_id = $1;
 
 -- name: GetUserGameHistory :many
+-- Lists finished rooms the user participated in. Excludes rooms that
+-- carry no actual gameplay: the replay screen would render an empty
+-- stepper for these, which looks like a broken link. Concretely: a
+-- room only appears here if at least one submission landed in it.
+-- This covers 24h-auto-closed lobbies (no rounds at all), rooms killed
+-- mid-round-zero via host_disconnected/pack_exhausted, and rounds that
+-- started but got aborted before anyone could submit.
 SELECT
   r.code,
   gt.slug AS game_type_slug,
@@ -119,7 +126,13 @@ FROM room_players rp
 JOIN rooms r ON rp.room_id = r.id
 JOIN game_types gt ON r.game_type_id = gt.id
 JOIN game_packs gp ON r.pack_id = gp.id
-WHERE rp.user_id = $1 AND r.state = 'finished'
+WHERE rp.user_id = $1
+  AND r.state = 'finished'
+  AND EXISTS (
+    SELECT 1 FROM submissions s
+    JOIN rounds rnd ON s.round_id = rnd.id
+    WHERE rnd.room_id = r.id
+  )
 ORDER BY r.finished_at DESC NULLS LAST
 LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 

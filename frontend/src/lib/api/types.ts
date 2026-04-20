@@ -280,3 +280,60 @@ export interface DeepHealthResponse {
     smtp: DeepHealthCheck;
   };
 }
+
+// ─── Replay (GET /api/rooms/:code/replay) ─────────────────────────────────
+
+export interface ReplayAuthor {
+  display_name: string;
+  kind: 'user' | 'guest' | 'deleted';
+}
+
+export interface ReplaySubmission {
+  id: string;
+  author: ReplayAuthor;
+  /**
+   * Opaque game-type payload. For meme-freestyle: `{ caption: string }`.
+   * For meme-showdown: `{ card_id: string; text: string }` (server-resolved).
+   */
+  payload: Record<string, unknown>;
+  votes_received: number;
+  points_awarded: number;
+}
+
+export interface ReplayPrompt {
+  payload_version: number;
+  media_key?: string;
+  image_url?: string;
+  prompt?: string;
+  text?: string;
+}
+
+export interface ReplayRound {
+  round_number: number;
+  prompt: ReplayPrompt;
+  submissions: ReplaySubmission[];
+}
+
+export interface ReplayLeaderboardRow {
+  rank: number;
+  display_name: string;
+  score: number;
+  kind: 'user' | 'guest' | 'deleted';
+}
+
+export interface ReplayRoomHeader {
+  code: string;
+  game_type_slug: string;
+  pack_name: string;
+  text_pack_name?: string;
+  started_at: string;
+  finished_at?: string;
+  player_count: number;
+  config: Record<string, unknown>;
+}
+
+export interface ReplayPayload {
+  room: ReplayRoomHeader;
+  rounds: ReplayRound[];
+  leaderboard: ReplayLeaderboardRow[];
+}

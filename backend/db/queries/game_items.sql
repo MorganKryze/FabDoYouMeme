@@ -58,6 +58,15 @@ WHERE gi.pack_id = $1
   AND giv.deleted_at IS NULL
   AND gi.payload_version = $2;
 
+-- name: GetCurrentVersionsForItems :many
+-- Batch lookup used by the replay enrichment path for meme-showdown: given a
+-- set of card item IDs, return each item's current version payload so the
+-- handler can splice the card text into submission payloads before returning.
+SELECT gi.id AS item_id, giv.payload
+FROM game_items gi
+JOIN game_item_versions giv ON gi.current_version_id = giv.id
+WHERE gi.id = ANY(sqlc.arg(ids)::uuid[]);
+
 -- name: GetRandomUnplayedItems :many
 SELECT gi.*, giv.media_key, giv.payload, giv.id AS version_id
 FROM game_items gi

@@ -66,6 +66,8 @@ The room moves to `finished` when:
 
 Finished rooms are permanent — they cannot be resumed. The leaderboard is accessible via `GET /api/rooms/:code/leaderboard` after the game ends.
 
+The full round-by-round replay is accessible via `GET /api/rooms/:code/replay` (see `docs/api.md`). The replay is gated to the room's registered participants and platform admins; it reconstructs the live reveal from `rounds` + `submissions` + `votes` + `room_players`, and never exposes voter → submission mapping (consistent with the live `vote_results` event).
+
 ### Out-of-band termination
 
 `Hub.EndRoom(ctx, reason)` is the out-of-band termination path, invoked by the `POST /api/rooms/:code/end` handler. It broadcasts `room_closed` to every player, closes every send channel (so `writePump` drains remaining messages, writes a close frame, and exits), and leaves no rematch opportunity. Reasons are `ended_by_host` (host clicked End Room) or `ended_by_admin` (a platform admin ended a room they do not host).

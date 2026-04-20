@@ -99,29 +99,52 @@
 
   <!-- Image + prompt split (matches meme-freestyle visual grammar) -->
   <div class="grid gap-4 md:grid-cols-[1fr_1.2fr] items-stretch">
-    <div
-      use:dealCard={{ delay: 80, rotate: -1.2 }}
-      class="relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-white p-3 flex flex-col gap-2"
-      style="box-shadow: 0 6px 0 rgba(0,0,0,0.12); transform: rotate(-1.2deg);"
-    >
-      {#if round.item?.media_url}
-        <div
-          class="relative w-full rounded-[14px] overflow-hidden border-[2.5px] border-brand-border-heavy bg-brand-surface"
-          style="box-shadow: inset 0 2px 0 rgba(0,0,0,0.04);"
-        >
-          <img
-            src={mediaSrc(round.item.media_url, room.code)}
-            alt="Round meme"
-            class="block w-full h-auto max-h-[60vh] object-cover"
-          />
+    <!-- Wrapped so the joker-drop overlay can position over the image
+         without being subject to the dealCard rotation. -->
+    <div class="relative">
+      <div
+        use:dealCard={{ delay: 80, rotate: -1.2 }}
+        class="relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-white p-3 flex flex-col gap-2"
+        style="box-shadow: 0 6px 0 rgba(0,0,0,0.12); transform: rotate(-1.2deg);"
+      >
+        {#if round.item?.media_url}
+          <div
+            class="relative w-full rounded-[14px] overflow-hidden border-[2.5px] border-brand-border-heavy bg-brand-surface"
+            style="box-shadow: inset 0 2px 0 rgba(0,0,0,0.04);"
+          >
+            <img
+              src={mediaSrc(round.item.media_url, room.code)}
+              alt="Round meme"
+              class="block w-full h-auto max-h-[60vh] object-cover"
+            />
+          </div>
+        {/if}
+        <div class="flex justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-brand-text-muted px-1">
+          <span>Round {round.round_number}</span>
+          {#if room.gameType}
+            <span class="truncate max-w-[60%]">{room.gameType.name}</span>
+          {/if}
+        </div>
+      </div>
+
+      {#if room.ownSkippedSubmit}
+        <div class="joker-drop" aria-hidden="true">
+          <div class="joker-card">
+            <div class="corner top">
+              <span class="rank">J</span>
+              <span class="pip">♠</span>
+            </div>
+            <div class="center">
+              <span class="pip-big">♠</span>
+              <span class="word">JOKER</span>
+            </div>
+            <div class="corner bottom">
+              <span class="rank">J</span>
+              <span class="pip">♠</span>
+            </div>
+          </div>
         </div>
       {/if}
-      <div class="flex justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-brand-text-muted px-1">
-        <span>Round {round.round_number}</span>
-        {#if room.gameType}
-          <span class="truncate max-w-[60%]">{room.gameType.name}</span>
-        {/if}
-      </div>
     </div>
 
     <div
@@ -438,5 +461,105 @@
   @media (prefers-reduced-motion: reduce) {
     .joker-btn.is-armed { animation: none; }
     .joker-btn.is-armed .joker-btn-pip { animation: none; }
+  }
+
+  /* Joker-drop overlay — appears once skip_submit is confirmed. A playing
+     card tumbles from above and lands tilted over the meme card. */
+  .joker-drop {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8%;
+  }
+  .joker-card {
+    position: relative;
+    width: min(68%, 220px);
+    aspect-ratio: 3 / 4.2;
+    border-radius: 18px;
+    border: 2.5px solid var(--brand-border-heavy);
+    background: var(--brand-white);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 14px;
+    box-shadow:
+      0 14px 28px rgba(0, 0, 0, 0.28),
+      0 6px 0 rgba(0, 0, 0, 0.2);
+    transform-origin: 50% -40%;
+    animation: jokerDrop 820ms cubic-bezier(0.22, 1.22, 0.36, 1) both;
+  }
+  .joker-card .corner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1;
+    color: var(--brand-text);
+    font-weight: 800;
+  }
+  .joker-card .corner .rank {
+    font-size: 1.2rem;
+    letter-spacing: -0.02em;
+  }
+  .joker-card .corner .pip {
+    font-size: 1rem;
+    margin-top: 2px;
+  }
+  .joker-card .corner.bottom {
+    align-self: flex-end;
+    transform: rotate(180deg);
+  }
+  .joker-card .center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    pointer-events: none;
+  }
+  .joker-card .center .pip-big {
+    font-size: clamp(3rem, 9vw, 4.5rem);
+    line-height: 1;
+    color: var(--brand-text);
+    opacity: 0.92;
+  }
+  .joker-card .center .word {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    font-size: 0.85rem;
+    color: var(--brand-text);
+    padding: 4px 10px;
+    border: 2px solid var(--brand-border-heavy);
+    border-radius: 9999px;
+    background: var(--brand-grad-1);
+  }
+  @keyframes jokerDrop {
+    0% {
+      transform: translate3d(-8%, -150%, 0) rotate(-32deg) scale(0.55);
+      opacity: 0;
+    }
+    45% {
+      transform: translate3d(2%, 6%, 0) rotate(12deg) scale(1.06);
+      opacity: 1;
+    }
+    65% {
+      transform: translate3d(-1%, -2%, 0) rotate(-6deg) scale(0.97);
+    }
+    85% {
+      transform: translate3d(0, 1%, 0) rotate(-3.5deg) scale(1.01);
+    }
+    100% {
+      transform: translate3d(0, 0, 0) rotate(-4deg) scale(1);
+      opacity: 1;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .joker-card { animation: none; transform: rotate(-4deg); }
   }
 </style>

@@ -80,6 +80,41 @@ func (q *Queries) DeleteItem(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const getCurrentVersionsForItems = `-- name: GetCurrentVersionsForItems :many
+SELECT gi.id AS item_id, giv.payload
+FROM game_items gi
+JOIN game_item_versions giv ON gi.current_version_id = giv.id
+WHERE gi.id = ANY($1::uuid[])
+`
+
+type GetCurrentVersionsForItemsRow struct {
+	ItemID  uuid.UUID       `json:"item_id"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+// Batch lookup used by the replay enrichment path for meme-showdown: given a
+// set of card item IDs, return each item's current version payload so the
+// handler can splice the card text into submission payloads before returning.
+func (q *Queries) GetCurrentVersionsForItems(ctx context.Context, ids []uuid.UUID) ([]GetCurrentVersionsForItemsRow, error) {
+	rows, err := q.db.Query(ctx, getCurrentVersionsForItems, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCurrentVersionsForItemsRow
+	for rows.Next() {
+		var i GetCurrentVersionsForItemsRow
+		if err := rows.Scan(&i.ItemID, &i.Payload); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getItemByID = `-- name: GetItemByID :one
 SELECT id, pack_id, position, payload_version, current_version_id, created_at, name, deleted_at FROM game_items WHERE id = $1
 `

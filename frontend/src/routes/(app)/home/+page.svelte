@@ -362,7 +362,7 @@
             <h2 class="text-lg font-bold">Recent activity</h2>
           </div>
           <a
-            href="/profile"
+            href="/games"
             class="text-xs font-bold text-brand-text hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
           >
             See all →
@@ -387,50 +387,54 @@
             </a>
           </div>
         {:else}
-          <ul class="flex flex-col gap-2">
-            {#each history.slice(0, 5) as room}
-              <li
-                class="flex items-center justify-between gap-3 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 py-2.5 text-sm"
-                style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
-              >
-                <div class="flex items-center gap-3 min-w-0 flex-1">
-                  <span
-                    class="font-mono font-bold tracking-widest text-xs inline-flex items-center justify-center rounded-full bg-brand-surface border-[2.5px] border-brand-border-heavy px-2.5 h-8"
-                  >
-                    {room.code}
-                  </span>
-                  <div class="flex flex-col min-w-0">
-                    <span class="inline-flex items-center gap-2 font-bold truncate">
-                      {#if room.rank === 1}
-                        <span class="medal gold" aria-label="First place">1</span>
-                      {:else if room.rank === 2}
-                        <span class="medal silver" aria-label="Second place">2</span>
-                      {:else if room.rank === 3}
-                        <span class="medal bronze" aria-label="Third place">3</span>
-                      {/if}
-                      <span class="truncate">{prettyGameSlug(room.game_type_slug)}</span>
+          <ul class="flex flex-col gap-2 list-none p-0 m-0">
+            {#each history.slice(0, 5) as room (room.code)}
+              <li>
+                <a
+                  href={`/games/${room.code}`}
+                  use:pressPhysics={'ghost'}
+                  class="flex items-center justify-between gap-3 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 py-2.5 text-sm no-underline text-brand-text focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+                  style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
+                >
+                  <div class="flex items-center gap-3 min-w-0 flex-1">
+                    <span
+                      class="font-mono font-bold tracking-widest text-xs inline-flex items-center justify-center rounded-full bg-brand-surface border-[2.5px] border-brand-border-heavy px-2.5 h-8"
+                    >
+                      {room.code}
                     </span>
-                    <span class="text-xs font-semibold text-brand-text-mid truncate">
-                      {room.pack_name} · {formatRelative(room.started_at)}
-                    </span>
-                  </div>
-                </div>
-                <div class="flex items-center gap-4 shrink-0">
-                  <div class="text-right hidden sm:block">
-                    <div class="text-xs font-bold uppercase tracking-[0.15em] text-brand-text-mid">
-                      Rank
+                    <div class="flex flex-col min-w-0">
+                      <span class="inline-flex items-center gap-2 font-bold truncate">
+                        {#if room.rank === 1}
+                          <span class="medal gold" aria-label="First place">1</span>
+                        {:else if room.rank === 2}
+                          <span class="medal silver" aria-label="Second place">2</span>
+                        {:else if room.rank === 3}
+                          <span class="medal bronze" aria-label="Third place">3</span>
+                        {/if}
+                        <span class="truncate">{prettyGameSlug(room.game_type_slug)}</span>
+                      </span>
+                      <span class="text-xs font-semibold text-brand-text-mid truncate">
+                        {room.pack_name} · {formatRelative(room.started_at)}
+                      </span>
                     </div>
-                    <div class="font-bold text-sm tabular-nums">
-                      {room.rank}<span class="text-brand-text-mid">/{room.player_count}</span>
+                  </div>
+                  <div class="flex items-center gap-4 shrink-0">
+                    <div class="text-right hidden sm:block">
+                      <div class="text-xs font-bold uppercase tracking-[0.15em] text-brand-text-mid">
+                        Rank
+                      </div>
+                      <div class="font-bold text-sm tabular-nums">
+                        {room.rank}<span class="text-brand-text-mid">/{room.player_count}</span>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <div class="text-xs font-bold uppercase tracking-[0.15em] text-brand-text-mid">
+                        Score
+                      </div>
+                      <div class="font-bold text-sm tabular-nums">{room.score}</div>
                     </div>
                   </div>
-                  <div class="text-right">
-                    <div class="text-xs font-bold uppercase tracking-[0.15em] text-brand-text-mid">
-                      Score
-                    </div>
-                    <div class="font-bold text-sm tabular-nums">{room.score}</div>
-                  </div>
-                </div>
+                </a>
               </li>
             {/each}
           </ul>

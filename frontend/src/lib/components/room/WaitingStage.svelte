@@ -476,13 +476,13 @@
     animation: status-pulse 1.8s ease-in-out infinite;
   }
   .readiness-chip.is-waiting {
-    background: var(--brand-grad-1);
-    border-color: var(--brand-accent);
-    color: var(--brand-text);
+    background: var(--brand-white);
+    border-color: var(--brand-border-heavy);
+    color: var(--brand-text-mid);
   }
   .readiness-chip.is-waiting .readiness-dot {
-    background: var(--brand-accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-accent) 22%, transparent);
+    background: var(--brand-text-mid);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-text-mid) 18%, transparent);
     animation: status-pulse 1.4s ease-in-out infinite;
   }
   @media (prefers-reduced-motion: reduce) {

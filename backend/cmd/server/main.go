@@ -307,6 +307,7 @@ func main() {
 			r.Post("/{code}/kick", roomHandler.Kick)
 			r.Post("/{code}/end", roomHandler.End)
 			r.Get("/{code}/leaderboard", roomHandler.Leaderboard)
+			r.Get("/{code}/replay", roomHandler.GetReplay)
 		})
 	})
 

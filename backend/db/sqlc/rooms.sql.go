@@ -403,6 +403,61 @@ func (q *Queries) GetCurrentRound(ctx context.Context, roomID uuid.UUID) (Round,
 	return i, err
 }
 
+const getFinishedRoomByCode = `-- name: GetFinishedRoomByCode :one
+SELECT
+  r.id,
+  r.code,
+  r.host_id,
+  r.state,
+  r.config,
+  r.created_at AS started_at,
+  r.finished_at,
+  gt.slug::text                            AS game_type_slug,
+  gp.name::text                            AS pack_name,
+  COALESCE(tp.name, '')::text              AS text_pack_name,
+  (SELECT COUNT(*) FROM room_players rp WHERE rp.room_id = r.id)::bigint AS player_count
+FROM rooms r
+JOIN game_types gt ON r.game_type_id = gt.id
+JOIN game_packs gp ON r.pack_id = gp.id
+LEFT JOIN game_packs tp ON r.text_pack_id = tp.id
+WHERE r.code = $1 AND r.state = 'finished'
+`
+
+type GetFinishedRoomByCodeRow struct {
+	ID           uuid.UUID          `json:"id"`
+	Code         string             `json:"code"`
+	HostID       pgtype.UUID        `json:"host_id"`
+	State        string             `json:"state"`
+	Config       json.RawMessage    `json:"config"`
+	StartedAt    time.Time          `json:"started_at"`
+	FinishedAt   pgtype.Timestamptz `json:"finished_at"`
+	GameTypeSlug string             `json:"game_type_slug"`
+	PackName     string             `json:"pack_name"`
+	TextPackName string             `json:"text_pack_name"`
+	PlayerCount  int64              `json:"player_count"`
+}
+
+// Replay landing lookup. Returns public room metadata plus slug/pack names.
+// text_pack_name is the empty string when the game type has no text pack.
+func (q *Queries) GetFinishedRoomByCode(ctx context.Context, code string) (GetFinishedRoomByCodeRow, error) {
+	row := q.db.QueryRow(ctx, getFinishedRoomByCode, code)
+	var i GetFinishedRoomByCodeRow
+	err := row.Scan(
+		&i.ID,
+		&i.Code,
+		&i.HostID,
+		&i.State,
+		&i.Config,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.GameTypeSlug,
+		&i.PackName,
+		&i.TextPackName,
+		&i.PlayerCount,
+	)
+	return i, err
+}
+
 const getRecentRoomsForUser = `-- name: GetRecentRoomsForUser :many
 SELECT
   r.id,
@@ -457,6 +512,176 @@ func (q *Queries) GetRecentRoomsForUser(ctx context.Context, arg GetRecentRoomsF
 			&i.FinishedAt,
 			&i.GameTypeSlug,
 			&i.PackName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getReplayLeaderboard = `-- name: GetReplayLeaderboard :many
+SELECT
+  COALESCE(rp.user_id, rp.guest_player_id)::uuid AS player_id,
+  COALESCE(u.username, gp.display_name, '[deleted]')::text AS display_name,
+  CASE
+    WHEN u.id = '00000000-0000-0000-0000-000000000001' THEN 'deleted'
+    WHEN rp.guest_player_id IS NOT NULL                THEN 'guest'
+    ELSE 'user'
+  END::text                                      AS kind,
+  rp.score
+FROM room_players rp
+LEFT JOIN users u         ON rp.user_id = u.id
+LEFT JOIN guest_players gp ON rp.guest_player_id = gp.id
+WHERE rp.room_id = $1
+ORDER BY rp.score DESC, rp.joined_at ASC
+`
+
+type GetReplayLeaderboardRow struct {
+	PlayerID    uuid.UUID `json:"player_id"`
+	DisplayName string    `json:"display_name"`
+	Kind        string    `json:"kind"`
+	Score       int32     `json:"score"`
+}
+
+// Final room_players leaderboard, sorted by score. Rank is assigned in Go
+// so tie-handling matches the live ResultsView (dense rank).
+func (q *Queries) GetReplayLeaderboard(ctx context.Context, roomID uuid.UUID) ([]GetReplayLeaderboardRow, error) {
+	rows, err := q.db.Query(ctx, getReplayLeaderboard, roomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetReplayLeaderboardRow
+	for rows.Next() {
+		var i GetReplayLeaderboardRow
+		if err := rows.Scan(
+			&i.PlayerID,
+			&i.DisplayName,
+			&i.Kind,
+			&i.Score,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getReplayRounds = `-- name: GetReplayRounds :many
+SELECT
+  rnd.id              AS round_id,
+  rnd.round_number,
+  rnd.started_at,
+  rnd.ended_at,
+  gi.payload_version  AS prompt_payload_version,
+  giv.media_key       AS prompt_media_key,
+  giv.payload         AS prompt_payload
+FROM rounds rnd
+JOIN game_items gi ON rnd.item_id = gi.id
+JOIN game_item_versions giv ON gi.current_version_id = giv.id
+WHERE rnd.room_id = $1
+ORDER BY rnd.round_number
+`
+
+type GetReplayRoundsRow struct {
+	RoundID              uuid.UUID          `json:"round_id"`
+	RoundNumber          int32              `json:"round_number"`
+	StartedAt            pgtype.Timestamptz `json:"started_at"`
+	EndedAt              pgtype.Timestamptz `json:"ended_at"`
+	PromptPayloadVersion int32              `json:"prompt_payload_version"`
+	PromptMediaKey       *string            `json:"prompt_media_key"`
+	PromptPayload        json.RawMessage    `json:"prompt_payload"`
+}
+
+// All rounds for the room, ordered by round_number. Every row in `rounds`
+// corresponds to a round the engine actually began (CreateRound is the first
+// step of the per-round loop); abandoned lobbies never populate this table.
+// Joins the prompt item's current version so the frontend gets the full
+// payload (image media_key, caption prompt, text) without a second round-trip.
+func (q *Queries) GetReplayRounds(ctx context.Context, roomID uuid.UUID) ([]GetReplayRoundsRow, error) {
+	rows, err := q.db.Query(ctx, getReplayRounds, roomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetReplayRoundsRow
+	for rows.Next() {
+		var i GetReplayRoundsRow
+		if err := rows.Scan(
+			&i.RoundID,
+			&i.RoundNumber,
+			&i.StartedAt,
+			&i.EndedAt,
+			&i.PromptPayloadVersion,
+			&i.PromptMediaKey,
+			&i.PromptPayload,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getReplaySubmissions = `-- name: GetReplaySubmissions :many
+SELECT
+  s.id                                                           AS submission_id,
+  s.round_id,
+  s.payload,
+  COALESCE(u.username, gp.display_name, '[deleted]')::text       AS author_name,
+  CASE
+    WHEN u.id = '00000000-0000-0000-0000-000000000001' THEN 'deleted'
+    WHEN s.guest_player_id IS NOT NULL                   THEN 'guest'
+    ELSE 'user'
+  END::text                                                      AS author_kind,
+  (SELECT COUNT(*) FROM votes v WHERE v.submission_id = s.id)::int AS votes_received
+FROM submissions s
+JOIN rounds rnd ON s.round_id = rnd.id
+LEFT JOIN users u         ON s.user_id = u.id
+LEFT JOIN guest_players gp ON s.guest_player_id = gp.id
+WHERE rnd.room_id = $1
+ORDER BY rnd.round_number, s.created_at
+`
+
+type GetReplaySubmissionsRow struct {
+	SubmissionID  uuid.UUID       `json:"submission_id"`
+	RoundID       uuid.UUID       `json:"round_id"`
+	Payload       json.RawMessage `json:"payload"`
+	AuthorName    string          `json:"author_name"`
+	AuthorKind    string          `json:"author_kind"`
+	VotesReceived int32           `json:"votes_received"`
+}
+
+// Submissions for every round of the room, with author resolution across
+// users and guests. Sentinel rows (hard-deleted users) surface as
+// display_name='[deleted]', kind='deleted'. votes_received is a subquery
+// count per submission.
+func (q *Queries) GetReplaySubmissions(ctx context.Context, roomID uuid.UUID) ([]GetReplaySubmissionsRow, error) {
+	rows, err := q.db.Query(ctx, getReplaySubmissions, roomID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetReplaySubmissionsRow
+	for rows.Next() {
+		var i GetReplaySubmissionsRow
+		if err := rows.Scan(
+			&i.SubmissionID,
+			&i.RoundID,
+			&i.Payload,
+			&i.AuthorName,
+			&i.AuthorKind,
+			&i.VotesReceived,
 		); err != nil {
 			return nil, err
 		}
@@ -733,6 +958,28 @@ func (q *Queries) IsUserBannedFromRoom(ctx context.Context, arg IsUserBannedFrom
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const isUserRoomMember = `-- name: IsUserRoomMember :one
+SELECT EXISTS(
+  SELECT 1 FROM room_players
+  WHERE room_id = $1 AND user_id = $2
+)::bool
+`
+
+type IsUserRoomMemberParams struct {
+	RoomID uuid.UUID   `json:"room_id"`
+	UserID pgtype.UUID `json:"user_id"`
+}
+
+// Authorization check for replay: returns TRUE iff this user participated in
+// the room as a registered player. Guests are never members for this purpose
+// (they have no login); admins bypass in the handler.
+func (q *Queries) IsUserRoomMember(ctx context.Context, arg IsUserRoomMemberParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isUserRoomMember, arg.RoomID, arg.UserID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const listRoomPlayers = `-- name: ListRoomPlayers :many

@@ -221,3 +221,94 @@ SELECT EXISTS(
 SELECT EXISTS(
   SELECT 1 FROM room_bans WHERE room_id = $1 AND guest_player_id = $2
 );
+
+-- name: GetFinishedRoomByCode :one
+-- Replay landing lookup. Returns public room metadata plus slug/pack names.
+-- text_pack_name is the empty string when the game type has no text pack.
+SELECT
+  r.id,
+  r.code,
+  r.host_id,
+  r.state,
+  r.config,
+  r.created_at AS started_at,
+  r.finished_at,
+  gt.slug::text                            AS game_type_slug,
+  gp.name::text                            AS pack_name,
+  COALESCE(tp.name, '')::text              AS text_pack_name,
+  (SELECT COUNT(*) FROM room_players rp WHERE rp.room_id = r.id)::bigint AS player_count
+FROM rooms r
+JOIN game_types gt ON r.game_type_id = gt.id
+JOIN game_packs gp ON r.pack_id = gp.id
+LEFT JOIN game_packs tp ON r.text_pack_id = tp.id
+WHERE r.code = $1 AND r.state = 'finished';
+
+-- name: IsUserRoomMember :one
+-- Authorization check for replay: returns TRUE iff this user participated in
+-- the room as a registered player. Guests are never members for this purpose
+-- (they have no login); admins bypass in the handler.
+SELECT EXISTS(
+  SELECT 1 FROM room_players
+  WHERE room_id = $1 AND user_id = $2
+)::bool;
+
+-- name: GetReplayRounds :many
+-- All rounds for the room, ordered by round_number. Every row in `rounds`
+-- corresponds to a round the engine actually began (CreateRound is the first
+-- step of the per-round loop); abandoned lobbies never populate this table.
+-- Joins the prompt item's current version so the frontend gets the full
+-- payload (image media_key, caption prompt, text) without a second round-trip.
+SELECT
+  rnd.id              AS round_id,
+  rnd.round_number,
+  rnd.started_at,
+  rnd.ended_at,
+  gi.payload_version  AS prompt_payload_version,
+  giv.media_key       AS prompt_media_key,
+  giv.payload         AS prompt_payload
+FROM rounds rnd
+JOIN game_items gi ON rnd.item_id = gi.id
+JOIN game_item_versions giv ON gi.current_version_id = giv.id
+WHERE rnd.room_id = $1
+ORDER BY rnd.round_number;
+
+-- name: GetReplaySubmissions :many
+-- Submissions for every round of the room, with author resolution across
+-- users and guests. Sentinel rows (hard-deleted users) surface as
+-- display_name='[deleted]', kind='deleted'. votes_received is a subquery
+-- count per submission.
+SELECT
+  s.id                                                           AS submission_id,
+  s.round_id,
+  s.payload,
+  COALESCE(u.username, gp.display_name, '[deleted]')::text       AS author_name,
+  CASE
+    WHEN u.id = '00000000-0000-0000-0000-000000000001' THEN 'deleted'
+    WHEN s.guest_player_id IS NOT NULL                   THEN 'guest'
+    ELSE 'user'
+  END::text                                                      AS author_kind,
+  (SELECT COUNT(*) FROM votes v WHERE v.submission_id = s.id)::int AS votes_received
+FROM submissions s
+JOIN rounds rnd ON s.round_id = rnd.id
+LEFT JOIN users u         ON s.user_id = u.id
+LEFT JOIN guest_players gp ON s.guest_player_id = gp.id
+WHERE rnd.room_id = $1
+ORDER BY rnd.round_number, s.created_at;
+
+-- name: GetReplayLeaderboard :many
+-- Final room_players leaderboard, sorted by score. Rank is assigned in Go
+-- so tie-handling matches the live ResultsView (dense rank).
+SELECT
+  COALESCE(rp.user_id, rp.guest_player_id)::uuid AS player_id,
+  COALESCE(u.username, gp.display_name, '[deleted]')::text AS display_name,
+  CASE
+    WHEN u.id = '00000000-0000-0000-0000-000000000001' THEN 'deleted'
+    WHEN rp.guest_player_id IS NOT NULL                THEN 'guest'
+    ELSE 'user'
+  END::text                                      AS kind,
+  rp.score
+FROM room_players rp
+LEFT JOIN users u         ON rp.user_id = u.id
+LEFT JOIN guest_players gp ON rp.guest_player_id = gp.id
+WHERE rp.room_id = $1
+ORDER BY rp.score DESC, rp.joined_at ASC;
