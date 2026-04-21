@@ -1,5 +1,5 @@
 {
-  "magic_link_login": "[FR] Your FabDoYouMeme login link",
-  "magic_link_email_change": "[FR] Confirm your new email address",
-  "notification_email_changed": "[FR] Your FabDoYouMeme email address was changed"
+  "magic_link_login": "Votre lien de connexion FabDoYouMeme",
+  "magic_link_email_change": "Confirmez votre nouvelle adresse e-mail",
+  "notification_email_changed": "Votre adresse e-mail FabDoYouMeme a été modifiée"
 }

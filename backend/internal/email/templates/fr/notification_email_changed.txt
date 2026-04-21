@@ -1,9 +1,9 @@
-[FR] Hi {{.Username}},
+Bonjour {{.Username}},
 
-Your FabDoYouMeme account email was changed to {{.NewEmailMasked}}.
+L’adresse e-mail de votre compte FabDoYouMeme a été modifiée vers {{.NewEmailMasked}}.
 
-If you made this change, no action is needed.
+Si vous êtes à l’origine de ce changement, aucune action n’est requise.
 
-If you did NOT make this change, contact your admin immediately.
+Si vous n’êtes PAS à l’origine de ce changement, contactez immédiatement votre administrateur.
 
--- FabDoYouMeme: {{.FrontendURL}}
+-- FabDoYouMeme : {{.FrontendURL}}

@@ -49,6 +49,47 @@ These are accepted costs. The name's personality outweighs its length.
 - Humour is allowed and encouraged, but never punches down
 - No corporate jargon, no growth-hacking language, no "users" — call them **players** or **makers**
 
+### French voice (for `messages/fr.json`, FR email templates, FR `tonePools`)
+
+**Register split:**
+
+- **App UI, in-room chat, errors, admin → tu.** Close-and-chill baseline, a touch more contained than the EN voice but never stiff. Playful and warm, not chaotic.
+- **Emails → vous.** Transactional messages (welcome, magic-link, invite) stay formal. They're read outside the party-game context, often by people who haven't registered yet.
+- **Legal prose (privacy, future ToS) → vous.** Impersonal register signals formality on purpose.
+
+**Typography.** French sets different rules than English — don't let the editor override them:
+
+- Narrow non-breaking space (`\u202F`) before `:`, `;`, `!`, `?` and inside guillemets: `« texte »`, `Prêt ?`.
+- Guillemets `« … »` for quotes. Straight `"…"` only inside code literals or JSON snippets.
+- Curly apostrophe `'` (`\u2019`), not ASCII `'`.
+- Sentence-case titles and buttons: "Créer un pack", not "Créer Un Pack".
+
+**Vocabulary** (mirror the EN table; keep the fablab flavour and loanwords):
+
+| EN              | FR                                   |
+| --------------- | ------------------------------------ |
+| Maker           | **Maker** (loanword, kept)           |
+| Player          | **Joueur**                           |
+| The Lab         | **Le Labo**                          |
+| Session / Round | **Partie** / **Manche**              |
+| Lobby           | **Salon**                            |
+| Lab Master      | **Maître du Labo**                   |
+| Room Host       | **Hôte**                             |
+| Hall of Fame    | **Palmarès**                         |
+| Maker Card      | **Maker Card** (kept — product term) |
+| Meme            | **meme** (kept EN spelling)          |
+| Pack            | **pack** (gaming vernacular)         |
+
+**Gender.** Masculine is neutral. The app doesn't know or ask the user's gender, so default to masculine forms everywhere — no mid-dot `·e`, no "prêt·e", no "le joueur / la joueuse". "Bienvenue, prêt à jouer ?" — that's it. This matches standard French usage and keeps the copy calm and short.
+
+**Tone.** Same 70/30 playful/serious split as EN, same "clever maker friend" voice. French default register runs slightly more formal than English — lean against that with contractions ("t'es", "c'est") and the occasional interjection ("Et hop !", "Allez !") rather than exclamation spam. Errors are direct, never blaming: "Impossible d'enregistrer ton meme" beats "Erreur : échec de l'enregistrement".
+
+**Anglicisms.** Keep gaming/tech vernacular that's part of the product's identity (`Maker`, `Maker Card`, `meme`, `pack`). Translate the rest: button → bouton, settings → paramètres, join → rejoindre, submit → envoyer.
+
+**Mechanics.** Paraglide `{var}` tokens must survive unchanged — ordering is free, but every variable in the EN string must appear in the FR one. `i18n:check` enforces this.
+
+**Numbers and dates.** Formatted at runtime via `toLocaleDateString('fr')` / `toLocaleString('fr')`. Never hardcode "3/5/2026" or "5:30 PM" in a string.
+
 ---
 
 ## Vocabulary

@@ -3,28 +3,29 @@
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
-    <title>Confirm your new email — FabDoYouMeme</title>
+    <title>Confirmez votre nouvelle adresse — FabDoYouMeme</title>
   </head>
   <body
     style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px"
   >
-    <h2>[FR] Hi {{.Username}},</h2>
+    <h2>Bonjour {{.Username}},</h2>
     <p>
-      Someone requested to change your FabDoYouMeme account email to this
-      address. Click below to confirm. This link expires in
-      <strong>{{.ExpiryMinutes}} minutes</strong>.
+      Quelqu’un a demandé le changement de l’adresse e-mail de votre compte
+      FabDoYouMeme vers celle-ci. Cliquez ci-dessous pour confirmer. Ce lien
+      expire dans <strong>{{.ExpiryMinutes}} minutes</strong>.
     </p>
     <p style="text-align:center;margin:32px 0">
       <a
         href="{{.MagicLinkURL}}"
         style="background:#18181b;color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600"
       >
-        Confirm Email Change →
+        Confirmer le changement →
       </a>
     </p>
     <p style="color:#71717a;font-size:14px">
-      If you didn't request this, your account is safe — the change will not
-      take effect. Your current email address is still active.
+      Si vous n’êtes pas à l’origine de cette demande, votre compte est en
+      sécurité — le changement ne sera pas effectué. Votre adresse e-mail
+      actuelle reste active.
     </p>
     <hr style="border:none;border-top:1px solid #e4e4e7;margin:24px 0" />
     <p style="color:#71717a;font-size:12px">

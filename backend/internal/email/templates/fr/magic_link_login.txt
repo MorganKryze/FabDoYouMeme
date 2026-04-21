@@ -1,9 +1,9 @@
-[FR] Hi {{.Username}},
+Bonjour {{.Username}},
 
-Use this link to log in to FabDoYouMeme (expires in {{.ExpiryMinutes}} minutes, one-time use):
+Utilisez ce lien pour vous connecter à FabDoYouMeme (expire dans {{.ExpiryMinutes}} minutes, à usage unique) :
 
 {{.MagicLinkURL}}
 
-If you didn't request this, ignore this email.
+Si vous n’êtes pas à l’origine de cette demande, ignorez cet e-mail.
 
--- FabDoYouMeme: {{.FrontendURL}}
+-- FabDoYouMeme : {{.FrontendURL}}

@@ -1,11 +1,11 @@
-[FR] Hi {{.Username}},
+Bonjour {{.Username}},
 
-Someone requested to change your FabDoYouMeme account email to this address.
-Click this link to confirm (expires in {{.ExpiryMinutes}} minutes):
+Quelqu’un a demandé le changement de l’adresse e-mail de votre compte FabDoYouMeme vers celle-ci.
+Cliquez sur ce lien pour confirmer (expire dans {{.ExpiryMinutes}} minutes) :
 
 {{.MagicLinkURL}}
 
-If you didn't request this, your account is safe — the change will not take effect.
-Your current email address is still active.
+Si vous n’êtes pas à l’origine de cette demande, votre compte est en sécurité — le changement ne sera pas effectué.
+Votre adresse e-mail actuelle reste active.
 
--- FabDoYouMeme: {{.FrontendURL}}
+-- FabDoYouMeme : {{.FrontendURL}}
