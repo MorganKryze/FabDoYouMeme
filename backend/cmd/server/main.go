@@ -112,6 +112,9 @@ func main() {
 		// Non-fatal — text sync touches no external storage, but a corrupt
 		// items.json shouldn't block boot.
 	}
+	if err := systempack.SyncTextFR(context.Background(), queries, logger); err != nil {
+		logger.Error("startup: system text pack sync (fr)", "error", err)
+	}
 
 	// ── Game registry ─────────────────────────────────────────────────────────
 	// Handlers carry their own manifest (see each handler's manifest.yaml).

@@ -4,13 +4,14 @@ import type { Pack } from '$lib/api/types';
 import { apiFetch } from '$lib/server/backend';
 
 export const load: PageServerLoad = async ({ fetch, url }) => {
-  const language = url.searchParams.get('language');
-  const query = language === 'en' || language === 'fr' ? `?language=${language}` : '';
+  const raw = url.searchParams.get('language');
+  const language = raw === 'en' || raw === 'fr' || raw === 'multi' ? raw : null;
+  const query = language ? `?language=${language}` : '';
   const body = await apiFetch<{ data: Pack[]; next_cursor: string | null }>(
     fetch,
     `/api/packs${query}`
   );
-  return { packs: body.data ?? [], language: language === 'en' || language === 'fr' ? language : null };
+  return { packs: body.data ?? [], language };
 };
 
 export const actions: Actions = {

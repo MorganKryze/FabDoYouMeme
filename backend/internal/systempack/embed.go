@@ -16,3 +16,10 @@ var DemoPackFS embed.FS
 //
 //go:embed demo-text-pack/*
 var DemoTextPackFS embed.FS
+
+// DemoTextPackFRFS is the French-language sibling of DemoTextPackFS. Text is
+// inherently locale-bound (captions/prompts are authored in one language), so
+// each locale ships its own pack rather than a machine-translated copy.
+//
+//go:embed demo-text-pack-fr/*
+var DemoTextPackFRFS embed.FS

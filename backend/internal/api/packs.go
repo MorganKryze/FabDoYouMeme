@@ -80,8 +80,8 @@ func (h *PackHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, "e_pack_language_required", "language is required")
 		return
 	}
-	if req.Language != "en" && req.Language != "fr" {
-		writeError(w, r, http.StatusBadRequest, "e_invalid_pack_language", "language must be en or fr")
+	if req.Language != "en" && req.Language != "fr" && req.Language != "multi" {
+		writeError(w, r, http.StatusBadRequest, "e_invalid_pack_language", "language must be en, fr, or multi")
 		return
 	}
 	if req.IsOfficial && u.Role != "admin" {
@@ -126,8 +126,11 @@ func (h *PackHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	// Optional language filter. Missing or unknown value leaves the filter off
 	// so the pre-i18n response shape is preserved for callers that don't care.
+	// 'multi' is accepted for packs whose content is locale-agnostic (image
+	// packs); callers that want "my locale OR multi" pass their locale here
+	// and client-side partitioning handles the inclusion (see host picker).
 	var languageArg *string
-	if q := r.URL.Query().Get("language"); q == "en" || q == "fr" {
+	if q := r.URL.Query().Get("language"); q == "en" || q == "fr" || q == "multi" {
 		lang := q
 		languageArg = &lang
 	}
@@ -264,8 +267,8 @@ func (h *PackHandler) Update(w http.ResponseWriter, r *http.Request) {
 	// silent fallback.
 	language := pack.Language
 	if req.Language != "" {
-		if req.Language != "en" && req.Language != "fr" {
-			writeError(w, r, http.StatusBadRequest, "e_invalid_pack_language", "language must be en or fr")
+		if req.Language != "en" && req.Language != "fr" && req.Language != "multi" {
+			writeError(w, r, http.StatusBadRequest, "e_invalid_pack_language", "language must be en, fr, or multi")
 			return
 		}
 		language = req.Language

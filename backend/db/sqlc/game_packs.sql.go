@@ -385,8 +385,8 @@ func (q *Queries) UpdatePack(ctx context.Context, arg UpdatePackParams) (GamePac
 }
 
 const upsertSystemPack = `-- name: UpsertSystemPack :one
-INSERT INTO game_packs (id, name, description, owner_id, is_official, visibility, status, is_system)
-VALUES ($1, $2, $3, NULL, true, 'public', 'active', true)
+INSERT INTO game_packs (id, name, description, owner_id, is_official, visibility, status, is_system, language)
+VALUES ($1, $2, $3, NULL, true, 'public', 'active', true, $4)
 ON CONFLICT (id) DO UPDATE
   SET name = EXCLUDED.name,
       description = EXCLUDED.description,
@@ -394,7 +394,8 @@ ON CONFLICT (id) DO UPDATE
       visibility = 'public',
       status = 'active',
       is_system = true,
-      deleted_at = NULL
+      deleted_at = NULL,
+      language = EXCLUDED.language
 RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language
 `
 
@@ -402,14 +403,22 @@ type UpsertSystemPackParams struct {
 	ID          uuid.UUID `json:"id"`
 	Name        string    `json:"name"`
 	Description *string   `json:"description"`
+	Language    string    `json:"language"`
 }
 
 // Upserts the bundled "system" pack row with a fixed sentinel UUID. Called
 // once per boot from backend/internal/systempack. Forces is_official,
-// visibility, status, is_system, and deleted_at back to their canonical values
-// on every boot so the pack cannot drift from its managed state.
+// visibility, status, is_system, deleted_at, and language back to their
+// canonical values on every boot so the pack cannot drift from its managed
+// state. The caller picks the language: image packs pass 'multi' (locale-
+// agnostic content), text packs pass the authored locale.
 func (q *Queries) UpsertSystemPack(ctx context.Context, arg UpsertSystemPackParams) (GamePack, error) {
-	row := q.db.QueryRow(ctx, upsertSystemPack, arg.ID, arg.Name, arg.Description)
+	row := q.db.QueryRow(ctx, upsertSystemPack,
+		arg.ID,
+		arg.Name,
+		arg.Description,
+		arg.Language,
+	)
 	var i GamePack
 	err := row.Scan(
 		&i.ID,

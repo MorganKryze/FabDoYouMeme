@@ -121,14 +121,16 @@
 
   // Partition a role's packs into same-language (matching the UI locale) and
   // other-language buckets. A user hosting in FR rarely wants EN captions, so
-  // the other bucket is hidden behind a disclosure but still reachable.
+  // the other bucket is hidden behind a disclosure but still reachable. Packs
+  // tagged 'multi' (language-agnostic content, e.g. image packs) always count
+  // as same-language so hosts see them regardless of UI locale.
   function sameLangOf(role: string): Pack[] {
     const loc = getLocale();
-    return (packsByRole[role] ?? []).filter((p) => p.language === loc);
+    return (packsByRole[role] ?? []).filter((p) => p.language === loc || p.language === 'multi');
   }
   function otherLangOf(role: string): Pack[] {
     const loc = getLocale();
-    return (packsByRole[role] ?? []).filter((p) => p.language !== loc);
+    return (packsByRole[role] ?? []).filter((p) => p.language !== loc && p.language !== 'multi');
   }
   function officialOf(packs: Pack[]): Pack[] {
     return packs.filter((p) => p.is_official || p.is_system);
@@ -138,7 +140,9 @@
   }
 
   function packLangLabel(lang: Pack['language']): string {
-    return lang === 'fr' ? m.host_pack_lang_fr() : m.host_pack_lang_en();
+    if (lang === 'multi') return m.host_pack_lang_multi();
+    if (lang === 'fr') return m.host_pack_lang_fr();
+    return m.host_pack_lang_en();
   }
 </script>
 

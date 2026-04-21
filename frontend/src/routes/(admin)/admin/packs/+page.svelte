@@ -77,6 +77,10 @@
         class="px-3 py-1 border-l border-brand-border transition-colors {data.language === 'fr' ? 'bg-brand-text text-brand-white' : 'hover:bg-muted/40'}">
         {m.admin_packs_filter_fr()}
       </a>
+      <a href="/admin/packs?language=multi" data-sveltekit-replacestate
+        class="px-3 py-1 border-l border-brand-border transition-colors {data.language === 'multi' ? 'bg-brand-text text-brand-white' : 'hover:bg-muted/40'}">
+        {m.admin_packs_filter_multi()}
+      </a>
     </div>
   </div>
 
@@ -134,7 +138,11 @@
               <div class="inline-flex items-center gap-2">
                 <a href="/admin/packs/{pack.id}" class="font-medium hover:underline">{pack.name}</a>
                 <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded border border-brand-border text-brand-text-muted uppercase">
-                  {pack.language === 'fr' ? m.admin_packs_filter_fr() : m.admin_packs_filter_en()}
+                  {pack.language === 'multi'
+                    ? m.admin_packs_filter_multi()
+                    : pack.language === 'fr'
+                      ? m.admin_packs_filter_fr()
+                      : m.admin_packs_filter_en()}
                 </span>
               </div>
             </td>

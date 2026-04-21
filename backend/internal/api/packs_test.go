@@ -236,6 +236,7 @@ func seedSystemPack(t *testing.T, q *db.Queries) db.GamePack {
 		ID:          uuid.MustParse("00000000-0000-0000-0000-000000000001"),
 		Name:        "Demo Pack",
 		Description: &desc,
+		Language:    "multi",
 	})
 	if err != nil {
 		t.Fatalf("upsert system pack: %v", err)

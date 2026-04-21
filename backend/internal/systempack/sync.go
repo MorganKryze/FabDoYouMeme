@@ -31,14 +31,50 @@ var SystemPackID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
 // but rounds still reference them by item id.
 var SystemTextPackID = uuid.MustParse("00000000-0000-0000-0000-000000000002")
 
+// SystemTextPackFRID is the sentinel for the bundled French text demo pack.
+// Text content is locale-bound, so each language ships its own pack rather
+// than a translated copy of the English one.
+var SystemTextPackFRID = uuid.MustParse("00000000-0000-0000-0000-000000000003")
+
 const (
-	systemPackName            = "Demo Pack"
-	systemPackDescription     = "Bundled sample images to get you started."
-	demoPackDir               = "demo-pack"
-	systemTextPackName        = "Demo Text Pack"
-	systemTextPackDescription = "Bundled sample text prompts to get you started."
-	demoTextPackDir           = "demo-text-pack"
-	demoTextPackFile          = "items.json"
+	systemPackName              = "Demo Pack"
+	systemPackDescription       = "Bundled sample images to get you started."
+	demoPackDir                 = "demo-pack"
+	systemTextPackName          = "Demo Text Pack"
+	systemTextPackDescription   = "Bundled sample text prompts to get you started."
+	demoTextPackDir             = "demo-text-pack"
+	systemTextPackFRName        = "Pack de textes de démo"
+	systemTextPackFRDescription = "Prompts texte prêts à l'emploi pour commencer."
+	demoTextPackFRDir           = "demo-text-pack-fr"
+	demoTextPackFile            = "items.json"
+)
+
+// textPackSpec holds the per-language parameters consumed by the shared text
+// sync orchestration. The sync logic itself is language-agnostic — it reads
+// items.json from `dir` and upserts the pack identified by `id`.
+type textPackSpec struct {
+	id          uuid.UUID
+	name        string
+	description string
+	language    string
+	dir         string
+}
+
+var (
+	textSpecEN = textPackSpec{
+		id:          SystemTextPackID,
+		name:        systemTextPackName,
+		description: systemTextPackDescription,
+		language:    "en",
+		dir:         demoTextPackDir,
+	}
+	textSpecFR = textPackSpec{
+		id:          SystemTextPackFRID,
+		name:        systemTextPackFRName,
+		description: systemTextPackFRDescription,
+		language:    "fr",
+		dir:         demoTextPackFRDir,
+	}
 )
 
 var allowedExts = map[string]string{
@@ -64,6 +100,9 @@ func SyncFS(ctx context.Context, q *db.Queries, store storage.Storage, srcFS fs.
 		ID:          SystemPackID,
 		Name:        systemPackName,
 		Description: strPtr(systemPackDescription),
+		// Image content is language-agnostic — memes land in any locale, so
+		// the bundled image pack is offered to hosts regardless of UI locale.
+		Language: "multi",
 	})
 	if err != nil {
 		return fmt.Errorf("upsert system pack: %w", err)
@@ -281,27 +320,45 @@ func strPtr(s string) *string {
 
 // ── Text demo pack ───────────────────────────────────────────────────────
 
-// SyncText runs the startup sync for the bundled text pack using the
+// SyncText runs the startup sync for the bundled English text pack using the
 // embedded demo-text-pack/items.json. Symmetric to Sync but with no asset
 // storage — text content lives in version.payload as `{text, sha256}`.
 func SyncText(ctx context.Context, q *db.Queries, logger *slog.Logger) error {
 	return SyncTextFS(ctx, q, DemoTextPackFS, logger)
 }
 
-// SyncTextFS is SyncText's testable core.
+// SyncTextFR runs the startup sync for the bundled French text pack.
+func SyncTextFR(ctx context.Context, q *db.Queries, logger *slog.Logger) error {
+	return syncTextPackFS(ctx, q, DemoTextPackFRFS, textSpecFR, logger)
+}
+
+// SyncTextFS is SyncText's testable core (English spec).
 func SyncTextFS(ctx context.Context, q *db.Queries, srcFS fs.FS, logger *slog.Logger) error {
+	return syncTextPackFS(ctx, q, srcFS, textSpecEN, logger)
+}
+
+// SyncTextFRFS is SyncTextFR's testable core (French spec).
+func SyncTextFRFS(ctx context.Context, q *db.Queries, srcFS fs.FS, logger *slog.Logger) error {
+	return syncTextPackFS(ctx, q, srcFS, textSpecFR, logger)
+}
+
+// syncTextPackFS is the language-agnostic orchestration that both the EN and
+// FR entrypoints delegate to. The spec carries the only per-language state
+// (pack id, display strings, CHECK value, embedded dir).
+func syncTextPackFS(ctx context.Context, q *db.Queries, srcFS fs.FS, spec textPackSpec, logger *slog.Logger) error {
 	start := time.Now()
 
 	pack, err := q.UpsertSystemPack(ctx, db.UpsertSystemPackParams{
-		ID:          SystemTextPackID,
-		Name:        systemTextPackName,
-		Description: strPtr(systemTextPackDescription),
+		ID:          spec.id,
+		Name:        spec.name,
+		Description: strPtr(spec.description),
+		Language:    spec.language,
 	})
 	if err != nil {
 		return fmt.Errorf("upsert system text pack: %w", err)
 	}
 
-	entries, err := readTextEntries(srcFS, logger)
+	entries, err := readTextEntries(srcFS, spec.dir, logger)
 	if err != nil {
 		return fmt.Errorf("read text entries: %w", err)
 	}
@@ -373,11 +430,12 @@ type textEntry struct {
 	Text string `json:"text"`
 }
 
-// readTextEntries loads and parses items.json. A missing file is treated as
-// "no entries" so a fresh checkout without bundled content still upserts the
-// pack row (consistent with how the image sync handles a missing folder).
-func readTextEntries(srcFS fs.FS, logger *slog.Logger) ([]textEntry, error) {
-	data, err := fs.ReadFile(srcFS, demoTextPackDir+"/"+demoTextPackFile)
+// readTextEntries loads and parses items.json from the given dir. A missing
+// file is treated as "no entries" so a fresh checkout without bundled content
+// still upserts the pack row (consistent with how the image sync handles a
+// missing folder).
+func readTextEntries(srcFS fs.FS, dir string, logger *slog.Logger) ([]textEntry, error) {
+	data, err := fs.ReadFile(srcFS, dir+"/"+demoTextPackFile)
 	if err != nil {
 		logger.Warn("systempack sync", "event", "text.read_failed", "error", err)
 		return nil, nil
