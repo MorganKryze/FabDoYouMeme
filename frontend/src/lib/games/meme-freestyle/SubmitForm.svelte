@@ -10,6 +10,7 @@
   import { mediaSrc } from '$lib/api/media';
   import type { Round } from '$lib/api/types';
   import * as m from '$lib/paraglide/messages';
+  import { localizeGameType } from '$lib/i18n/gameType';
 
   let { round }: { round: Round } = $props();
 
@@ -276,7 +277,7 @@
         <div class="flex justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-brand-text-muted px-1">
           <span>{m.game_meme_freestyle_round_number({ number: round.round_number })}</span>
           {#if room.gameType}
-            <span class="truncate max-w-[60%]">{room.gameType.name}</span>
+            <span class="truncate max-w-[60%]">{localizeGameType(room.gameType).name}</span>
           {/if}
         </div>
       </div>

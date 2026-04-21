@@ -14,6 +14,14 @@
   let packs = $state<Pack[]>(untrack(() => data.packs));
   let showNewRow = $state(false);
 
+  // Re-seed local state when the URL filter changes. Optimistic create/delete
+  // updates survive because they happen under a stable URL — `data.packs` is
+  // read via `untrack` so this effect only fires on `data.language` changes.
+  $effect(() => {
+    void data.language;
+    untrack(() => { packs = data.packs; });
+  });
+
   // `use:enhance` updates the `form` prop several times per submission
   // (pending → result → post-invalidate refetch), each update firing the
   // effect. Without this guard we got 3× toasts. A plain `let` (not
@@ -52,6 +60,24 @@
       <Plus size={14} strokeWidth={2.5} />
       {m.admin_packs_new()}
     </button>
+  </div>
+
+  <div class="flex items-center gap-2 text-xs">
+    <span class="text-brand-text-muted font-medium">{m.admin_packs_filter_language()}</span>
+    <div class="inline-flex rounded-full border border-brand-border overflow-hidden">
+      <a href="/admin/packs" data-sveltekit-replacestate
+        class="px-3 py-1 transition-colors {data.language === null ? 'bg-brand-text text-brand-white' : 'hover:bg-muted/40'}">
+        {m.admin_packs_filter_all()}
+      </a>
+      <a href="/admin/packs?language=en" data-sveltekit-replacestate
+        class="px-3 py-1 border-l border-brand-border transition-colors {data.language === 'en' ? 'bg-brand-text text-brand-white' : 'hover:bg-muted/40'}">
+        {m.admin_packs_filter_en()}
+      </a>
+      <a href="/admin/packs?language=fr" data-sveltekit-replacestate
+        class="px-3 py-1 border-l border-brand-border transition-colors {data.language === 'fr' ? 'bg-brand-text text-brand-white' : 'hover:bg-muted/40'}">
+        {m.admin_packs_filter_fr()}
+      </a>
+    </div>
   </div>
 
   {#if showNewRow}
@@ -105,7 +131,12 @@
         {#each packs as pack, i}
           <tr use:reveal={{ delay: i }} class="border-b border-brand-border/50 hover:bg-muted/20 transition-colors">
             <td class="px-4 py-3">
-              <a href="/admin/packs/{pack.id}" class="font-medium hover:underline">{pack.name}</a>
+              <div class="inline-flex items-center gap-2">
+                <a href="/admin/packs/{pack.id}" class="font-medium hover:underline">{pack.name}</a>
+                <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded border border-brand-border text-brand-text-muted uppercase">
+                  {pack.language === 'fr' ? m.admin_packs_filter_fr() : m.admin_packs_filter_en()}
+                </span>
+              </div>
             </td>
             <td class="px-4 py-3 text-brand-text-muted">{pack.description ?? '—'}</td>
             <td class="px-4 py-3 text-brand-text-muted">{pack.item_count ?? 0}</td>

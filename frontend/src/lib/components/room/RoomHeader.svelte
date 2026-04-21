@@ -4,6 +4,7 @@
   import { user } from '$lib/state/user.svelte';
   import EndRoomButton from '$lib/components/room/EndRoomButton.svelte';
   import * as m from '$lib/paraglide/messages';
+  import { localizeGameType } from '$lib/i18n/gameType';
 
   let { totalRounds = null }: { totalRounds?: number | null } = $props();
 
@@ -91,7 +92,7 @@
     {#if room.gameType}
       <div class="flex flex-col min-w-0">
         <span class="text-sm font-bold leading-tight truncate">
-          {room.gameType.name}
+          {localizeGameType(room.gameType).name}
         </span>
         <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-text-mid leading-tight truncate">
           {phaseLabel}

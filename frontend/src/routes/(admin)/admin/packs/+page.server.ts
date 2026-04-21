@@ -3,12 +3,14 @@ import type { Actions, PageServerLoad } from './$types';
 import type { Pack } from '$lib/api/types';
 import { apiFetch } from '$lib/server/backend';
 
-export const load: PageServerLoad = async ({ fetch }) => {
+export const load: PageServerLoad = async ({ fetch, url }) => {
+  const language = url.searchParams.get('language');
+  const query = language === 'en' || language === 'fr' ? `?language=${language}` : '';
   const body = await apiFetch<{ data: Pack[]; next_cursor: string | null }>(
     fetch,
-    '/api/packs'
+    `/api/packs${query}`
   );
-  return { packs: body.data ?? [] };
+  return { packs: body.data ?? [], language: language === 'en' || language === 'fr' ? language : null };
 };
 
 export const actions: Actions = {

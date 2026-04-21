@@ -44,10 +44,13 @@ export const actions: Actions = {
       ? new Date(expires_at_raw).toISOString()
       : null;
 
+    const locale_raw = (data.get('locale') as string | null) || null;
+    const locale = locale_raw === 'en' || locale_raw === 'fr' ? locale_raw : undefined;
+
     const res = await fetch('/api/admin/invites', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label, restricted_email, max_uses, expires_at })
+      body: JSON.stringify({ label, restricted_email, max_uses, expires_at, locale })
     });
 
     if (!res.ok) {

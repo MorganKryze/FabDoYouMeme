@@ -51,6 +51,7 @@ export interface Pack {
   visibility: 'private' | 'public';
   status: 'active' | 'flagged' | 'banned';
   is_system: boolean;
+  language: 'en' | 'fr';
   item_count?: number;
   created_at: string;
 }

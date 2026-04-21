@@ -163,8 +163,8 @@ Key naming: domain-prefixed flat snake_case. Reserved prefixes:
 | `toast_*`      | Flash messages                                                 |
 | `nav_*`        | Top-bar/user-menu labels                                       |
 
-Adding a string: add the key + EN value to `messages/en.json`, add the same key to `messages/fr.json` with a `"[FR] …"` placeholder (Phase 1 replaces these), then use `m.the_key()` at the call site. CI (`npm run i18n:check`) enforces parity and rejects `[FR]` placeholders inside `en.json` (source must stay canonical).
+Adding a string: add the key + EN value to `messages/en.json`, add the translated FR value to `messages/fr.json` under the same key, then use `m.the_key()` at the call site. CI (`npm run i18n:check`) enforces parity and rejects `[FR]` placeholders in either file — every key must have a real FR translation before merge. See `docs/brand.md § French voice` for the FR voice rules (tu/vous register, typography, loanword handling).
 
-Locale resolution priority (in `hooks.server.ts`): authenticated `user.locale` → `locale` cookie → `Accept-Language` header → `PUBLIC_DEFAULT_LOCALE`.
+Locale resolution priority (in `hooks.server.ts`): authenticated `user.locale` → `PARAGLIDE_LOCALE` cookie → `Accept-Language` header → `PUBLIC_DEFAULT_LOCALE`.
 
 Adding a new locale: (1) migration extending every CHECK constraint in `users.locale`, `game_packs.language`, `invites.locale`; (2) add the code to `SUPPORTED_LOCALES` in `src/lib/i18n/locale.ts`; (3) add the code to `project.inlang/settings.json` `languageTags`; (4) add `messages/<code>.json`; (5) add `backend/internal/email/templates/<code>/` with full template parity (startup fails otherwise).

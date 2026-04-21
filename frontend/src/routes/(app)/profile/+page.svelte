@@ -45,6 +45,13 @@
       editingEmail = false;
       toast.show(m.profile_email_toast_sent(), 'success');
     }
+    if (form?.localeSuccess) {
+      toast.show(m.profile_language_toast_updated(), 'success');
+      // A reload is the cleanest way to re-render every already-hydrated
+      // Paraglide message: invalidateAll() re-runs loads but components
+      // already hold their old translations in closures.
+      if (typeof window !== 'undefined') window.location.reload();
+    }
   });
 
   async function logout() {
@@ -215,6 +222,45 @@
     <h2 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted m-0">
       {m.profile_appearance()}
     </h2>
+
+    <div class="flex flex-col gap-2">
+      <p class="text-[0.6rem] font-bold uppercase tracking-[0.15em] text-brand-text-muted">{m.profile_language_label()}</p>
+      <form method="POST" action="?/updateLocale" use:enhance class="flex items-center gap-2">
+        <label class="flex-1">
+          <input
+            type="radio"
+            name="locale"
+            value="en"
+            checked={data.user.locale === 'en'}
+            onchange={(e) => (e.currentTarget.form as HTMLFormElement).requestSubmit()}
+            class="peer sr-only"
+          />
+          <span
+            class="flex items-center justify-center h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-sm font-bold cursor-pointer peer-checked:bg-brand-text peer-checked:text-brand-white transition-colors"
+          >
+            {m.profile_language_en()}
+          </span>
+        </label>
+        <label class="flex-1">
+          <input
+            type="radio"
+            name="locale"
+            value="fr"
+            checked={data.user.locale === 'fr'}
+            onchange={(e) => (e.currentTarget.form as HTMLFormElement).requestSubmit()}
+            class="peer sr-only"
+          />
+          <span
+            class="flex items-center justify-center h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-sm font-bold cursor-pointer peer-checked:bg-brand-text peer-checked:text-brand-white transition-colors"
+          >
+            {m.profile_language_fr()}
+          </span>
+        </label>
+      </form>
+      <p class="text-xs font-semibold text-brand-text-muted">
+        {m.profile_language_hint()}
+      </p>
+    </div>
 
     <div class="flex flex-col gap-2">
       <p class="text-[0.6rem] font-bold uppercase tracking-[0.15em] text-brand-text-muted">{m.profile_theme()}</p>

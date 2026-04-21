@@ -25,6 +25,7 @@
   import { backOut } from 'svelte/easing';
   import EndRoomButton from './EndRoomButton.svelte';
   import * as m from '$lib/paraglide/messages';
+  import { localizeGameType } from '$lib/i18n/gameType';
 
   interface Props {
     isHost: boolean;
@@ -41,8 +42,9 @@
     room.gameType ?? (pageRoom as any)?.game_type ?? null
   );
 
-  const gameName = $derived(gameType?.name ?? m.room_game_fallback());
-  const gameDescription = $derived(gameType?.description ?? '');
+  const localized = $derived(gameType ? localizeGameType(gameType) : null);
+  const gameName = $derived(localized?.name ?? m.room_game_fallback());
+  const gameDescription = $derived(localized?.description ?? '');
   const minPlayers = $derived(gameType?.config.min_players ?? 2);
   const maxPlayers = $derived(gameType?.config.max_players ?? 8);
 

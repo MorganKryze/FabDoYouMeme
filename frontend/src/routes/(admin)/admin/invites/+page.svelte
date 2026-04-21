@@ -9,6 +9,7 @@
   import type { Invite } from '$lib/api/types';
   import type { PageData } from './$types';
   import * as m from '$lib/paraglide/messages';
+  import { getLocale } from '$lib/paraglide/runtime';
 
   let { data }: { data: PageData } = $props();
   let showCreateForm = $state(false);
@@ -93,6 +94,15 @@
           <label for="expires_at" class="text-xs font-medium">{m.admin_invites_field_expires_at()}</label>
           <input id="expires_at" name="expires_at" type="datetime-local"
             class="h-9 rounded border border-brand-border-heavy bg-brand-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
+        </div>
+        <div class="flex flex-col gap-1">
+          <label for="invite_locale" class="text-xs font-medium">{m.admin_invites_field_locale()}</label>
+          <select id="invite_locale" name="locale"
+            value={getLocale()}
+            class="h-9 rounded border border-brand-border-heavy bg-brand-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring">
+            <option value="en">{m.admin_invites_field_locale_en()}</option>
+            <option value="fr">{m.admin_invites_field_locale_fr()}</option>
+          </select>
         </div>
       </div>
       <div class="flex gap-2 justify-end">
