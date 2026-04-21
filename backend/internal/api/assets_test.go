@@ -139,6 +139,7 @@ func TestAPI_DownloadURLAuthzMatrix(t *testing.T) {
 			Name:       fmt.Sprintf("p_%s_%s", visibility, testutil.SeedName(t)),
 			OwnerID:    pgtype.UUID{Bytes: owner.ID, Valid: true},
 			Visibility: visibility,
+			Language:   "en",
 		})
 		if err != nil {
 			t.Fatalf("create pack (%s): %v", visibility, err)

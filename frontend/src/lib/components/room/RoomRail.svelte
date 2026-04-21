@@ -2,6 +2,7 @@
   import { room } from '$lib/state/room.svelte';
   import { user } from '$lib/state/user.svelte';
   import { guest } from '$lib/state/guest.svelte';
+  import * as m from '$lib/paraglide/messages';
 
   // Player identity — same logic as /rooms/[code]/+page.svelte. Used to
   // highlight "you" in the roster.
@@ -53,14 +54,14 @@
     const total = room.players.length;
     if (room.phase === 'submitting') {
       return {
-        label: 'Submitted',
+        label: m.room_rail_progress_submitted(),
         done: room.submittedPlayerIds.size + room.skippedSubmitIds.size,
         total,
       };
     }
     if (room.phase === 'voting') {
       return {
-        label: 'Voted',
+        label: m.room_rail_progress_voted(),
         done: room.votedPlayerIds.size + room.skippedVoteIds.size,
         total,
       };
@@ -84,7 +85,7 @@
   }
 </script>
 
-<aside class="flex flex-col gap-4" aria-label="Room roster">
+<aside class="flex flex-col gap-4" aria-label={m.room_rail_aria()}>
   <!-- Roster / leaderboard -->
   <div
     class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-3"
@@ -93,9 +94,9 @@
     <h3 class="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-text-mid flex items-center gap-2 m-0">
       <span style="color: var(--brand-accent);">♠</span>
       {#if room.phase === 'results'}
-        Leaderboard
+        {m.room_leaderboard()}
       {:else}
-        Players
+        {m.room_players_title()}
       {/if}
       <span class="ml-auto font-mono tabular-nums">{rosterRows.length}</span>
     </h3>
@@ -115,47 +116,47 @@
           </span>
           <div class="flex flex-col min-w-0 flex-1">
             <span class="leading-tight truncate">
-              {isSelf ? `${row.name} (you)` : row.name}
+              {isSelf ? m.room_rail_self({ name: row.name }) : row.name}
             </span>
             {#if row.rank !== null}
               <span class="text-[9px] font-bold uppercase tracking-[0.15em] opacity-70">
-                Rank {row.rank}
+                {m.room_rail_rank({ n: row.rank })}
               </span>
             {:else if room.phase === 'voting' && row.hasSkippedVote}
               <span
                 class="text-[9px] font-bold uppercase tracking-[0.15em]"
                 style="color: {isSelf ? '#1A1A1A' : 'var(--brand-accent-3)'}; opacity: {isSelf ? 0.75 : 1};"
               >
-                ✗ Skipped
+                {m.room_rail_skipped()}
               </span>
             {:else if room.phase === 'voting' && row.hasVoted}
               <span
                 class="text-[9px] font-bold uppercase tracking-[0.15em]"
                 style="color: {isSelf ? '#1A1A1A' : 'var(--brand-accent-2)'}; opacity: {isSelf ? 0.75 : 1};"
               >
-                ✓ Voted
+                {m.room_rail_voted()}
               </span>
             {:else if room.phase === 'submitting' && row.hasSkippedSubmit}
               <span
                 class="text-[9px] font-bold uppercase tracking-[0.15em]"
                 style="color: {isSelf ? '#1A1A1A' : 'var(--brand-accent-3)'}; opacity: {isSelf ? 0.75 : 1};"
               >
-                ♠ Joker
+                {m.room_rail_joker()}
               </span>
             {:else if room.phase === 'submitting' && row.hasSubmitted}
               <span
                 class="text-[9px] font-bold uppercase tracking-[0.15em]"
                 style="color: {isSelf ? '#1A1A1A' : 'var(--brand-accent-2)'}; opacity: {isSelf ? 0.75 : 1};"
               >
-                ✓ Submitted
+                {m.room_rail_submitted()}
               </span>
             {:else if row.isHost}
               <span class="text-[9px] font-bold uppercase tracking-[0.15em] opacity-70">
-                Host
+                {m.room_host_label()}
               </span>
             {:else if !row.connected}
               <span class="text-[9px] font-bold uppercase tracking-[0.15em] opacity-60">
-                Away
+                {m.room_rail_away()}
               </span>
             {/if}
           </div>
@@ -170,7 +171,7 @@
           <span
             class="h-2 w-2 rounded-full shrink-0"
             style="background: {row.connected ? 'var(--brand-accent-2)' : 'var(--brand-text-muted)'};"
-            aria-label={row.connected ? 'Connected' : 'Away'}
+            aria-label={row.connected ? m.room_rail_connected_aria() : m.room_rail_away()}
           ></span>
         </li>
       {/each}
@@ -186,13 +187,13 @@
         <span style="color: var(--brand-accent);">
           {room.phase === 'submitting' ? '♣' : '♥'}
         </span>
-        How it works
+        {m.room_rail_how_it_works()}
       </span>
       <p class="text-xs font-semibold text-brand-text-mid leading-snug m-0">
         {#if room.phase === 'submitting'}
-          Write the funniest caption for the prompt. Everyone submits blind — captions stay anonymous until the vote closes.
+          {m.room_rail_how_it_works_submitting()}
         {:else}
-          Pick the caption that made you laugh hardest. You can't vote for your own, and votes reveal at the end of the round.
+          {m.room_rail_how_it_works_voting()}
         {/if}
       </p>
     </div>

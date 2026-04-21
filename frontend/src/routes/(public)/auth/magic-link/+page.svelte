@@ -5,6 +5,7 @@
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { Send } from '$lib/icons';
+  import * as m from '$lib/paraglide/messages';
   import type { ActionData } from './$types';
 
   let { form }: { form: ActionData } = $props();
@@ -37,16 +38,16 @@
 </script>
 
 <svelte:head>
-  <title>Sign in — FabDoYouMeme</title>
+  <title>{m.auth_magic_link_page_title()}</title>
 </svelte:head>
 
 <div class="flex flex-col gap-6" use:reveal>
   <div class="text-center">
     <h1 class="text-2xl font-bold">
-      {sent ? 'Check your inbox' : 'Sign in'}
+      {sent ? m.auth_magic_link_sent_title() : m.auth_magic_link_title()}
     </h1>
     <p class="text-sm font-semibold text-brand-text-muted mt-1">
-      {sent ? "Magic link sent — here's what to do." : "We'll email you a magic link."}
+      {sent ? m.auth_magic_link_sent_subtitle() : m.auth_magic_link_subtitle()}
     </p>
   </div>
 
@@ -61,8 +62,8 @@
           ✓
         </div>
         <div>
-          <p class="text-sm font-semibold leading-snug">Enter your email</p>
-          <p class="text-xs text-brand-text-muted font-medium mt-0.5">Done — link is on its way</p>
+          <p class="text-sm font-semibold leading-snug">{m.auth_magic_link_step1_title()}</p>
+          <p class="text-xs text-brand-text-muted font-medium mt-0.5">{m.auth_magic_link_step1_done()}</p>
         </div>
       </div>
 
@@ -74,8 +75,8 @@
           2
         </div>
         <div>
-          <p class="text-sm font-semibold leading-snug">Open the email</p>
-          <p class="text-xs text-brand-text-muted font-medium mt-0.5">Check spam if you don't see it</p>
+          <p class="text-sm font-semibold leading-snug">{m.auth_magic_link_step2_title()}</p>
+          <p class="text-xs text-brand-text-muted font-medium mt-0.5">{m.auth_magic_link_step2_body()}</p>
         </div>
       </div>
 
@@ -87,8 +88,8 @@
           3
         </div>
         <div>
-          <p class="text-sm font-semibold leading-snug">Click the link</p>
-          <p class="text-xs text-brand-text-muted font-medium mt-0.5">You'll be signed in automatically</p>
+          <p class="text-sm font-semibold leading-snug">{m.auth_magic_link_step3_title()}</p>
+          <p class="text-xs text-brand-text-muted font-medium mt-0.5">{m.auth_magic_link_step3_body()}</p>
         </div>
       </div>
     </div>
@@ -100,15 +101,15 @@
         aria-live="polite"
         class="text-xs {justResent ? 'text-brand-text font-bold' : 'text-brand-text-muted font-medium'}"
       >
-        {justResent ? '✓ Link sent again — check your inbox' : 'You can safely close this tab.'}
+        {justResent ? m.auth_magic_link_resent() : m.auth_magic_link_close_tab()}
       </p>
 
       {#if cooldownSeconds > 0}
         <span class="text-sm font-semibold text-brand-text-muted cursor-not-allowed select-none">
-          Send another link
+          {m.auth_magic_link_send_another()}
           <span
             class="inline-block rounded-full bg-brand-surface px-2 py-0.5 text-[0.68rem] font-bold text-brand-text-muted"
-          >{cooldownSeconds}s</span>
+          >{m.auth_magic_link_cooldown({ seconds: cooldownSeconds })}</span>
         </span>
       {:else}
         <form
@@ -127,7 +128,7 @@
             type="submit"
             class="text-sm font-semibold underline hover:text-brand-text cursor-pointer bg-transparent border-0 p-0"
           >
-            Send another link
+            {m.auth_magic_link_send_another()}
           </button>
         </form>
       {/if}
@@ -135,7 +136,7 @@
   {:else}
     <form method="POST" use:enhance class="flex flex-col gap-4">
       <div class="flex flex-col gap-1">
-        <label for="email" class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Email</label>
+        <label for="email" class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">{m.auth_magic_link_email_label()}</label>
         <input
           id="email"
           name="email"
@@ -144,7 +145,7 @@
           required
           autocomplete="email"
           class="h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
-          placeholder="you@example.com"
+          placeholder={m.auth_magic_link_email_placeholder()}
         />
       </div>
 
@@ -155,13 +156,13 @@
         class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold cursor-pointer inline-flex items-center justify-center gap-2"
       >
         <Send size={18} strokeWidth={2.5} />
-        Send Magic Link
+        {m.auth_magic_link_submit()}
       </button>
     </form>
 
     <p class="text-center text-sm font-semibold text-brand-text-muted">
-      Don't have an account?
-      <a href="/auth/register" class="underline hover:text-brand-text">Register with an invite</a>
+      {m.auth_magic_link_no_account_prompt()}
+      <a href="/auth/register" class="underline hover:text-brand-text">{m.auth_magic_link_register_link()}</a>
     </p>
   {/if}
 </div>

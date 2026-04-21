@@ -5,6 +5,7 @@
   import JoinCodePopover from '$lib/components/marketing/JoinCodePopover.svelte';
   import Wordmark from '$lib/components/Wordmark.svelte';
   import type { LayoutData } from './$types';
+  import * as m from '$lib/paraglide/messages';
 
   let { children, data }: { children: any; data: LayoutData } = $props();
 </script>
@@ -15,7 +16,7 @@
     href="#main"
     class="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 focus:z-[100] focus:px-4 focus:py-2 focus:rounded-full focus:bg-brand-text focus:text-brand-white focus:font-bold focus:no-underline focus:outline-none focus:ring-4 focus:ring-brand-accent/60"
   >
-    Skip to main content
+    {m.marketing_skip_to_main()}
   </a>
 
   <!-- Marketing nav: wordmark left, join + auth right — fixed so it stays on scroll -->
@@ -34,7 +35,7 @@
           class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-bold bg-brand-text text-brand-white border-[2.5px] border-brand-border-heavy no-underline transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
           style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
         >
-          Dashboard
+          {m.marketing_nav_dashboard()}
         </a>
       {:else}
         <a
@@ -44,7 +45,7 @@
           class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-bold bg-brand-text text-brand-white border-[2.5px] border-brand-border-heavy no-underline transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
           style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
         >
-          Sign in
+          {m.marketing_nav_signin()}
         </a>
       {/if}
     </div>
@@ -60,14 +61,14 @@
       <div class="flex flex-col gap-2">
         <span class="text-xl font-bold tracking-tight">FabDoYouMeme</span>
         <p class="text-sm font-semibold text-brand-text-mid max-w-xs leading-relaxed">
-          A private, self-hosted party meme game. Built for circles that prefer to keep things inside.
+          {m.marketing_footer_tagline()}
         </p>
       </div>
 
       <!-- Project links -->
       <div class="flex flex-col gap-3">
         <div class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
-          Project
+          {m.marketing_footer_project_heading()}
         </div>
         <ul class="flex flex-col gap-2 text-sm font-bold">
           <li>
@@ -75,7 +76,7 @@
               href="https://github.com/MorganKryze/FabDoYouMeme"
               class="hover:text-brand-text-mid transition-colors no-underline rounded-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
             >
-              Source
+              {m.marketing_footer_source()}
             </a>
           </li>
           <li>
@@ -83,7 +84,7 @@
               href="https://github.com/MorganKryze/FabDoYouMeme/issues"
               class="hover:text-brand-text-mid transition-colors no-underline rounded-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
             >
-              Issues
+              {m.marketing_footer_issues()}
             </a>
           </li>
           <li>
@@ -91,7 +92,7 @@
               href="https://github.com/MorganKryze/FabDoYouMeme/blob/main/LICENSE"
               class="hover:text-brand-text-mid transition-colors no-underline rounded-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
             >
-              GPLv3
+              {m.marketing_footer_license()}
             </a>
           </li>
         </ul>
@@ -100,17 +101,17 @@
       <!-- Legal links -->
       <div class="flex flex-col gap-3">
         <div class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
-          Legal
+          {m.marketing_footer_legal_heading()}
         </div>
         <ul class="flex flex-col gap-2 text-sm font-bold">
           <li>
             <a href="/privacy" class="hover:text-brand-text-mid transition-colors no-underline rounded-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60">
-              Privacy policy
+              {m.marketing_footer_privacy()}
             </a>
           </li>
           <li>
             <a href="/auth/register" class="hover:text-brand-text-mid transition-colors no-underline rounded-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60">
-              Register with invite
+              {m.marketing_footer_register()}
             </a>
           </li>
         </ul>
@@ -118,8 +119,8 @@
     </div>
 
     <div class="max-w-5xl mx-auto px-6 pb-10 pt-6 border-t border-brand-border flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-semibold text-brand-text-mid">
-      <p>© {new Date().getFullYear()} FabDoYouMeme — self-hosted, invite-only.</p>
-      <p>Built with <span class="font-bold">SvelteKit</span> + <span class="font-bold">Go</span> + <span class="font-bold">Postgres</span>.</p>
+      <p>{m.marketing_footer_copyright({ year: new Date().getFullYear() })}</p>
+      <p>{m.marketing_footer_built_prefix()}<span class="font-bold">SvelteKit</span>{m.marketing_footer_built_plus()}<span class="font-bold">Go</span>{m.marketing_footer_built_plus()}<span class="font-bold">Postgres</span>{m.marketing_footer_built_suffix()}</p>
     </div>
   </footer>
 </div>

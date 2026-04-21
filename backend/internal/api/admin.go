@@ -166,6 +166,7 @@ func (h *AdminHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		RestrictedEmail *string `json:"restricted_email,omitempty"`
 		MaxUses         int32   `json:"max_uses"`
 		ExpiresAt       *string `json:"expires_at,omitempty"`
+		Locale          string  `json:"locale,omitempty"`
 	}
 	if decodeErr := decodeJSON(r, &req); decodeErr != nil {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid JSON")
@@ -195,6 +196,18 @@ func (h *AdminHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		expiresAt = pgtype.Timestamptz{Time: t, Valid: true}
 	}
 
+	// Default locale: caller's own. The inviter's language is the best signal
+	// we have about the recipient's language at creation time — more useful
+	// than a hard-coded "en", since a FR operator inviting FR friends would
+	// otherwise receive an EN invite email.
+	locale := req.Locale
+	if locale != "en" && locale != "fr" {
+		locale = u.Locale
+		if locale != "en" && locale != "fr" {
+			locale = "en"
+		}
+	}
+
 	creatorID, _ := uuid.Parse(u.UserID)
 	invite, err := h.db.CreateInvite(r.Context(), db.CreateInviteParams{
 		Token:           req.Token,
@@ -203,6 +216,7 @@ func (h *AdminHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		RestrictedEmail: req.RestrictedEmail,
 		MaxUses:         req.MaxUses,
 		ExpiresAt:       expiresAt,
+		Locale:          locale,
 	})
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to create invite")

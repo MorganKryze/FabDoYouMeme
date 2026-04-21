@@ -63,6 +63,7 @@ func (h *PackHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Description string `json:"description"`
 		Visibility  string `json:"visibility"`
 		IsOfficial  bool   `json:"is_official"`
+		Language    string `json:"language"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid JSON")
@@ -75,6 +76,14 @@ func (h *PackHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if req.Visibility == "" {
 		req.Visibility = "private"
 	}
+	if req.Language == "" {
+		writeError(w, r, http.StatusBadRequest, "e_pack_language_required", "language is required")
+		return
+	}
+	if req.Language != "en" && req.Language != "fr" {
+		writeError(w, r, http.StatusBadRequest, "e_invalid_pack_language", "language must be en or fr")
+		return
+	}
 	if req.IsOfficial && u.Role != "admin" {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Only admins can create official packs")
 		return
@@ -86,6 +95,7 @@ func (h *PackHandler) Create(w http.ResponseWriter, r *http.Request) {
 		OwnerID:     pgtype.UUID{Bytes: ownerID, Valid: true},
 		IsOfficial:  req.IsOfficial,
 		Visibility:  req.Visibility,
+		Language:    req.Language,
 	})
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to create pack")
@@ -114,17 +124,26 @@ func (h *PackHandler) List(w http.ResponseWriter, r *http.Request) {
 	limit, offset := parsePagination(r)
 	userID, _ := uuid.Parse(u.UserID)
 
+	// Optional language filter. Missing or unknown value leaves the filter off
+	// so the pre-i18n response shape is preserved for callers that don't care.
+	var languageArg *string
+	if q := r.URL.Query().Get("language"); q == "en" || q == "fr" {
+		lang := q
+		languageArg = &lang
+	}
+
 	var packs []db.GamePack
 	var err error
 	if u.Role == "admin" {
 		packs, err = h.db.ListAllPacksAdmin(r.Context(), db.ListAllPacksAdminParams{
-			Lim: limit, Off: offset,
+			Language: languageArg, Lim: limit, Off: offset,
 		})
 	} else {
 		packs, err = h.db.ListPacksForUser(r.Context(), db.ListPacksForUserParams{
-			UserID: pgtype.UUID{Bytes: userID, Valid: true},
-			Lim:    limit,
-			Off:    offset,
+			UserID:   pgtype.UUID{Bytes: userID, Valid: true},
+			Language: languageArg,
+			Lim:      limit,
+			Off:      offset,
 		})
 	}
 	if err != nil {
@@ -231,6 +250,7 @@ func (h *PackHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Name        string `json:"name"`
 		Description string `json:"description"`
 		Visibility  string `json:"visibility"`
+		Language    string `json:"language"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	if req.Name == "" {
@@ -239,12 +259,24 @@ func (h *PackHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.Visibility == "" {
 		req.Visibility = pack.Visibility
 	}
+	// Language is optional on update: omit → keep existing. A supplied value
+	// must still be in the known set; anything else is a client bug, not a
+	// silent fallback.
+	language := pack.Language
+	if req.Language != "" {
+		if req.Language != "en" && req.Language != "fr" {
+			writeError(w, r, http.StatusBadRequest, "e_invalid_pack_language", "language must be en or fr")
+			return
+		}
+		language = req.Language
+	}
 	oldVisibility := pack.Visibility
 	updated, err := h.db.UpdatePack(r.Context(), db.UpdatePackParams{
 		ID:          packID,
 		Name:        req.Name,
 		Description: strPtr(req.Description),
 		Visibility:  req.Visibility,
+		Language:    language,
 	})
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Update failed")

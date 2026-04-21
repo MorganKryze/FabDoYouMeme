@@ -9,6 +9,7 @@ declare global {
 				username: string;
 				email: string;
 				role: 'player' | 'admin';
+				locale: 'en' | 'fr';
 				created_at: string;
 			} | null;
 			nonce: string;

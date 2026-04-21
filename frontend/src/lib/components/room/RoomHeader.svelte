@@ -3,6 +3,7 @@
   import { room } from '$lib/state/room.svelte';
   import { user } from '$lib/state/user.svelte';
   import EndRoomButton from '$lib/components/room/EndRoomButton.svelte';
+  import * as m from '$lib/paraglide/messages';
 
   let { totalRounds = null }: { totalRounds?: number | null } = $props();
 
@@ -53,30 +54,30 @@
   const codeLetters = $derived((room.code ?? '').split(''));
   const phaseLabel = $derived(
     room.phase === 'submitting'
-      ? 'Submission'
+      ? m.room_phase_submitting()
       : room.phase === 'voting'
-        ? 'Voting'
+        ? m.room_phase_voting()
         : room.phase === 'results'
-          ? 'Results'
+          ? m.room_phase_results()
           : ''
   );
   // During results with a live deadline, prefix the countdown so players see
   // "Next round 00:08" instead of a bare 00:08 that could be mistaken for the
   // current phase's remaining time.
   const countdownPrefix = $derived(
-    room.phase === 'results' && deadline > 0 ? 'Next round' : ''
+    room.phase === 'results' && deadline > 0 ? m.room_countdown_next_round() : ''
   );
 </script>
 
 <section
   class="room-header sticky top-4 z-20 mx-auto w-full max-w-[1280px] flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 md:py-3 rounded-[22px] md:rounded-full bg-brand-white border-[2.5px] border-brand-border-heavy"
   style="box-shadow: 0 5px 0 rgba(0,0,0,0.12);"
-  aria-label="Room status"
+  aria-label={m.room_header_aria()}
 >
   <!-- LEFT: code chip + game + pack -->
   <div class="flex items-center gap-3 min-w-0">
     {#if codeLetters.length > 0}
-      <div class="inline-flex gap-1 shrink-0" aria-label="Room code {room.code}">
+      <div class="inline-flex gap-1 shrink-0" aria-label={m.room_code_aria({ code: room.code ?? '' })}>
         {#each codeLetters as letter}
           <span
             class="inline-grid place-items-center w-8 h-10 rounded-[8px] border-[2.5px] border-brand-border-heavy bg-brand-white font-mono font-bold text-[15px]"
@@ -104,9 +105,9 @@
     <div class="flex items-center gap-3.5">
       <span class="text-[13px] font-bold uppercase tracking-[0.22em] text-brand-text">
         {#if totalRounds}
-          Round {roundNumber} of {totalRounds}
+          {m.room_rounds_info_of({ number: roundNumber, total: totalRounds })}
         {:else}
-          Round {roundNumber}
+          {m.room_rounds_info({ number: roundNumber })}
         {/if}
       </span>
       {#if showRoundPills}
@@ -135,14 +136,14 @@
     class:warn={isWarn}
     style="background: {isWarn ? 'var(--brand-accent)' : 'var(--brand-text)'}; color: {isWarn ? 'var(--brand-text)' : 'var(--brand-white)'}; box-shadow: 0 5px 0 rgba(0,0,0,{isWarn ? '0.22' : '0.35'});"
     role="timer"
-    aria-label={room.roundPaused ? 'Timer paused' : (showCountdown ? 'Time remaining' : phaseLabel)}
+    aria-label={room.roundPaused ? m.room_timer_paused_aria() : (showCountdown ? m.room_timer_remaining_aria() : phaseLabel)}
   >
     <span
       class="h-3 w-3 rounded-full shrink-0"
       style="background: {isWarn ? 'var(--brand-text)' : 'var(--brand-accent)'}; animation: {room.roundPaused || !showCountdown ? 'none' : 'pulse-dot 1.2s ease-in-out infinite'};"
     ></span>
     {#if room.roundPaused}
-      <span class="text-lg font-bold uppercase tracking-[0.2em] tabular-nums">Paused</span>
+      <span class="text-lg font-bold uppercase tracking-[0.2em] tabular-nums">{m.room_timer_paused()}</span>
     {:else if showCountdown}
       {#if countdownPrefix}
         <span class="text-[11px] font-bold uppercase tracking-[0.2em] opacity-80">{countdownPrefix}</span>

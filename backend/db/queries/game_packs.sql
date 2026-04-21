@@ -1,26 +1,32 @@
 -- backend/db/queries/game_packs.sql
 
 -- name: CreatePack :one
-INSERT INTO game_packs (name, description, owner_id, is_official, visibility)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO game_packs (name, description, owner_id, is_official, visibility, language)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: GetPackByID :one
 SELECT * FROM game_packs WHERE id = $1 AND deleted_at IS NULL;
 
 -- name: ListPacksForUser :many
+-- Optional language filter: when sqlc.narg(language) is NULL the predicate is a no-op
+-- and every language is returned (preserves pre-i18n behaviour). Pass 'en' or 'fr' to
+-- narrow.
 SELECT * FROM game_packs
 WHERE deleted_at IS NULL
   AND (owner_id = sqlc.arg(user_id) OR (visibility = 'public' AND status = 'active'))
+  AND (sqlc.narg(language)::text IS NULL OR language = sqlc.narg(language)::text)
 ORDER BY created_at DESC
 LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 
 -- name: ListAllPacksAdmin :many
-SELECT * FROM game_packs WHERE deleted_at IS NULL
+SELECT * FROM game_packs
+WHERE deleted_at IS NULL
+  AND (sqlc.narg(language)::text IS NULL OR language = sqlc.narg(language)::text)
 ORDER BY created_at DESC LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 
 -- name: UpdatePack :one
-UPDATE game_packs SET name = $2, description = $3, visibility = $4 WHERE id = $1 RETURNING *;
+UPDATE game_packs SET name = $2, description = $3, visibility = $4, language = $5 WHERE id = $1 RETURNING *;
 
 -- name: SetPackStatus :one
 UPDATE game_packs SET status = $2 WHERE id = $1 RETURNING *;

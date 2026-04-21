@@ -7,6 +7,7 @@
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { reveal } from '$lib/actions/reveal';
   import { roomsApi } from '$lib/api/rooms';
+  import { ApiError, errorMessage } from '$lib/api';
   import {
     Play,
     Clock,
@@ -23,6 +24,7 @@
   import { fade, scale } from 'svelte/transition';
   import { backOut } from 'svelte/easing';
   import EndRoomButton from './EndRoomButton.svelte';
+  import * as m from '$lib/paraglide/messages';
 
   interface Props {
     isHost: boolean;
@@ -39,7 +41,7 @@
     room.gameType ?? (pageRoom as any)?.game_type ?? null
   );
 
-  const gameName = $derived(gameType?.name ?? 'Unrecognized game');
+  const gameName = $derived(gameType?.name ?? m.room_game_fallback());
   const gameDescription = $derived(gameType?.description ?? '');
   const minPlayers = $derived(gameType?.config.min_players ?? 2);
   const maxPlayers = $derived(gameType?.config.max_players ?? 8);
@@ -88,11 +90,11 @@
     try {
       await navigator.clipboard.writeText(room.code);
       codeCopied = true;
-      toast.show('Room code copied', 'success');
+      toast.show(m.room_copy_code_toast_ok(), 'success');
       if (codeTimeout) clearTimeout(codeTimeout);
       codeTimeout = setTimeout(() => { codeCopied = false; }, 2000);
     } catch {
-      toast.show('Could not copy room code', 'error');
+      toast.show(m.room_copy_code_toast_error(), 'error');
     }
   }
 
@@ -103,8 +105,8 @@
       if (typeof navigator !== 'undefined' && 'share' in navigator) {
         try {
           await navigator.share({
-            title: 'Join my FabDoYouMeme game',
-            text: `Join me with code ${room.code}`,
+            title: m.room_invite_share_title(),
+            text: m.room_invite_share_text({ code: room.code ?? '' }),
             url: link
           });
           return;
@@ -114,16 +116,16 @@
       }
       await navigator.clipboard.writeText(link);
       linkCopied = true;
-      toast.show('Invite link copied', 'success');
+      toast.show(m.room_copy_invite_toast_ok(), 'success');
       if (linkTimeout) clearTimeout(linkTimeout);
       linkTimeout = setTimeout(() => { linkCopied = false; }, 2000);
     } catch {
-      toast.show('Could not copy invite link', 'error');
+      toast.show(m.room_copy_invite_toast_error(), 'error');
     }
   }
 
   const hostName = $derived(
-    room.players.find((p) => p.is_host)?.username ?? 'the host'
+    room.players.find((p) => p.is_host)?.username ?? m.room_host_label()
   );
 
   const playerCount = $derived(room.players.length);
@@ -187,7 +189,7 @@
       await roomsApi.updateConfig(room.code, patch);
       await invalidateAll();
     } catch {
-      toast.show('Could not save settings', 'error');
+      toast.show(m.room_settings_save_error(), 'error');
     } finally {
       settingsSaving = false;
     }
@@ -265,11 +267,16 @@
         room.code,
         kickTarget.isGuest ? { guestPlayerId: kickTarget.id } : { userId: kickTarget.id }
       );
-      toast.show(`${kickTarget.name} was removed`, 'success');
+      toast.show(m.room_kick_toast_ok({ name: kickTarget.name }), 'success');
       kickTarget = null;
       await invalidateAll();
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Could not remove player';
+      const message =
+        e instanceof ApiError
+          ? errorMessage(e.code, e.message)
+          : e instanceof Error
+            ? e.message
+            : m.room_kick_error_default();
       kickError = message;
       toast.show(message, 'error');
     } finally {
@@ -517,21 +524,21 @@
         style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
       >
         <ListChecks size={14} strokeWidth={2.5} />
-        {roundCount} rounds
+        {m.room_rounds_count({ count: roundCount })}
       </span>
       <span
         class="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-xs font-bold tabular-nums"
         style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
       >
         <Clock size={14} strokeWidth={2.5} />
-        {submitDuration}s submit · {voteDuration}s vote
+        {m.room_timing_info({ submit: submitDuration, vote: voteDuration })}
       </span>
       <span
         class="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-xs font-bold tabular-nums"
         style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
       >
         <Users size={14} strokeWidth={2.5} />
-        {minPlayers}–{maxPlayers} players
+        {m.room_players_range({ min: minPlayers, max: maxPlayers })}
       </span>
     </div>
   </div>
@@ -552,14 +559,14 @@
           style="box-shadow: 0 5px 0 rgba(0,0,0,0.22);"
         >
           <Play size={20} strokeWidth={2.5} />
-          Start game
+          {m.room_start_game()}
         </button>
       {:else}
         <div
           class="h-14 px-8 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-surface font-bold text-sm text-brand-text-mid inline-flex items-center justify-center gap-2"
           style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
         >
-          Waiting for <span class="text-brand-text">{hostName}</span>…
+          {m.room_waiting_for_host({ name: hostName })}
         </div>
       {/if}
     </div>
@@ -578,12 +585,12 @@
         <div class="inline-flex items-center gap-2">
           <Settings size={16} strokeWidth={2.5} />
           <h2 class="text-[0.7rem] font-bold uppercase tracking-[0.2em] text-brand-text-mid">
-            Room settings
+            {m.room_settings_title()}
           </h2>
         </div>
         {#if settingsSaving}
           <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
-            Saving…
+            {m.room_settings_saving()}
           </span>
         {/if}
       </div>
@@ -595,12 +602,12 @@
       >
         <div class="flex flex-col gap-1.5">
           <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
-            Rounds
+            {m.room_settings_rounds_label()}
           </span>
           <div class="stepper">
             <button
               type="button"
-              aria-label="Decrease rounds"
+              aria-label={m.room_settings_rounds_decrease_aria()}
               disabled={settingsRoundCount <= roundCountMin}
               onclick={() => { settingsRoundCount = Math.max(roundCountMin, settingsRoundCount - 1); commitRoundCount(); }}
             >−</button>
@@ -611,27 +618,27 @@
               bind:value={settingsRoundCount}
               onblur={commitRoundCount}
               onchange={commitRoundCount}
-              aria-label="Rounds"
+              aria-label={m.room_settings_rounds_aria()}
             />
             <button
               type="button"
-              aria-label="Increase rounds"
+              aria-label={m.room_settings_rounds_increase_aria()}
               disabled={settingsRoundCount >= roundCountMax}
               onclick={() => { settingsRoundCount = Math.min(roundCountMax, settingsRoundCount + 1); commitRoundCount(); }}
             >+</button>
           </div>
           <span class="text-[0.6rem] font-semibold text-brand-text-muted tabular-nums">
-            {roundCountMin}–{roundCountMax}
+            {m.room_settings_rounds_range({ min: roundCountMin, max: roundCountMax })}
           </span>
         </div>
         <div class="flex flex-col gap-1.5">
           <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
-            Submit time (s)
+            {m.room_settings_submit_label()}
           </span>
           <div class="stepper">
             <button
               type="button"
-              aria-label="Decrease submit time"
+              aria-label={m.room_settings_submit_decrease_aria()}
               disabled={settingsSubmitDuration <= submitMin}
               onclick={() => { settingsSubmitDuration = Math.max(submitMin, settingsSubmitDuration - 5); commitSubmitDuration(); }}
             >−</button>
@@ -642,27 +649,27 @@
               bind:value={settingsSubmitDuration}
               onblur={commitSubmitDuration}
               onchange={commitSubmitDuration}
-              aria-label="Submit time in seconds"
+              aria-label={m.room_settings_submit_aria()}
             />
             <button
               type="button"
-              aria-label="Increase submit time"
+              aria-label={m.room_settings_submit_increase_aria()}
               disabled={settingsSubmitDuration >= submitMax}
               onclick={() => { settingsSubmitDuration = Math.min(submitMax, settingsSubmitDuration + 5); commitSubmitDuration(); }}
             >+</button>
           </div>
           <span class="text-[0.6rem] font-semibold text-brand-text-muted tabular-nums">
-            {submitMin}–{submitMax}s
+            {m.room_settings_submit_range({ min: submitMin, max: submitMax })}
           </span>
         </div>
         <div class="flex flex-col gap-1.5">
           <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
-            Vote time (s)
+            {m.room_settings_vote_label()}
           </span>
           <div class="stepper">
             <button
               type="button"
-              aria-label="Decrease vote time"
+              aria-label={m.room_settings_vote_decrease_aria()}
               disabled={settingsVoteDuration <= voteMin}
               onclick={() => { settingsVoteDuration = Math.max(voteMin, settingsVoteDuration - 5); commitVoteDuration(); }}
             >−</button>
@@ -673,27 +680,27 @@
               bind:value={settingsVoteDuration}
               onblur={commitVoteDuration}
               onchange={commitVoteDuration}
-              aria-label="Vote time in seconds"
+              aria-label={m.room_settings_vote_aria()}
             />
             <button
               type="button"
-              aria-label="Increase vote time"
+              aria-label={m.room_settings_vote_increase_aria()}
               disabled={settingsVoteDuration >= voteMax}
               onclick={() => { settingsVoteDuration = Math.min(voteMax, settingsVoteDuration + 5); commitVoteDuration(); }}
             >+</button>
           </div>
           <span class="text-[0.6rem] font-semibold text-brand-text-muted tabular-nums">
-            {voteMin}–{voteMax}s
+            {m.room_settings_vote_range({ min: voteMin, max: voteMax })}
           </span>
         </div>
         <div class="flex flex-col gap-1.5">
           <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
-            Jokers per player
+            {m.room_settings_joker_label()}
           </span>
           <div class="stepper">
             <button
               type="button"
-              aria-label="Decrease jokers"
+              aria-label={m.room_settings_joker_decrease_aria()}
               disabled={settingsJokerCount <= 0}
               onclick={() => { settingsJokerCount = Math.max(0, settingsJokerCount - 1); commitJokerCount(); }}
             >−</button>
@@ -704,28 +711,28 @@
               bind:value={settingsJokerCount}
               onblur={commitJokerCount}
               onchange={commitJokerCount}
-              aria-label="Jokers per player"
+              aria-label={m.room_settings_joker_input_aria()}
             />
             <button
               type="button"
-              aria-label="Increase jokers"
+              aria-label={m.room_settings_joker_increase_aria()}
               disabled={settingsJokerCount >= settingsRoundCount}
               onclick={() => { settingsJokerCount = Math.min(settingsRoundCount, settingsJokerCount + 1); commitJokerCount(); }}
             >+</button>
           </div>
           <span class="text-[0.6rem] font-semibold text-brand-text-muted tabular-nums">
-            0 disables · rec. {Math.ceil(settingsRoundCount / 5)}
+            {m.room_settings_joker_range({ rec: Math.ceil(settingsRoundCount / 5) })}
           </span>
         </div>
         {#if handSizeMax > 0}
           <div class="flex flex-col gap-1.5">
             <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
-              Hand size
+              {m.room_settings_hand_size_label()}
             </span>
             <div class="stepper">
               <button
                 type="button"
-                aria-label="Decrease hand size"
+                aria-label={m.room_settings_hand_size_decrease_aria()}
                 disabled={settingsHandSize <= handSizeMin}
                 onclick={() => { settingsHandSize = Math.max(handSizeMin, settingsHandSize - 1); commitHandSize(); }}
               >−</button>
@@ -736,17 +743,17 @@
                 bind:value={settingsHandSize}
                 onblur={commitHandSize}
                 onchange={commitHandSize}
-                aria-label="Hand size"
+                aria-label={m.room_settings_hand_size_aria()}
               />
               <button
                 type="button"
-                aria-label="Increase hand size"
+                aria-label={m.room_settings_hand_size_increase_aria()}
                 disabled={settingsHandSize >= handSizeMaxBound}
                 onclick={() => { settingsHandSize = Math.min(handSizeMaxBound, settingsHandSize + 1); commitHandSize(); }}
               >+</button>
             </div>
             <span class="text-[0.6rem] font-semibold text-brand-text-muted tabular-nums">
-              {handSizeMin}–{handSizeMaxBound} cards
+              {m.room_settings_hand_size_range({ min: handSizeMin, max: handSizeMaxBound })}
             </span>
           </div>
         {/if}
@@ -758,14 +765,14 @@
             type="checkbox"
             checked={settingsHostPaced}
             onchange={toggleHostPaced}
-            aria-label="Host-paced rounds"
+            aria-label={m.room_settings_host_paced_aria()}
           />
           <span class="thumb"></span>
         </span>
         <span class="flex flex-col gap-0.5">
-          <span class="text-sm font-bold text-brand-text">Host-paced rounds</span>
+          <span class="text-sm font-bold text-brand-text">{m.room_settings_host_paced_title()}</span>
           <span class="text-xs font-semibold text-brand-text-muted">
-            You advance each round manually instead of auto-advancing.
+            {m.room_settings_host_paced_body()}
           </span>
         </span>
       </label>
@@ -776,14 +783,14 @@
             type="checkbox"
             checked={settingsAllowSkipVote}
             onchange={toggleAllowSkipVote}
-            aria-label="Allow skip vote"
+            aria-label={m.room_settings_allow_skip_aria()}
           />
           <span class="thumb"></span>
         </span>
         <span class="flex flex-col gap-0.5">
-          <span class="text-sm font-bold text-brand-text">Allow skip button</span>
+          <span class="text-sm font-bold text-brand-text">{m.room_settings_allow_skip_title()}</span>
           <span class="text-xs font-semibold text-brand-text-muted">
-            Players can skip voting if no caption landed. If everyone skips, the round ends with no points.
+            {m.room_settings_allow_skip_body()}
           </span>
         </span>
       </label>
@@ -801,7 +808,7 @@
       style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
     >
       <p class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
-        Room code
+        {m.room_code_label()}
       </p>
 
       <div class="font-mono font-bold tracking-[0.15em] text-brand-text select-all leading-none text-4xl">
@@ -809,7 +816,7 @@
       </div>
 
       <p class="text-xs font-semibold text-brand-text-muted text-center max-w-xs">
-        Share the 4-letter code — or tap the link to let friends join in one tap.
+        {m.room_code_share_hint()}
       </p>
 
       <div class="flex flex-wrap items-center justify-center gap-3 w-full">
@@ -821,10 +828,10 @@
         >
           {#if codeCopied}
             <CheckCircle size={16} strokeWidth={2.5} />
-            Copied!
+            {m.room_copy_code_done()}
           {:else}
             <Copy size={16} strokeWidth={2.5} />
-            Copy code
+            {m.room_copy_code()}
           {/if}
         </button>
         <button
@@ -836,10 +843,10 @@
         >
           {#if linkCopied}
             <CheckCircle size={16} strokeWidth={2.5} />
-            Link copied!
+            {m.room_copy_invite_done()}
           {:else}
             <Link2 size={16} strokeWidth={2.5} />
-            Copy invite link
+            {m.room_copy_invite()}
           {/if}
         </button>
       </div>
@@ -854,7 +861,7 @@
         <div class="inline-flex items-center gap-2">
           <Users size={16} strokeWidth={2.5} />
           <h2 class="text-[0.7rem] font-bold uppercase tracking-[0.2em] text-brand-text-mid">
-            Players
+            {m.room_players_title()}
           </h2>
         </div>
         <span
@@ -863,12 +870,12 @@
           class:is-waiting={!canStart}
         >
           <span class="readiness-dot"></span>
-          <span class="readiness-count tabular-nums">{playerCount} / {maxPlayers}</span>
+          <span class="readiness-count tabular-nums">{m.room_players_count({ count: playerCount, max: maxPlayers })}</span>
           <span class="readiness-sep" aria-hidden="true">·</span>
           {#if canStart}
-            Ready
+            {m.room_players_ready()}
           {:else}
-            Need {minPlayers - playerCount} more
+            {m.room_players_need_more({ count: minPlayers - playerCount })}
           {/if}
         </span>
       </div>
@@ -894,12 +901,12 @@
                 {#if player.is_host}
                   <span class="inline-flex items-center gap-1">
                     <Sparkles size={10} strokeWidth={2.5} />
-                    Host
+                    {m.room_player_label_host()}
                   </span>
                 {:else if player.is_guest}
-                  <span>Guest</span>
+                  <span>{m.room_player_label_guest()}</span>
                 {:else}
-                  <span>Player</span>
+                  <span>{m.room_player_label()}</span>
                 {/if}
               </div>
             </div>
@@ -907,18 +914,18 @@
               class="status-chip shrink-0"
               class:is-online={isOnline}
               class:is-away={!isOnline}
-              aria-label={isOnline ? 'Online' : 'Away'}
+              aria-label={isOnline ? m.room_status_online() : m.room_status_away()}
             >
               <span class="status-dot"></span>
-              {isOnline ? 'Online' : 'Away'}
+              {isOnline ? m.room_status_online() : m.room_status_away()}
             </span>
             {#if isHost && !player.is_host}
               <button
                 type="button"
                 use:pressPhysics={'ghost'}
                 onclick={() => openKick(player)}
-                aria-label={`Remove ${player.username}`}
-                title={`Remove ${player.username}`}
+                aria-label={m.room_kick_remove_aria({ name: player.username })}
+                title={m.room_kick_remove_aria({ name: player.username })}
                 class="absolute -top-2 -right-2 h-7 w-7 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text-mid hover:text-red-600 hover:border-red-600 inline-flex items-center justify-center cursor-pointer transition-colors"
                 style="box-shadow: 0 2px 0 rgba(0,0,0,0.1);"
               >
@@ -936,7 +943,7 @@
               <Users size={16} strokeWidth={2.5} />
             </span>
             <span class="text-[0.65rem] font-bold uppercase tracking-[0.1em]">
-              Waiting…
+              {m.room_player_empty_slot()}
             </span>
           </li>
         {/each}
@@ -956,7 +963,7 @@
   >
     <button
       type="button"
-      aria-label="Close dialog"
+      aria-label={m.room_close_dialog_aria()}
       class="absolute inset-0 w-full h-full cursor-default"
       onclick={closeKick}
     ></button>
@@ -970,9 +977,9 @@
         aria-labelledby="kick-title"
         transition:scale={{ duration: 180, start: 0.85, easing: backOut }}
       >
-        <h2 id="kick-title" class="text-xl font-bold">Remove {kickTarget.name}?</h2>
+        <h2 id="kick-title" class="text-xl font-bold">{m.room_kick_title({ name: kickTarget.name })}</h2>
         <p class="text-sm font-semibold text-brand-text-mid">
-          They'll be disconnected immediately and won't be able to rejoin this room.
+          {m.room_kick_body()}
         </p>
         {#if kickError}
           <p class="text-sm font-semibold text-red-600">{kickError}</p>
@@ -985,7 +992,7 @@
             disabled={kickPending}
             class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-sm font-bold disabled:opacity-50 cursor-pointer"
           >
-            Cancel
+            {m.room_kick_cancel()}
           </button>
           <button
             use:pressPhysics={'dark'}
@@ -994,7 +1001,7 @@
             disabled={kickPending}
             class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-red-600 text-white text-sm font-bold disabled:opacity-50 cursor-pointer"
           >
-            {kickPending ? 'Removing…' : 'Remove player'}
+            {kickPending ? m.room_kick_pending() : m.room_kick_confirm()}
           </button>
         </div>
       </div>

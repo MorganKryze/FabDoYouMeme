@@ -5,6 +5,7 @@
   import { reveal } from '$lib/actions/reveal';
   import { physCard } from '$lib/actions/physCard';
   import type { PageData } from './$types';
+  import * as m from '$lib/paraglide/messages';
   import {
     Lock,
     Server,
@@ -62,82 +63,40 @@
     }
   }
 
-  const heroCards: { caption: string; who: string; votes: number; winner?: boolean }[] = [
-    { caption: '"my wifi after three people join the voice call"', who: 'R.03 · Bob', votes: 1 },
-    { caption: '"me pretending I read the group chat before replying"', who: 'R.03 · Mia', votes: 2 },
-    { caption: '"dev-ops trying to debug at 2am with one working brain cell"', who: 'R.03 · Leo', votes: 3, winner: true },
-    { caption: '"my ISP when I ask for upload speed"', who: 'R.03 · Jun', votes: 1 },
-  ];
+  const heroCards = $derived([
+    { caption: m.marketing_hero_card1_caption(), who: m.marketing_hero_card1_who(), votes: 1 },
+    { caption: m.marketing_hero_card2_caption(), who: m.marketing_hero_card2_who(), votes: 2 },
+    { caption: m.marketing_hero_card3_caption(), who: m.marketing_hero_card3_who(), votes: 3, winner: true },
+    { caption: m.marketing_hero_card4_caption(), who: m.marketing_hero_card4_who(), votes: 1 },
+  ] as { caption: string; who: string; votes: number; winner?: boolean }[]);
 
-  const tableHand = [
-    { label: 'Caption A', caption: '"when the docker compose finally comes up"', tilt: -2, votes: 2 },
-    { label: 'Caption B', caption: '"reading docs after breaking prod"', tilt: 1.4, votes: 1 },
-    { label: 'Caption C', caption: '"me explaining self-hosting to my partner"', tilt: -0.8, votes: 0 },
-    { label: 'Caption D', caption: '"the raspberry pi that hosts our whole weekend"', tilt: 2, votes: 3 },
-  ] as const;
+  const tableHand = $derived([
+    { label: m.marketing_table_card1_label(), caption: m.marketing_table_card1_caption(), tilt: -2, votes: 2 },
+    { label: m.marketing_table_card2_label(), caption: m.marketing_table_card2_caption(), tilt: 1.4, votes: 1 },
+    { label: m.marketing_table_card3_label(), caption: m.marketing_table_card3_caption(), tilt: -0.8, votes: 0 },
+    { label: m.marketing_table_card4_label(), caption: m.marketing_table_card4_caption(), tilt: 2, votes: 3 },
+  ]);
 
-  const steps = [
-    {
-      suit: '♠',
-      label: 'Step I',
-      n: 1,
-      title: 'Host a room',
-      body: 'Pick a game, pick a pack, get a 4-letter room code. Everything runs on your box — no cloud in the loop.',
-      tilt: -1.5,
-    },
-    {
-      suit: '♥',
-      label: 'Step II',
-      n: 2,
-      title: 'Friends pile in',
-      body: "They tap the code on their phone. No download, no account, no tracking. Guests get a seat at the table.",
-      tilt: 0.8,
-    },
-    {
-      suit: '♦',
-      label: 'Step III',
-      n: 3,
-      title: 'Caption & vote',
-      body: 'Round by round. The best punchline wins the hand. Scoring, timers, and reconnects are on the house.',
-      tilt: -0.6,
-    },
-  ] as const;
+  const steps = $derived([
+    { suit: '♠', label: m.marketing_step1_label(), n: 1, title: m.marketing_step1_title(), body: m.marketing_step1_body(), tilt: -1.5 },
+    { suit: '♥', label: m.marketing_step2_label(), n: 2, title: m.marketing_step2_title(), body: m.marketing_step2_body(), tilt: 0.8 },
+    { suit: '♦', label: m.marketing_step3_label(), n: 3, title: m.marketing_step3_title(), body: m.marketing_step3_body(), tilt: -0.6 },
+  ]);
 
-  const packs = [
-    {
-      art: 'SUNSET',
-      artClass: 'pack-art-a1',
-      title: 'House Warming',
-      body: 'The default pack for new labs. Lightly spicy, universally legible, safe for in-laws.',
-      meta: 'System · v1.0',
-      count: '84 cards',
-    },
-    {
-      art: 'DUSK',
-      artClass: 'pack-art-a2',
-      title: 'Dev & Deploy',
-      body: 'For the group chat that Slacks in Markdown. Sprint retros welcome. CI failures encouraged.',
-      meta: 'System · v1.0',
-      count: '96 cards',
-    },
-    {
-      art: 'MINT',
-      artClass: 'pack-art-a3',
-      title: 'Lab Original',
-      body: 'Your pack. Upload images, write prompts, version it, ship it. The studio is a full-fledged tool.',
-      meta: 'Custom',
-      count: 'you decide',
-    },
-  ] as const;
+  const packs = $derived([
+    { art: m.marketing_pack1_art(), artClass: 'pack-art-a1', title: m.marketing_pack1_title(), body: m.marketing_pack1_body(), meta: m.marketing_pack1_meta(), count: m.marketing_pack1_count() },
+    { art: m.marketing_pack2_art(), artClass: 'pack-art-a2', title: m.marketing_pack2_title(), body: m.marketing_pack2_body(), meta: m.marketing_pack2_meta(), count: m.marketing_pack2_count() },
+    { art: m.marketing_pack3_art(), artClass: 'pack-art-a3', title: m.marketing_pack3_title(), body: m.marketing_pack3_body(), meta: m.marketing_pack3_meta(), count: m.marketing_pack3_count() },
+  ]);
 
-  const advantages = [
-    { glyph: '♠', title: 'Self-hosted, one command', body: 'One Docker Compose stack. Old laptop, home server, €5 VPS — it runs anywhere you run containers.', Icon: Server },
-    { glyph: '♥', title: 'Invite-only by design', body: 'No public signup. Single-use invite tokens, optional email restriction. You decide who sits at your table.', Icon: Lock },
-    { glyph: '♦', title: 'Magic-link auth', body: 'No passwords to leak or rotate. Tokens are SHA-256 hashed in the DB, single-use, expire in 15 minutes.', Icon: Sparkles },
-    { glyph: '♣', title: 'GDPR-ready', body: 'Consent capture, one-click data export, admin-driven erasure with sentinel-UUID anonymisation. Retention windows built in.', Icon: Shield },
-    { glyph: '★', title: 'Multi-game platform', body: 'Meme captioning is the first handler; trivia, drawing duels, pairs, quickfire slot in as plugins. No schema churn.', Icon: Gamepad2 },
-    { glyph: '⚙', title: 'Read every line', body: 'GPLv3. Go backend, SvelteKit frontend. Fork it, rebrand it, rewire it — just don’t lock it back up.', Icon: Code2 },
-  ] as const;
+  const advantages = $derived([
+    { glyph: '♠', title: m.marketing_adv1_title(), body: m.marketing_adv1_body(), Icon: Server },
+    { glyph: '♥', title: m.marketing_adv2_title(), body: m.marketing_adv2_body(), Icon: Lock },
+    { glyph: '♦', title: m.marketing_adv3_title(), body: m.marketing_adv3_body(), Icon: Sparkles },
+    { glyph: '♣', title: m.marketing_adv4_title(), body: m.marketing_adv4_body(), Icon: Shield },
+    { glyph: '★', title: m.marketing_adv5_title(), body: m.marketing_adv5_body(), Icon: Gamepad2 },
+    { glyph: '⚙', title: m.marketing_adv6_title(), body: m.marketing_adv6_body(), Icon: Code2 },
+  ]);
 
   function onFanMove(e: MouseEvent) {
     if (!fan) return;
@@ -161,17 +120,14 @@
 </script>
 
 <svelte:head>
-  <title>FabDoYouMeme — Deal yourself in.</title>
-  <meta
-    name="description"
-    content="A party meme game for you and your people. Self-hosted, invite-only, GDPR-first. Host a room, share the code, caption, vote, laugh."
-  />
+  <title>{m.marketing_page_title()}</title>
+  <meta name="description" content={m.marketing_meta_description()} />
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="FabDoYouMeme: a private, self-hosted party meme game" />
-  <meta property="og:description" content="A party meme game for you and your people. Self-hosted, invite-only, GDPR-first." />
+  <meta property="og:title" content={m.marketing_og_title()} />
+  <meta property="og:description" content={m.marketing_og_description()} />
   <meta name="twitter:card" content="summary" />
-  <meta name="twitter:title" content="FabDoYouMeme: a private, self-hosted party meme game" />
-  <meta name="twitter:description" content="A party meme game for you and your people. Self-hosted, invite-only, GDPR-first." />
+  <meta name="twitter:title" content={m.marketing_og_title()} />
+  <meta name="twitter:description" content={m.marketing_og_description()} />
 </svelte:head>
 
 <!-- ─── HERO ─────────────────────────────────────────────────── -->
@@ -179,14 +135,14 @@
   <div class="hero-text" use:reveal>
     <span class="hero-mark">
       <span class="hero-mark-suit">♠</span>
-      A party game you host yourself.
+      {m.marketing_hero_mark()}
     </span>
     <h1 class="hero-title mt-12">
-      Deal yourself <em>in.</em>
-      <span class="line2">Then deal your friends a punchline.</span>
+      {m.marketing_hero_title_line1()}<em>{m.marketing_hero_title_line1_em()}</em>
+      <span class="line2">{m.marketing_hero_title_line2()}</span>
     </h1>
     <p class="hero-sub max-w-[520px] mt-12">
-      FabDoYouMeme is a self-hosted, invite-only party meme game. Spin up a room, share a 4-letter code, caption the deck, vote on the funniest. No accounts for players. No data leaves your lab.
+      {m.marketing_hero_sub()}
     </p>
 
     <div class="mt-10 flex flex-wrap gap-3.5">
@@ -198,7 +154,7 @@
           class="btn btn-lg btn-dark"
         >
           <Home size={18} strokeWidth={2.5} />
-          Go to dashboard
+          {m.marketing_hero_cta_dashboard()}
         </a>
       {:else}
         <a
@@ -208,7 +164,7 @@
           class="btn btn-lg btn-dark"
         >
           <span aria-hidden="true" class="text-lg leading-none">♠</span>
-          Deal me in
+          {m.marketing_hero_cta_deal_in()}
         </a>
       {/if}
       <a
@@ -217,14 +173,14 @@
         use:hoverEffect={'swap'}
         class="btn btn-lg btn-ghost"
       >
-        See a round →
+        {m.marketing_hero_cta_see_round()}
       </a>
     </div>
 
     <div class="mt-10 flex flex-wrap gap-4 text-[13px] font-bold">
-      <span class="chip"><span class="glyph">01</span> Magic-link auth</span>
-      <span class="chip"><span class="glyph">02</span> GDPR-first</span>
-      <span class="chip"><span class="glyph">03</span> GPLv3, no ads</span>
+      <span class="chip"><span class="glyph">01</span> {m.marketing_hero_chip_auth()}</span>
+      <span class="chip"><span class="glyph">02</span> {m.marketing_hero_chip_gdpr()}</span>
+      <span class="chip"><span class="glyph">03</span> {m.marketing_hero_chip_license()}</span>
     </div>
   </div>
 
@@ -238,8 +194,8 @@
       role="presentation"
     >
       {#each heroCards as c, i (i)}
-        <article class="card fan-card" class:winner={c.winner} data-pos={i + 1}>
-          <div class="card-stripe">[ MEME IMAGE ]</div>
+        <article class="card fan-card" class:winner={c.winner} data-pos={i + 1} data-winner-label={m.marketing_hero_winner_badge()}>
+          <div class="card-stripe">{m.marketing_hero_stripe_meme()}</div>
           <div class="card-caption">{c.caption}</div>
           <div class="card-foot">
             <span>{c.who}</span>
@@ -259,15 +215,15 @@
 <!-- ─── LIVE ROUND ────────────────────────────────────────────── -->
 <section id="round" class="mx-auto w-full max-w-[1180px] px-6 py-24">
   <div use:reveal class="text-center mb-14">
-    <span class="label"><span class="label-dot"></span> Round 3 of 5 · Voting phase</span>
-    <h2 class="section-h">A table, not a feed.</h2>
-    <p class="section-p">Every session plays like a real card table. A timer. A hand. Four captions. One winner. Then shuffle and deal again.</p>
+    <span class="label"><span class="label-dot"></span> {m.marketing_round_label()}</span>
+    <h2 class="section-h">{m.marketing_round_heading()}</h2>
+    <p class="section-p">{m.marketing_round_body()}</p>
   </div>
 
   <div class="table" use:reveal>
     <div class="table-top">
       <div class="timer"><span class="timer-dot"></span>00:24</div>
-      <div class="room-code" aria-label="Room code">
+      <div class="room-code" aria-label={m.marketing_round_code_aria()}>
         <span>L</span><span>A</span><span>B</span><span>7</span>
       </div>
       <div class="players">
@@ -281,7 +237,7 @@
     <div class="hand">
       {#each tableHand as h, i (i)}
         <article class="card hand-card" style="transform: rotate({h.tilt}deg);" use:physCard>
-          <div class="card-stripe">[ PROMPT IMAGE ]</div>
+          <div class="card-stripe">{m.marketing_round_stripe_prompt()}</div>
           <div class="card-caption">{h.caption}</div>
           <div class="card-foot">
             <span>{h.label}</span>
@@ -300,9 +256,9 @@
 <!-- ─── HOW IT WORKS ──────────────────────────────────────────── -->
 <section id="how" class="mx-auto w-full max-w-[1180px] px-6 py-24">
   <div use:reveal class="text-center mb-14">
-    <span class="label">How to play</span>
-    <h2 class="section-h">Shuffle. Deal. Laugh. Repeat.</h2>
-    <p class="section-p">Three steps, one code, zero friction. Your friends don’t sign up — they just show up.</p>
+    <span class="label">{m.marketing_how_label()}</span>
+    <h2 class="section-h">{m.marketing_how_heading()}</h2>
+    <p class="section-p">{m.marketing_how_body()}</p>
   </div>
   <div class="steps">
     {#each steps as s, i (i)}
@@ -319,14 +275,14 @@
 <!-- ─── PACKS ─────────────────────────────────────────────────── -->
 <section id="packs" class="mx-auto w-full max-w-[1180px] px-6 py-24">
   <div use:reveal class="text-center mb-14">
-    <span class="label">Decks shipped in v1</span>
-    <h2 class="section-h">Open a fresh pack.</h2>
-    <p class="section-p">Start with a system pack or forge your own in the Lab. Every maker can upload images, write prompts, and publish decks to their instance.</p>
+    <span class="label">{m.marketing_packs_label()}</span>
+    <h2 class="section-h">{m.marketing_packs_heading()}</h2>
+    <p class="section-p">{m.marketing_packs_body()}</p>
   </div>
   <div class="packs">
     {#each packs as p, i (i)}
       <article class="pack" use:reveal>
-        <div class="pack-art {p.artClass}">[ DECK ART · {p.art} ]</div>
+        <div class="pack-art {p.artClass}">{m.marketing_pack_art_prefix()}{p.art}{m.marketing_pack_art_suffix()}</div>
         <h3 class="pack-title">{p.title}</h3>
         <p class="pack-body">{p.body}</p>
         <div class="pack-meta">
@@ -341,9 +297,9 @@
 <!-- ─── WHY SELF-HOST ─────────────────────────────────────────── -->
 <section id="why" class="mx-auto w-full max-w-[1180px] px-6 py-24">
   <div use:reveal class="text-center mb-14">
-    <span class="label">The small print (but fun)</span>
-    <h2 class="section-h">Yours. Not theirs.</h2>
-    <p class="section-p">Most party platforms turn your laughter into somebody’s training data. This one doesn’t — it’s GPLv3, self-hosted, and boring where it counts.</p>
+    <span class="label">{m.marketing_why_label()}</span>
+    <h2 class="section-h">{m.marketing_why_heading()}</h2>
+    <p class="section-p">{m.marketing_why_body()}</p>
   </div>
   <div class="why">
     {#each advantages as a, i (i)}
@@ -361,15 +317,15 @@
 <!-- ─── FINAL CTA ─────────────────────────────────────────────── -->
 <section id="join" class="mx-auto w-full max-w-[1180px] px-6 pt-10 pb-20 scroll-mt-20">
   <div class="final-card" use:reveal>
-    <span class="label"><span class="label-dot"></span> Table’s open</span>
-    <h2 class="section-h mt-1">Ready to play?</h2>
-    <p class="section-p">Pick your lane. No wrong answer — and yes, the Lab Master always eats last.</p>
+    <span class="label"><span class="label-dot"></span> {m.marketing_final_label()}</span>
+    <h2 class="section-h mt-1">{m.marketing_final_heading()}</h2>
+    <p class="section-p">{m.marketing_final_body()}</p>
 
     <div class="final-lanes">
       <div class="lane">
-        <div class="label">♠ Got a code?</div>
-        <h3 class="lane-title">Join the room</h3>
-        <div class="code-input" role="group" aria-label="4-letter room code">
+        <div class="label">{m.marketing_final_lane1_label()}</div>
+        <h3 class="lane-title">{m.marketing_final_lane1_title()}</h3>
+        <div class="code-input" role="group" aria-label={m.marketing_final_lane1_code_aria()}>
           {#each codeChars as _ch, i (i)}
             <input
               bind:this={codeRefs[i]}
@@ -381,7 +337,7 @@
               autocapitalize="characters"
               autocomplete="off"
               maxlength={i === 0 ? 4 : 1}
-              aria-label={`Letter ${i + 1}`}
+              aria-label={m.marketing_final_lane1_letter_aria({ n: i + 1 })}
             />
           {/each}
         </div>
@@ -394,21 +350,21 @@
           class="btn disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <Play size={16} strokeWidth={2.5} />
-          Join the table
+          {m.marketing_final_lane1_cta()}
         </button>
       </div>
 
       <div class="lane-divider" aria-hidden="true">
         <span class="lane-bar"></span>
-        <span class="lane-or">OR</span>
+        <span class="lane-or">{m.marketing_final_or()}</span>
         <span class="lane-bar"></span>
       </div>
 
       <div class="lane">
-        <div class="label">★ Spinning one up?</div>
-        <h3 class="lane-title">Host your own lab</h3>
+        <div class="label">{m.marketing_final_lane2_label()}</div>
+        <h3 class="lane-title">{m.marketing_final_lane2_title()}</h3>
         <p class="lane-body">
-          {data.user ? `Welcome back, ${data.user.username}. Jump straight in.` : 'One account, unlimited rooms. Packs, players, rounds — all yours.'}
+          {data.user ? m.marketing_final_lane2_body_user({ name: data.user.username }) : m.marketing_final_lane2_body_guest()}
         </p>
         {#if data.user}
           <a
@@ -418,7 +374,7 @@
             class="btn btn-dark"
           >
             <Home size={16} strokeWidth={2.5} />
-            Go to dashboard
+            {m.marketing_final_lane2_cta_dashboard()}
           </a>
         {:else}
           <a
@@ -428,14 +384,14 @@
             class="btn btn-dark"
           >
             <Sparkles size={16} strokeWidth={2.5} />
-            Sign in with magic link
+            {m.marketing_final_lane2_cta_signin()}
           </a>
         {/if}
       </div>
     </div>
 
     <p class="text-[12px] font-semibold text-brand-text-muted">
-      Hosting needs an account. Joining with a code does not.
+      {m.marketing_final_footer()}
     </p>
   </div>
 </section>
@@ -629,7 +585,7 @@
 
   .winner { position: relative; }
   .winner::after {
-    content: '★ WINNER';
+    content: attr(data-winner-label);
     position: absolute; top: -14px; right: -14px;
     background: var(--brand-text); color: var(--brand-white);
     font-size: 10px; letter-spacing: 0.18em; font-weight: 700;

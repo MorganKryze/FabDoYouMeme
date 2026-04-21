@@ -115,6 +115,7 @@ func newHubEnvWith(t *testing.T, opts hubEnvOpts) *hubEnv {
 		Role:      "player",
 		IsActive:  true,
 		ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("newHubEnvWith: create host: %v", err)
@@ -128,6 +129,7 @@ func newHubEnvWith(t *testing.T, opts hubEnvOpts) *hubEnv {
 	pack, err := q.CreatePack(ctx, db.CreatePackParams{
 		Name:       slug + "_pk",
 		Visibility: "private",
+		Language:   "en",
 	})
 	if err != nil {
 		t.Fatalf("newHubEnvWith: create pack: %v", err)

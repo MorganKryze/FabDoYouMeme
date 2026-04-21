@@ -1,8 +1,8 @@
 -- backend/db/queries/invites.sql
 
 -- name: CreateInvite :one
-INSERT INTO invites (token, created_by, label, restricted_email, max_uses, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO invites (token, created_by, label, restricted_email, max_uses, expires_at, locale)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: GetInviteByToken :one

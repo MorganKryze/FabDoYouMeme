@@ -19,6 +19,7 @@ type SessionUser struct {
 	Username  string
 	Email     string
 	Role      string
+	Locale    string
 	CreatedAt time.Time
 }
 

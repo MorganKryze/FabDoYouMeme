@@ -2,6 +2,7 @@
 <script lang="ts">
   import '../../app.css';
   import Wordmark from '$lib/components/Wordmark.svelte';
+  import * as m from '$lib/paraglide/messages';
   let { children } = $props();
 </script>
 
@@ -25,7 +26,7 @@
         href="/privacy"
         class="underline hover:text-brand-text transition-colors rounded-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
       >
-        Privacy Policy
+        {m.common_privacy_policy()}
       </a>
     </footer>
   </div>

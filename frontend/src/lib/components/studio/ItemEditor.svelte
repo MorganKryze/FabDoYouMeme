@@ -12,6 +12,7 @@
   import ImageEditor from './ImageEditor.svelte';
   import TextEditor from './TextEditor.svelte';
   import VersionHistory from './VersionHistory.svelte';
+  import * as m from '$lib/paraglide/messages';
 
   const item = $derived(studio.items.find((i) => i.id === studio.selectedItemId) ?? null);
   const activeVersion = $derived(
@@ -77,11 +78,11 @@
       studio.items = studio.items.map((i) => i.id === enriched.id ? enriched : i);
       const versions = await listVersions(studio.selectedPackId, studio.selectedItemId);
       studio.versions = versions;
-      toast.show('New version saved.', 'success');
+      toast.show(m.studio_toast_version_saved(), 'success');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown error';
       console.error('[studio] save version failed:', err);
-      toast.show(`Failed to save version: ${message}`, 'error');
+      toast.show(m.studio_toast_version_save_failed({ reason: message }), 'error');
     }
   }
 
@@ -110,11 +111,11 @@
       studio.items = studio.items.map((i) => i.id === enriched.id ? enriched : i);
       const versions = await listVersions(studio.selectedPackId, studio.selectedItemId);
       studio.versions = versions;
-      toast.show('New version saved.', 'success');
+      toast.show(m.studio_toast_version_saved(), 'success');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'unknown error';
       console.error('[studio] save text version failed:', err);
-      toast.show(`Failed to save version: ${message}`, 'error');
+      toast.show(m.studio_toast_version_save_failed({ reason: message }), 'error');
     }
   }
 </script>
@@ -123,7 +124,7 @@
   {#if item}
     <div class="px-4 py-3 border-b border-brand-border shrink-0">
       <p class="text-sm font-semibold truncate">{item.name}</p>
-      <p class="text-xs text-brand-text-muted">{isText ? 'text' : 'image'} · {studio.versions.length} version(s)</p>
+      <p class="text-xs text-brand-text-muted">{isText ? m.studio_editor_version_count_text({ count: studio.versions.length }) : m.studio_editor_version_count_image({ count: studio.versions.length })}</p>
     </div>
 
     <div class="flex-1 overflow-y-auto p-4">

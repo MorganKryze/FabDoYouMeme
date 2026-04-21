@@ -8,6 +8,7 @@
   import { Plus, Trash2, XCircle, Edit2, ImageIcon, Type } from '$lib/icons';
   import type { Pack } from '$lib/api/types';
   import type { PackKind } from '$lib/state/studio.svelte';
+  import * as m from '$lib/paraglide/messages';
 
   let showNewPackForm = $state(false);
   let newPackName = $state('');
@@ -63,7 +64,7 @@
       await updatePack(id, { name: next });
     } catch {
       studio.packs = studio.packs.map((p) => p.id === id ? { ...p, name: original.name } : p);
-      toast.show('Failed to rename pack.', 'error');
+      toast.show(m.studio_toast_pack_rename_failed(), 'error');
     }
   }
 
@@ -100,7 +101,7 @@
       newPackDesc = '';
       newPackKind = 'image';
     } catch {
-      toast.show('Failed to create pack.', 'error');
+      toast.show(m.studio_toast_pack_create_failed_alt(), 'error');
     } finally {
       creating = false;
     }
@@ -111,7 +112,7 @@
       await updatePack(pack.id, { status: 'banned' });
       studio.packs = studio.packs.map((p) => p.id === pack.id ? { ...p, status: 'banned' } : p);
     } catch {
-      toast.show('Failed to ban pack.', 'error');
+      toast.show(m.studio_toast_pack_ban_failed(), 'error');
     }
   }
 
@@ -120,13 +121,13 @@
       await updatePack(pack.id, { status: 'active' });
       studio.packs = studio.packs.map((p) => p.id === pack.id ? { ...p, status: 'active' } : p);
     } catch {
-      toast.show('Failed to clear flag.', 'error');
+      toast.show(m.studio_toast_pack_clear_failed(), 'error');
     }
   }
 
   async function handleDelete(pack: Pack, e: MouseEvent) {
     e.stopPropagation();
-    if (!confirm(`Delete "${pack.name}"? This cannot be undone.`)) return;
+    if (!confirm(m.studio_confirm_delete_pack({ name: pack.name }))) return;
     try {
       await deletePack(pack.id);
       studio.packs = studio.packs.filter((p) => p.id !== pack.id);
@@ -135,9 +136,9 @@
         studio.selectedPackId = null;
         studio.items = [];
       }
-      toast.show('Pack deleted.', 'success');
+      toast.show(m.studio_toast_pack_deleted(), 'success');
     } catch {
-      toast.show('Failed to delete pack.', 'error');
+      toast.show(m.studio_toast_pack_delete_failed(), 'error');
     }
   }
 </script>
@@ -163,7 +164,7 @@
                 onblur={() => void commitRename()}
                 type="text"
                 class="flex-1 min-w-0 mx-1 my-1 h-7 px-2 rounded border border-brand-border-heavy bg-brand-white text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                aria-label="Rename pack"
+                aria-label={m.studio_nav_rename_aria()}
               />
             {:else}
               <button
@@ -177,19 +178,19 @@
                   <span class="truncate {pack.status === 'banned' ? 'line-through text-brand-text-muted' : ''}">{pack.name}</span>
                   {#if pack.is_system}
                     <span class="shrink-0 text-[9px] font-bold uppercase tracking-wider text-brand-text-muted border border-brand-border px-1 py-[1px] rounded"
-                          title="This pack is bundled with the server and is read-only">
-                      System
+                          title={m.studio_nav_badge_system_title()}>
+                      {m.studio_nav_badge_system()}
                     </span>
                   {/if}
                   {#if pack.status === 'banned'}
                     <span class="shrink-0 text-[9px] font-bold uppercase tracking-wider text-red-600 border border-red-600 px-1 py-[1px] rounded"
-                          title="This pack has been banned by a moderator and cannot be used in games">
-                      Banned
+                          title={m.studio_nav_badge_banned_title()}>
+                      {m.studio_nav_badge_banned()}
                     </span>
                   {:else if pack.status === 'flagged'}
                     <span class="shrink-0 text-[9px] font-bold uppercase tracking-wider text-yellow-700 border border-yellow-600 px-1 py-[1px] rounded"
-                          title="This pack has been reported and is awaiting moderator review">
-                      Flagged
+                          title={m.studio_nav_badge_flagged_title()}>
+                      {m.studio_nav_badge_flagged()}
                     </span>
                   {/if}
                 </span>
@@ -199,8 +200,8 @@
                   type="button"
                   onclick={(e) => startRename(pack, e)}
                   class="opacity-0 group-hover:opacity-100 text-brand-text-muted hover:text-brand-text transition-all p-1 rounded-full"
-                  aria-label="Rename pack"
-                  title="Rename pack (or double-click)"
+                  aria-label={m.studio_nav_rename_aria()}
+                  title={m.studio_nav_rename_title()}
                 >
                   <Edit2 size={12} strokeWidth={2.5} />
                 </button>
@@ -208,8 +209,8 @@
                   type="button"
                   onclick={(e) => handleDelete(pack, e)}
                   class="opacity-0 group-hover:opacity-100 text-brand-text-muted hover:text-red-600 transition-all p-1 rounded-full"
-                  aria-label="Delete pack"
-                  title="Delete pack"
+                  aria-label={m.studio_nav_delete_aria()}
+                  title={m.studio_nav_delete_title()}
                 >
                   <Trash2 size={12} strokeWidth={2.5} />
                 </button>
@@ -221,24 +222,24 @@
     {/if}
   {/snippet}
 
-  {@render packGroup('Official', officialPacks, false)}
-  {@render packGroup('Public', publicPacks, false)}
-  {@render packGroup('My Packs', myPacks, true)}
+  {@render packGroup(m.studio_nav_group_official(), officialPacks, false)}
+  {@render packGroup(m.studio_nav_group_public(), publicPacks, false)}
+  {@render packGroup(m.studio_nav_group_mine(), myPacks, true)}
 
   <!-- Admin moderation section -->
   {#if user.role === 'admin' && flaggedPacks.length > 0}
     <div class="mt-2 border-t border-brand-border pt-2">
       <p class="text-xs font-semibold uppercase text-brand-text-muted tracking-wider px-2 py-1">
-        Moderation ({flaggedPacks.length})
+        {m.studio_nav_moderation_heading({ count: flaggedPacks.length })}
       </p>
       {#each flaggedPacks as pack}
         <div class="px-2 py-1.5 rounded-md text-sm">
           <span class="block truncate text-yellow-700">{pack.name}</span>
           <div class="flex gap-1 mt-0.5">
             <button type="button" onclick={() => banPack(pack)}
-              class="text-xs text-red-600 underline hover:text-red-800">Ban</button>
+              class="text-xs text-red-600 underline hover:text-red-800">{m.studio_nav_moderation_ban()}</button>
             <button type="button" onclick={() => clearFlag(pack)}
-              class="text-xs text-brand-text-muted underline hover:text-brand-text">Clear</button>
+              class="text-xs text-brand-text-muted underline hover:text-brand-text">{m.studio_nav_moderation_clear()}</button>
           </div>
         </div>
       {/each}
@@ -253,16 +254,16 @@
           bind:value={newPackName}
           bind:this={newPackNameInput}
           type="text"
-          placeholder="Pack name"
+          placeholder={m.studio_nav_new_pack_placeholder_name()}
           class="h-8 rounded border border-brand-border-heavy bg-brand-white px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
         />
         <input
           bind:value={newPackDesc}
           type="text"
-          placeholder="Description (optional)"
+          placeholder={m.studio_nav_new_pack_placeholder_desc()}
           class="h-8 rounded border border-brand-border-heavy bg-brand-white px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
         />
-        <fieldset class="flex gap-1" aria-label="Pack content type">
+        <fieldset class="flex gap-1" aria-label={m.studio_nav_new_pack_kind_aria()}>
           <label
             class="flex-1 h-8 rounded border text-xs cursor-pointer inline-flex items-center justify-center gap-1
               {newPackKind === 'image'
@@ -271,7 +272,7 @@
           >
             <input type="radio" bind:group={newPackKind} value="image" class="sr-only" />
             <ImageIcon size={12} strokeWidth={2.5} />
-            Image
+            {m.studio_nav_new_pack_kind_image()}
           </label>
           <label
             class="flex-1 h-8 rounded border text-xs cursor-pointer inline-flex items-center justify-center gap-1
@@ -281,7 +282,7 @@
           >
             <input type="radio" bind:group={newPackKind} value="text" class="sr-only" />
             <Type size={12} strokeWidth={2.5} />
-            Text
+            {m.studio_nav_new_pack_kind_text()}
           </label>
         </fieldset>
         <div class="flex gap-1">
@@ -292,7 +293,7 @@
             use:pressPhysics={'dark'}
             class="flex-1 h-8 rounded bg-primary text-primary-foreground text-xs font-medium disabled:opacity-50 inline-flex items-center justify-center gap-1">
             <Plus size={12} strokeWidth={2.5} />
-            {creating ? 'Creating…' : 'Create'}
+            {creating ? m.studio_nav_new_pack_creating() : m.studio_nav_new_pack_create()}
           </button>
           <button
             type="button"
@@ -300,7 +301,7 @@
             use:pressPhysics={'ghost'}
             class="h-8 px-3 rounded border border-brand-border text-xs inline-flex items-center gap-1">
             <XCircle size={12} strokeWidth={2.5} />
-            Cancel
+            {m.studio_nav_new_pack_cancel()}
           </button>
         </div>
       </div>
@@ -311,7 +312,7 @@
         use:pressPhysics={'ghost'}
         class="w-full text-left px-2 py-1.5 rounded-md border border-brand-border text-sm text-brand-text-muted hover:text-brand-text hover:bg-muted inline-flex items-center gap-1.5">
         <Plus size={12} strokeWidth={2.5} />
-        New Pack
+        {m.studio_nav_new_pack_trigger()}
       </button>
     {/if}
   </div>

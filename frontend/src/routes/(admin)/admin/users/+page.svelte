@@ -7,6 +7,7 @@
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { Search, Shield, UserX, Gamepad2, Clock } from '$lib/icons';
   import type { ActionData, PageData } from './$types';
+  import * as m from '$lib/paraglide/messages';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -33,44 +34,44 @@
   // (logged out / never active), otherwise the largest unit that still
   // reads as a small number: "5m", "2h", "3d", "6mo", "2y".
   function formatRelative(iso: string | null): string {
-    if (!iso) return '—';
+    if (!iso) return m.admin_users_relative_none();
     const then = new Date(iso).getTime();
-    if (Number.isNaN(then)) return '—';
+    if (Number.isNaN(then)) return m.admin_users_relative_none();
     const diff = Math.max(0, Date.now() - then);
     const sec = Math.floor(diff / 1000);
-    if (sec < 60) return 'just now';
+    if (sec < 60) return m.admin_users_relative_just_now();
     const min = Math.floor(sec / 60);
-    if (min < 60) return `${min}m`;
+    if (min < 60) return m.admin_users_relative_minutes({ count: min });
     const hr = Math.floor(min / 60);
-    if (hr < 24) return `${hr}h`;
+    if (hr < 24) return m.admin_users_relative_hours({ count: hr });
     const day = Math.floor(hr / 24);
-    if (day < 30) return `${day}d`;
+    if (day < 30) return m.admin_users_relative_days({ count: day });
     const mo = Math.floor(day / 30);
-    if (mo < 12) return `${mo}mo`;
-    return `${Math.floor(mo / 12)}y`;
+    if (mo < 12) return m.admin_users_relative_months({ count: mo });
+    return m.admin_users_relative_years({ count: Math.floor(mo / 12) });
   }
 
   $effect(() => {
     if (form === lastForm) return;
     lastForm = form;
     if (form?.error) toast.show(form.error, 'error');
-    if (form?.success) toast.show('User updated.', 'success');
-    if (form?.deleted) toast.show('User deleted.', 'success');
+    if (form?.success) toast.show(m.admin_users_toast_updated(), 'success');
+    if (form?.deleted) toast.show(m.admin_users_toast_deleted(), 'success');
   });
 </script>
 
 <svelte:head>
-  <title>Users — Admin</title>
+  <title>{m.admin_users_page_title()}</title>
 </svelte:head>
 
 <div class="p-6 flex flex-col gap-4" use:reveal>
   <div class="flex items-center gap-4">
-    <h1 class="text-xl font-bold flex-1">Users</h1>
+    <h1 class="text-xl font-bold flex-1">{m.admin_users_heading()}</h1>
     <div class="relative">
       <Search size={14} strokeWidth={2.5} class="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-muted" />
       <input
         type="search"
-        placeholder="Search users…"
+        placeholder={m.admin_users_search_placeholder()}
         bind:value={searchTerm}
         oninput={onSearchInput}
         class="h-9 w-56 rounded-md border border-brand-border-heavy bg-brand-white pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
@@ -82,21 +83,21 @@
     <table class="w-full text-sm">
       <thead>
         <tr class="border-b border-brand-border bg-muted/40 text-xs font-medium text-brand-text-muted">
-          <th class="text-left px-4 py-3">Username</th>
-          <th class="text-left px-4 py-3">Email</th>
-          <th class="text-left px-4 py-3">Role</th>
-          <th class="text-left px-4 py-3">Active</th>
+          <th class="text-left px-4 py-3">{m.admin_users_col_username()}</th>
+          <th class="text-left px-4 py-3">{m.admin_users_col_email()}</th>
+          <th class="text-left px-4 py-3">{m.admin_users_col_role()}</th>
+          <th class="text-left px-4 py-3">{m.admin_users_col_active()}</th>
           <th class="text-left px-4 py-3">
             <span class="inline-flex items-center gap-1">
               <Gamepad2 size={12} strokeWidth={2.5} />
-              Games
+              {m.admin_users_col_games()}
             </span>
           </th>
-          <th class="text-left px-4 py-3">Joined</th>
+          <th class="text-left px-4 py-3">{m.admin_users_col_joined()}</th>
           <th class="text-left px-4 py-3">
             <span class="inline-flex items-center gap-1">
               <Clock size={12} strokeWidth={2.5} />
-              Last login
+              {m.admin_users_col_last_login()}
             </span>
           </th>
           <th class="px-4 py-3"></th>
@@ -121,8 +122,8 @@
                 {#if u.is_protected}
                   <span
                     class="inline-flex items-center text-brand-text-muted"
-                    title="Protected bootstrap admin — cannot be deleted or have its role changed"
-                    aria-label="Protected account"
+                    title={m.admin_users_protected_tooltip()}
+                    aria-label={m.admin_users_protected_aria()}
                   >
                     <Shield size={14} strokeWidth={2.5} />
                   </span>
@@ -152,11 +153,11 @@
                   value={u.role}
                   disabled={u.is_protected}
                   onchange={(e) => (e.target as HTMLSelectElement).closest('form')?.requestSubmit()}
-                  title={u.is_protected ? 'Protected bootstrap admin — role is locked' : undefined}
+                  title={u.is_protected ? m.admin_users_role_locked_tooltip() : undefined}
                   class="h-7 rounded border border-transparent hover:border-brand-border px-1 text-sm bg-transparent focus:outline-none focus:border-ring cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  <option value="player">player</option>
-                  <option value="admin">admin</option>
+                  <option value="player">{m.admin_users_role_player()}</option>
+                  <option value="admin">{m.admin_users_role_admin()}</option>
                 </select>
               </form>
             </td>
@@ -169,7 +170,7 @@
                   checked={u.is_active}
                   disabled={u.is_protected}
                   onchange={(e) => (e.target as HTMLInputElement).closest('form')?.requestSubmit()}
-                  title={u.is_protected ? 'Protected bootstrap admin — cannot be deactivated' : undefined}
+                  title={u.is_protected ? m.admin_users_deactivate_locked_tooltip() : undefined}
                   class="h-4 w-4 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                 />
               </form>
@@ -184,7 +185,7 @@
               class="px-4 py-3 text-brand-text-muted text-xs tabular-nums"
               title={u.last_login_at
                 ? new Date(u.last_login_at).toLocaleString()
-                : 'No live session — user is logged out'}
+                : m.admin_users_last_login_none()}
             >
               {formatRelative(u.last_login_at)}
             </td>
@@ -197,19 +198,19 @@
                   <form method="POST" action="?/deleteUser" use:enhance>
                     <input type="hidden" name="user_id" value={u.id} />
                     <button type="submit" class="text-xs text-red-600 underline hover:text-red-800">
-                      Confirm Delete
+                      {m.admin_users_confirm_delete()}
                     </button>
                   </form>
                   <button type="button" onclick={() => confirmDeleteId = null}
                     class="text-xs text-brand-text-muted underline">
-                    Cancel
+                    {m.admin_users_cancel()}
                   </button>
                 </div>
               {:else}
                 <button type="button" onclick={() => confirmDeleteId = u.id}
                   use:hoverEffect={'swap'}
                   class="text-brand-text-muted hover:text-red-600 transition-colors inline-flex items-center p-1 rounded-full"
-                  aria-label="Delete user">
+                  aria-label={m.admin_users_delete_aria()}>
                   <UserX size={16} strokeWidth={2.5} />
                 </button>
               {/if}
@@ -225,7 +226,7 @@
       href="?{data.q ? `q=${encodeURIComponent(data.q)}&` : ''}cursor={data.nextCursor}"
       class="self-center text-sm text-brand-text-muted underline hover:text-brand-text"
     >
-      Load more
+      {m.admin_users_load_more()}
     </a>
   {/if}
 </div>

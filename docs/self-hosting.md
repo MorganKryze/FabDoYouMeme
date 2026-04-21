@@ -198,6 +198,21 @@ See [`docs/reference/privacy-policy.md`](reference/privacy-policy.md) for the fu
 
 ---
 
+### Localization
+
+FabDoYouMeme ships with English and French UI. The deployment-wide default language is controlled by:
+
+| Variable                 | Required | Default | Description                                                                                                                            |
+| ------------------------ | -------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `PUBLIC_DEFAULT_LOCALE`  | no       | `en`    | Read by the frontend at request time. Controls which locale unauthenticated visitors see before they pick one. Legal values: `en`, `fr`. |
+| `DEFAULT_LOCALE`         | no       | `en`    | Read by the backend for flows that cannot infer a user's locale (seed-admin bootstrap, fallback email sends). Legal values: `en`, `fr`. |
+
+Both should be set to the same value. Authenticated users override per-account via the profile page (Phase 2, not yet shipped in Phase 0).
+
+Translations live in `frontend/messages/{en,fr}.json` and are compiled by [Paraglide JS](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) at build time. Adding a new locale requires: a new CHECK-constraint migration for `users.locale` / `game_packs.language` / `invites.locale`, a `messages/<code>.json`, a `backend/internal/email/templates/<code>/` directory with full template parity, and appending the code to `SUPPORTED_LOCALES` (frontend) + `supportedLocales` (backend).
+
+---
+
 ## Secrets rotation
 
 | Secret                                    | Impact when rotated                         | Procedure                                                           |

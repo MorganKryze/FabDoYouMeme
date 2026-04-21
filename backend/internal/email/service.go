@@ -6,8 +6,6 @@ import (
 	"context"
 	"embed"
 	"fmt"
-	ht "html/template"
-	tt "text/template"
 
 	gomail "github.com/wneessen/go-mail"
 
@@ -18,43 +16,72 @@ import (
 //go:embed templates
 var templateFS embed.FS
 
-// Service implements auth.EmailSender using go-mail + embedded templates.
+// supportedLocales is kept in sync with frontend/src/lib/i18n/locale.ts
+// and the CHECK constraints in migration 011. Adding a locale = add
+// templates/<code>/, add to this slice, add a CHECK migration, update
+// frontend.
+var supportedLocales = []string{"en", "fr"}
+
+// Service implements auth.EmailSender using go-mail + embedded templates
+// indexed by locale. The per-locale template tree is built once at
+// construction; missing templates cause NewService to fail so mis-shipped
+// locale bundles cannot silently fall back in production.
 type Service struct {
-	cfg      *config.Config
-	htmlTmpl *ht.Template
-	txtTmpl  *tt.Template
+	cfg  *config.Config
+	tree map[string]*localeTemplates
 }
 
-// NewService parses all embedded templates. Returns an error if any template has a syntax error.
+// NewService parses all embedded templates for every supported locale.
+// Returns an error if any locale is missing a template (parity check).
 func NewService(cfg *config.Config) (*Service, error) {
-	htmlTmpl, err := ht.ParseFS(templateFS, "templates/*.html")
+	tree, err := loadTemplateTree(templateFS, supportedLocales)
 	if err != nil {
-		return nil, fmt.Errorf("email: parse HTML templates: %w", err)
+		return nil, fmt.Errorf("email: %w", err)
 	}
-	txtTmpl, err := tt.ParseFS(templateFS, "templates/*.txt")
-	if err != nil {
-		return nil, fmt.Errorf("email: parse text templates: %w", err)
-	}
-	return &Service{cfg: cfg, htmlTmpl: htmlTmpl, txtTmpl: txtTmpl}, nil
+	return &Service{cfg: cfg, tree: tree}, nil
 }
 
 // Compile-time check that Service satisfies auth.EmailSender.
 var _ auth.EmailSender = (*Service)(nil)
 
-// RenderLogin renders the login email templates to strings (used in tests).
+// RenderLogin renders the EN login email templates to strings (used in tests).
+// Kept for backwards compatibility with existing test call sites.
 func (s *Service) RenderLogin(data auth.LoginEmailData) (html, text string, err error) {
-	return s.render("magic_link_login.html", "magic_link_login.txt", data)
+	return s.renderLocale("en", "magic_link_login", data)
 }
 
-func (s *Service) render(htmlFile, txtFile string, data any) (html, text string, err error) {
-	var hbuf, tbuf bytes.Buffer
-	if err = s.htmlTmpl.Lookup(htmlFile).Execute(&hbuf, data); err != nil {
-		return "", "", fmt.Errorf("render %s: %w", htmlFile, err)
+// renderLocale executes the named template (no extension) in the requested
+// locale. Unknown locale falls back to "en" — the parity check guarantees
+// every template exists in en.
+func (s *Service) renderLocale(locale, name string, data any) (html, text string, err error) {
+	lt, ok := s.tree[locale]
+	if !ok {
+		lt = s.tree["en"]
 	}
-	if err = s.txtTmpl.Lookup(txtFile).Execute(&tbuf, data); err != nil {
-		return "", "", fmt.Errorf("render %s: %w", txtFile, err)
+	var hbuf, tbuf bytes.Buffer
+	if err = lt.HTML.Lookup(name + ".html").Execute(&hbuf, data); err != nil {
+		return "", "", fmt.Errorf("render %s.html (%s): %w", name, locale, err)
+	}
+	if err = lt.Text.Lookup(name + ".txt").Execute(&tbuf, data); err != nil {
+		return "", "", fmt.Errorf("render %s.txt (%s): %w", name, locale, err)
 	}
 	return hbuf.String(), tbuf.String(), nil
+}
+
+// subject returns the localized subject line, falling back to EN if the
+// requested locale lacks the key.
+func (s *Service) subject(locale, name string) string {
+	if lt, ok := s.tree[locale]; ok {
+		if subj, ok := lt.Subjects[name]; ok {
+			return subj
+		}
+	}
+	if en, ok := s.tree["en"]; ok {
+		if subj, ok := en.Subjects[name]; ok {
+			return subj
+		}
+	}
+	return name
 }
 
 // buildClientOptions returns the go-mail options derived from the current
@@ -123,28 +150,28 @@ func (s *Service) Probe(ctx context.Context) error {
 }
 
 // SendMagicLinkLogin implements auth.EmailSender.
-func (s *Service) SendMagicLinkLogin(ctx context.Context, to string, data auth.LoginEmailData) error {
-	html, txt, err := s.render("magic_link_login.html", "magic_link_login.txt", data)
+func (s *Service) SendMagicLinkLogin(ctx context.Context, to, locale string, data auth.LoginEmailData) error {
+	html, txt, err := s.renderLocale(locale, "magic_link_login", data)
 	if err != nil {
 		return err
 	}
-	return s.send(ctx, to, "Your FabDoYouMeme login link", html, txt)
+	return s.send(ctx, to, s.subject(locale, "magic_link_login"), html, txt)
 }
 
 // SendMagicLinkEmailChange implements auth.EmailSender.
-func (s *Service) SendMagicLinkEmailChange(ctx context.Context, to string, data auth.EmailChangeData) error {
-	html, txt, err := s.render("magic_link_email_change.html", "magic_link_email_change.txt", data)
+func (s *Service) SendMagicLinkEmailChange(ctx context.Context, to, locale string, data auth.EmailChangeData) error {
+	html, txt, err := s.renderLocale(locale, "magic_link_email_change", data)
 	if err != nil {
 		return err
 	}
-	return s.send(ctx, to, "Confirm your new email address", html, txt)
+	return s.send(ctx, to, s.subject(locale, "magic_link_email_change"), html, txt)
 }
 
 // SendEmailChangedNotification implements auth.EmailSender.
-func (s *Service) SendEmailChangedNotification(ctx context.Context, to string, data auth.EmailChangedNotificationData) error {
-	html, txt, err := s.render("notification_email_changed.html", "notification_email_changed.txt", data)
+func (s *Service) SendEmailChangedNotification(ctx context.Context, to, locale string, data auth.EmailChangedNotificationData) error {
+	html, txt, err := s.renderLocale(locale, "notification_email_changed", data)
 	if err != nil {
 		return err
 	}
-	return s.send(ctx, to, "Your FabDoYouMeme email address was changed", html, txt)
+	return s.send(ctx, to, s.subject(locale, "notification_email_changed"), html, txt)
 }

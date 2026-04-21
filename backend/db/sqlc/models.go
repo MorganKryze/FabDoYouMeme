@@ -62,6 +62,7 @@ type GamePack struct {
 	CreatedAt   time.Time          `json:"created_at"`
 	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
 	IsSystem    bool               `json:"is_system"`
+	Language    string             `json:"language"`
 }
 
 type GameType struct {
@@ -94,6 +95,7 @@ type Invite struct {
 	UsesCount       int32              `json:"uses_count"`
 	ExpiresAt       pgtype.Timestamptz `json:"expires_at"`
 	CreatedAt       time.Time          `json:"created_at"`
+	Locale          string             `json:"locale"`
 }
 
 type MagicLinkToken struct {
@@ -175,6 +177,7 @@ type User struct {
 	ConsentAt    time.Time   `json:"consent_at"`
 	CreatedAt    time.Time   `json:"created_at"`
 	IsProtected  bool        `json:"is_protected"`
+	Locale       string      `json:"locale"`
 }
 
 type Vote struct {

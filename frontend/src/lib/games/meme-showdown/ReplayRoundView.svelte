@@ -3,6 +3,7 @@
   import type { ReplayRound, ReplayLeaderboardRow, Submission, LeaderboardEntry } from '$lib/api/types';
   import { mediaUrl } from '$lib/api/media';
   import RoundReveal from './RoundReveal.svelte';
+  import * as m from '$lib/paraglide/messages';
 
   let {
     round,
@@ -69,7 +70,7 @@
 
   {#if submissions.length === 0}
     <p class="text-center text-sm font-bold text-brand-text-muted py-8 m-0">
-      Everybody skipped this one.
+      {m.game_round_all_skipped()}
     </p>
   {:else}
     <RoundReveal submissions={submissions} leaderboard={lb} />

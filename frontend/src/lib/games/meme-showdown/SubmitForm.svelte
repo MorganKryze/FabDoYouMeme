@@ -10,6 +10,7 @@
   import { mediaSrc } from '$lib/api/media';
   import type { Round } from '$lib/api/types';
   import { handStore } from './handStore.svelte';
+  import * as m from '$lib/paraglide/messages';
 
   let { round }: { round: Round } = $props();
 
@@ -86,14 +87,14 @@
       class="inline-flex items-center gap-2 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 py-1.5 text-xs font-bold text-brand-text-mid w-fit mx-auto"
       style="box-shadow: 0 3px 0 rgba(0,0,0,0.08);"
     >
-      Submission window has closed.
+      {m.game_meme_showdown_submit_closed()}
     </div>
   {:else if room.roundPaused}
     <div
       class="inline-flex items-center gap-2 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 py-1.5 text-xs font-bold text-brand-text-muted w-fit mx-auto"
       style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
     >
-      Everyone dropped — timer paused
+      {m.game_paused_everyone_dropped()}
     </div>
   {/if}
 
@@ -114,13 +115,13 @@
           >
             <img
               src={mediaSrc(round.item.media_url, room.code)}
-              alt="Round meme"
+              alt={m.game_round_meme_alt()}
               class="block w-full h-auto max-h-[60vh] object-cover"
             />
           </div>
         {/if}
         <div class="flex justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-brand-text-muted px-1">
-          <span>Round {round.round_number}</span>
+          <span>{m.game_meme_showdown_round_number({ number: round.round_number })}</span>
           {#if room.gameType}
             <span class="truncate max-w-[60%]">{room.gameType.name}</span>
           {/if}
@@ -158,24 +159,24 @@
       >♠</span>
       <div class="relative flex items-center justify-between gap-2">
         <span class="text-[10px] font-bold uppercase tracking-[0.25em] opacity-70">
-          Round {round.round_number} · play a card
+          {m.game_meme_showdown_round_play({ number: round.round_number })}
         </span>
         <span
           class="inline-flex items-center gap-1.5 rounded-full border-[2px] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em]"
           style="border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.08);"
         >
           <span class="h-1.5 w-1.5 rounded-full" style="background: var(--brand-accent); animation: pulse-dot 1.2s ease-in-out infinite;"></span>
-          Live
+          {m.game_meme_showdown_live()}
         </span>
       </div>
       <p
         class="relative m-0 font-bold leading-tight tracking-tight"
         style="font-size: clamp(1.5rem, 2.4vw, 2rem);"
       >
-        {promptText ?? 'Pick the funniest caption for this meme.'}
+        {promptText ?? m.game_meme_showdown_prompt_fallback()}
       </p>
       <span class="relative text-[11px] font-bold uppercase tracking-[0.2em] opacity-70 mt-auto">
-        Plays are anonymous · voting comes next
+        {m.game_meme_showdown_plays_anonymous()}
       </span>
     </div>
   </div>
@@ -187,7 +188,7 @@
   >
     <div class="flex items-center justify-between gap-2">
       <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-text-mid">
-        Your hand ({cards.length})
+        {m.game_meme_showdown_hand_label({ count: cards.length })}
       </span>
       <span
         class="inline-flex items-center gap-1.5 rounded-full border-[2.5px] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.15em]"
@@ -197,7 +198,7 @@
           class="h-2 w-2 rounded-full"
           style="background: {submitted ? 'var(--brand-accent-2)' : 'var(--brand-accent)'};"
         ></span>
-        {submitted ? 'Submitted' : 'Choose one'}
+        {submitted ? m.game_meme_showdown_submitted_chip() : m.game_meme_showdown_choose_one()}
       </span>
     </div>
 
@@ -206,20 +207,20 @@
         class="w-full rounded-[14px] border-[2.5px] border-brand-border-heavy bg-brand-surface px-4 py-3 text-base font-bold text-brand-text text-left leading-snug"
         style="box-shadow: inset 0 2px 0 rgba(0,0,0,0.04);"
       >
-        Joker used — waiting for the others…
+        {m.game_meme_showdown_joker_used()}
       </div>
     {:else if submitted}
       <p class="text-xs font-bold text-brand-text-mid text-center m-0">
-        Waiting for the others…
+        {m.game_meme_showdown_submitted_waiting()}
       </p>
     {:else if cards.length === 0}
       <p class="text-xs font-bold text-brand-text-muted text-center m-0">
-        Dealing hand…
+        {m.game_meme_showdown_dealing()}
       </p>
     {:else}
       <div
         role="radiogroup"
-        aria-label="Your caption hand"
+        aria-label={m.game_meme_showdown_hand_aria()}
         class="hand-fan"
         style="--card-count: {cards.length};"
       >
@@ -249,7 +250,7 @@
 
       <div class="flex items-center justify-between gap-2 flex-wrap">
         <span class="font-mono text-xs font-bold text-brand-text-muted tabular-nums">
-          {selectedCardId ? 'Card selected' : 'Pick a card'}
+          {selectedCardId ? m.game_meme_showdown_card_selected() : m.game_meme_showdown_pick_card()}
         </span>
         <div class="flex items-center gap-2">
           {#if jokerEnabled}
@@ -264,11 +265,11 @@
             >
               <span class="joker-btn-pip" aria-hidden="true">♠</span>
               {#if jokerRemaining <= 0}
-                No jokers left
+                {m.game_meme_showdown_no_jokers_left()}
               {:else if jokerArmed}
-                Tap again · cancels in 3s
+                {m.game_meme_showdown_joker_armed()}
               {:else}
-                Use joker · {jokerRemaining} left
+                {m.game_meme_showdown_joker_use({ n: jokerRemaining })}
               {/if}
             </button>
           {/if}
@@ -282,7 +283,7 @@
             style="box-shadow: 0 4px 0 rgba(0,0,0,0.28);"
           >
             <Send size={16} strokeWidth={2.5} />
-            Play caption
+            {m.game_meme_showdown_play_caption()}
           </button>
         </div>
       </div>

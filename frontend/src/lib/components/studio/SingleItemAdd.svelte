@@ -10,6 +10,7 @@
   } from '$lib/api/studio';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { Upload, Save } from '$lib/icons';
+  import * as m from '$lib/paraglide/messages';
 
   const kind = $derived(studio.kindFor(studio.selectedPackId));
 
@@ -63,7 +64,7 @@
     }
     const err = validateImageFile(f);
     if (err) {
-      inlineError = `${f.name}: ${err}`;
+      inlineError = m.studio_add_inline_error_named({ name: f.name, reason: err });
       return;
     }
     file = f;
@@ -85,7 +86,7 @@
       file = null;
       imageName = '';
       previewUrl = null;
-      toast.show('Item added.', 'success');
+      toast.show(m.studio_toast_item_added(), 'success');
     } else {
       inlineError = result.error;
     }
@@ -109,7 +110,7 @@
       studio.selectItem(result.item.id);
       text = '';
       textName = '';
-      toast.show('Item added.', 'success');
+      toast.show(m.studio_toast_item_added(), 'success');
     } else {
       inlineError = result.error;
     }
@@ -123,9 +124,9 @@
   ondragover={(e) => e.preventDefault()}
   ondrop={onDrop}
   role="region"
-  aria-label="Add a single item"
+  aria-label={m.studio_add_region_aria()}
 >
-  <h3 class="text-sm font-semibold">Add an item</h3>
+  <h3 class="text-sm font-semibold">{m.studio_add_heading()}</h3>
 
   {#if kind === 'image'}
     <label class="block cursor-pointer">
@@ -139,7 +140,7 @@
         <div
           class="w-full h-36 rounded-md border-2 border-dashed border-brand-border flex items-center justify-center text-xs text-brand-text-muted"
         >
-          Drop or pick an image
+          {m.studio_add_drop_or_pick()}
         </div>
       {/if}
       <input
@@ -151,7 +152,7 @@
     </label>
 
     <div class="flex flex-col gap-1">
-      <label for="single-add-name" class="text-xs font-medium">Name</label>
+      <label for="single-add-name" class="text-xs font-medium">{m.studio_add_label_name()}</label>
       <input
         id="single-add-name"
         type="text"
@@ -160,7 +161,7 @@
       />
     </div>
 
-    <p class="text-[11px] text-brand-text-muted">JPEG / PNG / WebP · max 10 MB</p>
+    <p class="text-[11px] text-brand-text-muted">{m.studio_add_image_hint()}</p>
 
     {#if inlineError}
       <p class="text-xs text-red-600">{inlineError}</p>
@@ -174,36 +175,36 @@
       class="h-9 px-4 rounded-lg border border-brand-border bg-primary text-primary-foreground text-sm font-medium inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
     >
       <Upload size={14} strokeWidth={2.5} />
-      {submitting ? 'Adding…' : 'Add to pack'}
+      {submitting ? m.studio_add_submitting() : m.studio_add_submit()}
     </button>
   {:else}
     <div class="flex flex-col gap-1">
-      <label for="single-add-text-name" class="text-xs font-medium">Name</label>
+      <label for="single-add-text-name" class="text-xs font-medium">{m.studio_add_label_name()}</label>
       <input
         id="single-add-text-name"
         type="text"
         bind:value={textName}
-        placeholder="Internal label"
+        placeholder={m.studio_add_placeholder_name()}
         class="h-9 rounded border border-brand-border-heavy bg-brand-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
       />
     </div>
 
     <div class="flex flex-col gap-1">
-      <label for="single-add-text" class="text-xs font-medium">Text</label>
+      <label for="single-add-text" class="text-xs font-medium">{m.studio_add_label_text()}</label>
       <div class="relative">
         <textarea
           id="single-add-text"
           bind:value={text}
           rows={5}
           maxlength={TEXT_MAX}
-          placeholder="Enter text content…"
+          placeholder={m.studio_add_placeholder_text()}
           class="w-full rounded border border-brand-border-heavy bg-brand-white p-3 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
         ></textarea>
         <span class="absolute bottom-2 right-3 text-[11px] text-brand-text-muted">{textRemaining}</span>
       </div>
     </div>
 
-    <p class="text-[11px] text-brand-text-muted">Max {TEXT_MAX} characters</p>
+    <p class="text-[11px] text-brand-text-muted">{m.studio_add_text_hint({ max: TEXT_MAX })}</p>
 
     {#if inlineError}
       <p class="text-xs text-red-600">{inlineError}</p>
@@ -217,7 +218,7 @@
       class="h-9 px-4 rounded-lg border border-brand-border bg-primary text-primary-foreground text-sm font-medium inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
     >
       <Save size={14} strokeWidth={2.5} />
-      {submitting ? 'Adding…' : 'Add to pack'}
+      {submitting ? m.studio_add_submitting() : m.studio_add_submit()}
     </button>
   {/if}
 </div>

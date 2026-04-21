@@ -3,6 +3,7 @@
   import { physCard } from '$lib/actions/physCard';
   import type { Medal } from '$lib/medals';
   import { formatMakerSince } from '$lib/medals';
+  import * as m from '$lib/paraglide/messages';
 
   interface Props {
     user: {
@@ -34,7 +35,7 @@
     <button
       type="button"
       onclick={(e) => { e.stopPropagation(); onClose?.(); }}
-      aria-label="Hide maker card"
+      aria-label={m.home_maker_hide_aria()}
       class="absolute top-2 left-2 inline-flex items-center justify-center h-7 w-7 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
       style="box-shadow: 0 2px 0 rgba(0,0,0,0.1);"
     >
@@ -46,7 +47,7 @@
   <div class="absolute top-3 right-3 inline-flex items-center gap-1.5">
     <Sparkles size={11} strokeWidth={2.75} />
     <span class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
-      Maker Card
+      {m.home_maker_title()}
     </span>
   </div>
 
@@ -61,7 +62,7 @@
     </div>
     <div class="flex flex-col min-w-0 flex-1 pt-2">
       <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
-        Signed in as
+        {m.home_maker_username_label()}
       </p>
       <p
         class="text-xl font-extrabold leading-none truncate mt-0.5 text-brand-accent"
@@ -76,14 +77,14 @@
         >
           {#if user.role === 'admin'}
             <Shield size={9} strokeWidth={3} />
-            Admin
+            {m.home_maker_label_admin()}
           {:else}
             <Sparkles size={9} strokeWidth={3} />
-            Maker
+            {m.home_maker_label_maker()}
           {/if}
         </span>
         <span class="font-mono text-xs font-bold text-brand-text-mid tracking-[0.1em] tabular-nums">
-          ID · {serial}
+          {m.home_maker_id({ serial })}
         </span>
       </div>
     </div>
@@ -95,7 +96,7 @@
   <!-- Medals -->
   <div class="flex flex-col gap-2">
     <p class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
-      Medals
+      {m.home_maker_medals()}
     </p>
     <div class="flex items-center gap-2">
       {#each medals as medal (medal.id)}
@@ -105,8 +106,8 @@
           class:bg-brand-white={!medal.earned}
           class:opacity-35={!medal.earned}
           style="box-shadow: 0 2px 0 rgba(0,0,0,0.1);"
-          data-tip={medal.earned ? medal.description : `Locked · ${medal.description}`}
-          aria-label="{medal.name}: {medal.earned ? 'earned' : 'locked'}"
+          data-tip={medal.earned ? medal.description : m.home_maker_medal_locked_tip({ description: medal.description })}
+          aria-label={medal.earned ? m.home_maker_medal_aria_earned({ name: medal.name }) : m.home_maker_medal_aria_locked({ name: medal.name })}
         >
           {medal.icon}
         </div>
@@ -116,7 +117,7 @@
 
   <!-- Maker since footer -->
   <p class="text-xs font-bold uppercase tracking-[0.15em] text-brand-text-mid">
-    Maker since · {makerSince}
+    {m.home_maker_since({ date: makerSince })}
   </p>
 </div>
 

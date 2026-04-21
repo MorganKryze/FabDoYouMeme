@@ -38,6 +38,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 		"username":   u.Username,
 		"email":      u.Email,
 		"role":       u.Role,
+		"locale":     u.Locale,
 		"created_at": u.CreatedAt.UTC().Format(time.RFC3339),
 	})
 }

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { pressPhysics } from '$lib/actions/pressPhysics';
+  import * as m from '$lib/paraglide/messages';
 
   interface Props {
     href?: string;
@@ -12,7 +13,7 @@
   {href}
   use:pressPhysics={'ghost'}
   class="wordmark inline-block text-lg font-bold tracking-tight no-underline rounded-full px-5 py-1.5 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
-  aria-label="FabDoYouMeme home"
+  aria-label={m.common_wordmark_home_aria()}
 >
   FabDoYouMeme
 </a>

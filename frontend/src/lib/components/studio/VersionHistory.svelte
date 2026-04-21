@@ -7,6 +7,7 @@
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { ChevronLeft, ChevronRight } from '$lib/icons';
   import type { ItemVersion } from '$lib/api/types';
+  import * as m from '$lib/paraglide/messages';
 
   let open = $state(false);
 
@@ -18,21 +19,21 @@
     try {
       const updated = await restoreVersion(studio.selectedPackId!, studio.selectedItemId!, version.id);
       studio.items = studio.items.map((i) => i.id === updated.id ? updated : i);
-      toast.show('Version restored.', 'success');
+      toast.show(m.studio_toast_version_restored(), 'success');
     } catch {
-      toast.show('Failed to restore version.', 'error');
+      toast.show(m.studio_toast_version_restore_failed(), 'error');
     }
   }
 
   async function moveToBin(version: ItemVersion) {
-    if (!confirm('Move this version to bin?')) return;
+    if (!confirm(m.studio_confirm_move_version_to_bin())) return;
     try {
       await softDeleteVersion(studio.selectedPackId!, studio.selectedItemId!, version.id);
       studio.versions = studio.versions.map((v) =>
         v.id === version.id ? { ...v, deleted_at: new Date().toISOString() } : v
       );
     } catch {
-      toast.show('Failed to move version to bin.', 'error');
+      toast.show(m.studio_toast_version_bin_failed(), 'error');
     }
   }
 </script>
@@ -43,7 +44,7 @@
     onclick={() => open = !open}
     class="w-full flex items-center justify-between px-4 py-2 text-xs font-semibold uppercase text-brand-text-muted tracking-wider hover:bg-muted/40 transition-colors"
   >
-    Version History ({studio.versions.length})
+    {m.studio_versions_heading({ count: studio.versions.length })}
     <span>{open ? '▲' : '▼'}</span>
   </button>
 
@@ -62,7 +63,7 @@
             <span class="font-medium">v{version.version_number}</span>
             <span class="text-brand-text-muted">{new Date(version.created_at).toLocaleDateString()}</span>
             {#if isActive}
-              <span class="ml-auto px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-medium">active</span>
+              <span class="ml-auto px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-medium">{m.studio_versions_active()}</span>
             {/if}
           </div>
 
@@ -71,20 +72,20 @@
               {#if !isActive}
                 <button type="button" onclick={() => restore(version)}
                   class="text-brand-text-muted underline hover:text-brand-text">
-                  Restore
+                  {m.studio_versions_restore()}
                 </button>
               {/if}
               <button type="button" onclick={() => moveToBin(version)}
                 class="text-brand-text-muted underline hover:text-red-600">
-                Move to Bin
+                {m.studio_versions_move_to_bin()}
               </button>
               <button type="button" onclick={() => studio.toggleVersionSelection(version.id)}
                 class="ml-auto {isSelected ? 'text-primary' : 'text-brand-text-muted'} underline hover:text-brand-text">
-                {isSelected ? 'Deselect' : 'Compare'}
+                {isSelected ? m.studio_versions_deselect() : m.studio_versions_compare()}
               </button>
             </div>
           {:else}
-            <p class="text-xs text-brand-text-muted">In bin — cannot be restored.</p>
+            <p class="text-xs text-brand-text-muted">{m.studio_versions_binned()}</p>
           {/if}
         </div>
       {/each}
@@ -95,13 +96,12 @@
         <button
           type="button"
           disabled
-          title="Side-by-side comparison coming soon"
+          title={m.studio_versions_compare_soon_title()}
           use:pressPhysics={'ghost'}
           class="w-full h-8 rounded-md bg-muted text-sm font-medium opacity-50 cursor-not-allowed inline-flex items-center justify-center gap-1"
         >
           <ChevronLeft size={12} strokeWidth={2.5} />
-          v{studio.versions.find((v) => v.id === studio.selectedVersionIds[0])?.version_number}
-          vs v{studio.versions.find((v) => v.id === studio.selectedVersionIds[1])?.version_number}
+          {m.studio_versions_compare_pair({ a: studio.versions.find((v) => v.id === studio.selectedVersionIds[0])?.version_number ?? '', b: studio.versions.find((v) => v.id === studio.selectedVersionIds[1])?.version_number ?? '' })}
           <ChevronRight size={12} strokeWidth={2.5} />
         </button>
       </div>

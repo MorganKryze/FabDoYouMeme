@@ -4,6 +4,7 @@
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { Home, Hash, Search, AlertTriangle, Lock } from '$lib/icons';
+  import * as m from '$lib/paraglide/messages';
 
   // Root-level error boundary. SvelteKit renders this whenever a load
   // function throws and no nearer +error.svelte exists along the route
@@ -17,30 +18,30 @@
   const presets: Record<number, Preset> = {
     404: {
       Icon: Search,
-      title: "Nothing here",
-      body: "We couldn't find what you're looking for. The link may be wrong, the room may have closed, or it has expired."
+      title: m.error_404_title(),
+      body: m.error_404_body()
     },
     401: {
       Icon: Lock,
-      title: 'Sign in first',
-      body: 'This page needs an account. Grab a magic link to continue.'
+      title: m.error_401_title(),
+      body: m.error_401_body()
     },
     403: {
       Icon: Lock,
-      title: 'Not allowed',
-      body: "You don't have access to this page. If you think that's a mistake, ping your admin."
+      title: m.error_403_title(),
+      body: m.error_403_body()
     },
     500: {
       Icon: AlertTriangle,
-      title: 'Something broke',
-      body: 'Our server hit a snag. Try again in a moment — if it keeps happening, let your host know.'
+      title: m.error_500_title(),
+      body: m.error_500_body()
     }
   };
 
   const fallback: Preset = {
     Icon: AlertTriangle,
-    title: 'Unexpected error',
-    body: 'Something went wrong on our end.'
+    title: m.error_fallback_title(),
+    body: m.error_fallback_body()
   };
 
   const status = $derived($page.status);
@@ -55,7 +56,7 @@
   const Icon = $derived(preset.Icon);
 
   const primaryHref = $derived(signedIn ? '/home' : '/');
-  const primaryLabel = $derived(signedIn ? 'Back to dashboard' : 'Back to home');
+  const primaryLabel = $derived(signedIn ? m.error_back_to_dashboard() : m.error_back_to_home());
 </script>
 
 <svelte:head>
@@ -76,7 +77,7 @@
 
     <div class="flex flex-col items-center gap-2">
       <div class="text-[0.7rem] font-bold uppercase tracking-[0.2em] text-brand-text-mid">
-        Error {status}
+        {m.error_status_prefix({ status })}
       </div>
       <h1 class="text-3xl font-bold">{preset.title}</h1>
       <p class="text-sm font-semibold text-brand-text-mid max-w-xs">
@@ -112,7 +113,7 @@
           style="box-shadow: 0 4px 0 rgba(0,0,0,0.08);"
         >
           <Hash size={16} strokeWidth={2.5} />
-          Join with a code
+          {m.error_join_with_code()}
         </a>
       {/if}
     </div>

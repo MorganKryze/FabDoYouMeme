@@ -2,6 +2,7 @@
 <script lang="ts">
   import { XCircle } from '$lib/icons';
   import { hoverEffect } from '$lib/actions/hoverEffect';
+  import * as m from '$lib/paraglide/messages';
 
   let { open = $bindable(false) }: { open: boolean } = $props();
 
@@ -16,7 +17,7 @@
   <!-- Scrim -->
   <button
     type="button"
-    aria-label="Close help"
+    aria-label={m.studio_help_close()}
     class="fixed inset-0 bg-black/30 z-40"
     onclick={() => (open = false)}
   ></button>
@@ -32,12 +33,12 @@
     <div
       class="flex items-center justify-between px-5 py-4 border-b border-brand-border"
     >
-      <h2 id="lab-help-title" class="text-lg font-bold">How packs work</h2>
+      <h2 id="lab-help-title" class="text-lg font-bold">{m.studio_help_title()}</h2>
       <button
         type="button"
         onclick={() => (open = false)}
         use:hoverEffect={'swap'}
-        aria-label="Close help"
+        aria-label={m.studio_help_close()}
         class="p-1 rounded-full"
       >
         <XCircle size={18} strokeWidth={2.5} />
@@ -45,40 +46,33 @@
     </div>
     <div class="px-5 py-4 flex flex-col gap-4 text-sm leading-relaxed">
       <section>
-        <h3 class="font-semibold">What a pack is</h3>
+        <h3 class="font-semibold">{m.studio_help_what_heading()}</h3>
         <p class="text-brand-text-muted">
-          A pack is a named collection of items — images or text prompts that a
-          game draws from.
+          {m.studio_help_what_body()}
         </p>
       </section>
       <section>
-        <h3 class="font-semibold">Items &amp; versions</h3>
+        <h3 class="font-semibold">{m.studio_help_versions_heading()}</h3>
         <p class="text-brand-text-muted">
-          Each item keeps its version history. Upload a new version anytime;
-          revert to a previous one if a change didn't land well.
+          {m.studio_help_versions_body()}
         </p>
       </section>
       <section>
-        <h3 class="font-semibold">Visibility</h3>
+        <h3 class="font-semibold">{m.studio_help_visibility_heading()}</h3>
         <p class="text-brand-text-muted">
-          Packs start <b>private</b> — only you can pick them. Publish to
-          <b>public</b> and any Maker can use your pack in their rooms. Publishing
-          notifies admins for moderation.
+          {m.studio_help_visibility_prefix()}<b>{m.studio_help_visibility_private()}</b>{m.studio_help_visibility_middle()}<b>{m.studio_help_visibility_public()}</b>{m.studio_help_visibility_suffix()}
         </p>
       </section>
       <section>
-        <h3 class="font-semibold">Pack → Game</h3>
+        <h3 class="font-semibold">{m.studio_help_pack_game_heading()}</h3>
         <p class="text-brand-text-muted">
-          When you host a room, you pick one of your packs. The pack must match
-          the game type's item kind (image packs go with image games, text with
-          text).
+          {m.studio_help_pack_game_body()}
         </p>
       </section>
       <section>
-        <h3 class="font-semibold">Moderation</h3>
+        <h3 class="font-semibold">{m.studio_help_moderation_heading()}</h3>
         <p class="text-brand-text-muted">
-          Admins can flag or ban public packs. Flagged packs stop appearing in
-          public picks until reviewed.
+          {m.studio_help_moderation_body()}
         </p>
       </section>
     </div>

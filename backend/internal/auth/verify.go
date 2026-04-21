@@ -80,7 +80,11 @@ func (h *Handler) Verify(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if err := h.email.SendEmailChangedNotification(r.Context(), oldEmail, EmailChangedNotificationData{
+		notifyLocale := updated.Locale
+		if notifyLocale == "" {
+			notifyLocale = h.cfg.DefaultLocale
+		}
+		if err := h.email.SendEmailChangedNotification(r.Context(), oldEmail, notifyLocale, EmailChangedNotificationData{
 			Username:       updated.Username,
 			NewEmailMasked: maskEmail(updated.Email),
 			FrontendURL:    h.cfg.FrontendURL,

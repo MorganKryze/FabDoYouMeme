@@ -5,6 +5,7 @@
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { LogIn, ArrowRight } from '$lib/icons';
+  import * as m from '$lib/paraglide/messages';
   import type { ActionData, PageData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -18,14 +19,14 @@
 </script>
 
 <svelte:head>
-  <title>Log In — FabDoYouMeme</title>
+  <title>{m.auth_verify_page_title()}</title>
 </svelte:head>
 
 <div class="flex flex-col gap-6 text-center" use:reveal>
   <div>
-    <h1 class="text-2xl font-bold">Welcome back</h1>
+    <h1 class="text-2xl font-bold">{m.auth_verify_title()}</h1>
     {#if !isExpired}
-      <p class="text-sm font-semibold text-brand-text-muted mt-1">Click below to log in to your account.</p>
+      <p class="text-sm font-semibold text-brand-text-muted mt-1">{m.auth_verify_subtitle()}</p>
     {/if}
   </div>
 
@@ -34,7 +35,7 @@
       class="rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white px-5 py-3 text-sm font-bold"
       style="box-shadow: 0 4px 0 rgba(0,0,0,0.06);"
     >
-      This link has expired or already been used.
+      {m.auth_verify_expired()}
     </div>
     <a
       href="/auth/magic-link"
@@ -43,7 +44,7 @@
       class="inline-flex items-center justify-center gap-2 h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold px-7"
     >
       <ArrowRight size={18} strokeWidth={2.5} />
-      Request a new link
+      {m.auth_verify_request_new()}
     </a>
   {:else}
     {#if data.token}
@@ -57,7 +58,7 @@
           class="w-full h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold cursor-pointer inline-flex items-center justify-center gap-2"
         >
           <LogIn size={18} strokeWidth={2.5} />
-          Log In
+          {m.auth_verify_submit()}
         </button>
       </form>
     {:else}
@@ -65,10 +66,10 @@
         class="rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white px-5 py-3 text-sm font-bold"
         style="box-shadow: 0 4px 0 rgba(0,0,0,0.06);"
       >
-        No token found in this link. Please check the email and try again.
+        {m.auth_verify_no_token()}
       </div>
       <a href="/auth/magic-link" class="underline text-sm font-bold hover:text-brand-text text-brand-text-muted">
-        Request a new link
+        {m.auth_verify_request_new()}
       </a>
     {/if}
   {/if}

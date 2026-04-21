@@ -29,6 +29,7 @@ func extraRoomUser(t *testing.T, q *db.Queries, suffix string, role string) db.U
 		Role:      role,
 		IsActive:  true,
 		ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("extraRoomUser(%s): %v", suffix, err)

@@ -38,6 +38,12 @@ type Config struct {
 	SeedAdminEmail string
 	LogLevel       string
 
+	// DefaultLocale is the server-side locale fallback for flows that cannot
+	// infer a user's locale (seed-admin bootstrap, email sends where the
+	// target user is unknown). Mirrors frontend's PUBLIC_DEFAULT_LOCALE.
+	// Legal values: "en" | "fr". Defaults to "en" when unset.
+	DefaultLocale string
+
 	// AppEnv gates env-specific features. Legal values: "dev", "preprod",
 	// "prod". Defaults to "prod" when unset — fail safe, because features
 	// that disable in prod should stay disabled if the operator forgets to
@@ -99,6 +105,7 @@ func Load() (*Config, error) {
 		SeedAdminEmail:   os.Getenv("SEED_ADMIN_EMAIL"),
 		LogLevel:         getEnv("LOG_LEVEL", "info"),
 		AppEnv:           getEnv("APP_ENV", "prod"),
+		DefaultLocale:    normalizeLocale(os.Getenv("DEFAULT_LOCALE")),
 	}
 
 	// Fail-loud on bad FRONTEND_URL (finding 4.D). url.Parse accepts almost
@@ -267,6 +274,17 @@ func getEnvDuration(key string, fallback time.Duration) (time.Duration, error) {
 		return fallback, nil
 	}
 	return time.ParseDuration(v)
+}
+
+// normalizeLocale maps DEFAULT_LOCALE to a known-good value. Any unknown or
+// empty input falls back to "en" — same fail-safe as the frontend helper.
+func normalizeLocale(v string) string {
+	switch v {
+	case "en", "fr":
+		return v
+	default:
+		return "en"
+	}
 }
 
 // NormalizeOrigin trims surrounding whitespace and a single trailing slash so

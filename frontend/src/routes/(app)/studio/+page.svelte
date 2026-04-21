@@ -8,6 +8,7 @@
   import SingleItemAdd from '$lib/components/studio/SingleItemAdd.svelte';
   import LabWelcome from '$lib/components/studio/LabWelcome.svelte';
   import type { PageData } from './$types';
+  import * as m from '$lib/paraglide/messages';
 
   let { data }: { data: PageData } = $props();
 
@@ -25,7 +26,7 @@
 </script>
 
 <svelte:head>
-  <title>Studio — FabDoYouMeme</title>
+  <title>{m.studio_page_title()}</title>
 </svelte:head>
 
 <div class="flex-1 flex overflow-hidden h-[calc(100vh-3.5rem)]" use:reveal>
@@ -42,7 +43,7 @@
       <LabWelcome />
     {:else}
       <div class="flex items-center justify-center h-full text-brand-text-muted text-sm">
-        Select a pack to view items.
+        {m.studio_placeholder_select_pack_to_view()}
       </div>
     {/if}
   </div>
@@ -54,14 +55,14 @@
     {:else if studio.selectedPackId}
       {#if isSelectedSystem}
         <div class="flex items-center justify-center h-full text-brand-text-muted text-sm p-4 text-center">
-          This pack is bundled with the server and is read-only. Select an item to preview it.
+          {m.studio_placeholder_system_pack()}
         </div>
       {:else}
         <SingleItemAdd />
       {/if}
     {:else}
       <div class="flex items-center justify-center h-full text-brand-text-muted text-sm p-4 text-center">
-        Select a pack to get started.
+        {m.studio_placeholder_select_pack_to_start()}
       </div>
     {/if}
   </div>

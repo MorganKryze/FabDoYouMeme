@@ -4,6 +4,7 @@
   import { pickForSlot } from '$lib/content/toneSelect';
   import { TONE_LABELS, DEFAULT_TONE, type TonePair, type ToneLevel } from '$lib/content/tonePools';
   import { Shuffle } from '$lib/icons';
+  import * as m from '$lib/paraglide/messages';
 
   let { username }: { username: string } = $props();
 
@@ -39,11 +40,11 @@
 
 <div class="card" aria-live="polite">
   <div class="header">
-    <span class="eyebrow">A taste — {TONE_LABELS[displayLevel]}</span>
+    <span class="eyebrow">{m.profile_tone_sample_eyebrow({ label: TONE_LABELS[displayLevel] })}</span>
     <button
       type="button"
       class="shuffle"
-      aria-label="Shuffle sample greeting"
+      aria-label={m.profile_tone_shuffle_aria()}
       onclick={shuffle}
       disabled={!mounted}
     >

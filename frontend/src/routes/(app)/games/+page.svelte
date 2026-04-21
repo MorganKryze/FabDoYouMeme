@@ -4,6 +4,7 @@
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { Play, Clock, ArrowLeft } from '$lib/icons';
   import type { PageData } from './$types';
+  import * as m from '$lib/paraglide/messages';
 
   let { data }: { data: PageData } = $props();
 
@@ -14,17 +15,17 @@
   function formatRelative(iso: string): string {
     const diff = Date.now() - new Date(iso).getTime();
     const minutes = Math.floor(diff / 60_000);
-    if (minutes < 1) return 'just now';
-    if (minutes < 60) return `${minutes}m ago`;
+    if (minutes < 1) return m.games_relative_just_now();
+    if (minutes < 60) return m.games_relative_minutes({ minutes });
     const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
+    if (hours < 24) return m.games_relative_hours({ hours });
     const days = Math.floor(hours / 24);
-    if (days < 7) return `${days}d ago`;
+    if (days < 7) return m.games_relative_days({ days });
     return new Date(iso).toLocaleDateString();
   }
 </script>
 
-<svelte:head><title>All games — FabDoYouMeme</title></svelte:head>
+<svelte:head><title>{m.games_page_title()}</title></svelte:head>
 
 <div class="flex-1 flex justify-center p-6 pt-4 pb-10">
   <div class="w-full max-w-3xl flex flex-col gap-6">
@@ -32,19 +33,19 @@
       href="/home"
       class="inline-flex items-center gap-2 text-xs font-bold text-brand-text-mid hover:text-brand-text self-start"
     >
-      <ArrowLeft size={14} strokeWidth={2.5} /> Home
+      <ArrowLeft size={14} strokeWidth={2.5} /> {m.games_back_home()}
     </a>
 
     <section use:reveal class="flex items-center gap-2">
       <Clock size={18} strokeWidth={2.5} />
-      <h1 class="text-2xl font-bold m-0">All games</h1>
+      <h1 class="text-2xl font-bold m-0">{m.games_heading()}</h1>
     </section>
 
     {#if data.rooms.length === 0}
       <div class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-8 text-center flex flex-col gap-3 items-center">
-        <p class="text-sm font-bold m-0">No games yet.</p>
+        <p class="text-sm font-bold m-0">{m.games_empty_title()}</p>
         <p class="text-xs font-semibold text-brand-text-mid max-w-xs m-0">
-          Your history lands here after the first round.
+          {m.games_empty_body()}
         </p>
         <a
           href="/host"
@@ -54,7 +55,7 @@
           style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
         >
           <Play size={14} strokeWidth={2.5} />
-          Host your first room
+          {m.games_empty_cta()}
         </a>
       </div>
     {:else}
@@ -74,11 +75,11 @@
                 <div class="flex flex-col min-w-0">
                   <span class="inline-flex items-center gap-2 font-bold truncate">
                     {#if room.rank === 1}
-                      <span class="medal gold" aria-label="First place">1</span>
+                      <span class="medal gold" aria-label={m.common_medal_first()}>1</span>
                     {:else if room.rank === 2}
-                      <span class="medal silver" aria-label="Second place">2</span>
+                      <span class="medal silver" aria-label={m.common_medal_second()}>2</span>
                     {:else if room.rank === 3}
-                      <span class="medal bronze" aria-label="Third place">3</span>
+                      <span class="medal bronze" aria-label={m.common_medal_third()}>3</span>
                     {/if}
                     <span class="truncate">{prettyGameSlug(room.game_type_slug)}</span>
                   </span>
@@ -89,13 +90,13 @@
               </div>
               <div class="flex items-center gap-4 shrink-0">
                 <div class="text-right hidden sm:block">
-                  <div class="text-xs font-bold uppercase tracking-[0.15em] text-brand-text-mid">Rank</div>
+                  <div class="text-xs font-bold uppercase tracking-[0.15em] text-brand-text-mid">{m.games_col_rank()}</div>
                   <div class="font-bold text-sm tabular-nums">
                     {room.rank}<span class="text-brand-text-mid">/{room.player_count}</span>
                   </div>
                 </div>
                 <div class="text-right">
-                  <div class="text-xs font-bold uppercase tracking-[0.15em] text-brand-text-mid">Score</div>
+                  <div class="text-xs font-bold uppercase tracking-[0.15em] text-brand-text-mid">{m.games_col_score()}</div>
                   <div class="font-bold text-sm tabular-nums">{room.score}</div>
                 </div>
               </div>
@@ -112,7 +113,7 @@
           class="self-center inline-flex items-center gap-2 px-6 h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text font-bold no-underline text-xs"
           style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
         >
-          Load more →
+          {m.games_load_more()}
         </a>
       {/if}
     {/if}

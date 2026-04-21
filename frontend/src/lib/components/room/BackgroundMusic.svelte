@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import { Volume2, VolumeX, XCircle } from '$lib/icons';
   import { pressPhysics } from '$lib/actions/pressPhysics';
+  import * as m from '$lib/paraglide/messages';
 
   const TRACK_AMBIENT = '/audio/monument_music-pure-159612.mp3';
   const TRACK_GAMEPLAY = '/audio/moodmode-for-fashion-luxury-223930.mp3';
@@ -125,7 +126,7 @@
             gestureCleanup = armGestureUnmute();
           })
           .catch((mutedErr) => {
-            error = `Audio: ${mutedErr?.message ?? err?.message ?? err}`;
+            error = m.room_music_error({ reason: mutedErr?.message ?? err?.message ?? err });
             console.warn('[bg-music] play() rejected', { err, mutedErr });
           });
       });
@@ -182,7 +183,7 @@
         audioEl.play()
           .then(() => fadeTo(() => volumeFor(level), FADE_MS))
           .catch((err) => {
-            error = `Audio: ${err?.message ?? err}`;
+            error = m.room_music_error({ reason: err?.message ?? err });
             console.warn('[bg-music] play() rejected after gesture', err);
           });
       } else {
@@ -227,7 +228,7 @@
     const el = e.currentTarget as HTMLAudioElement;
     const code = el.error?.code;
     const msg = el.error?.message || 'unknown';
-    error = `Audio failed (code ${code})`;
+    error = m.room_music_error_code({ code: code ?? 0 });
     console.error('[bg-music] <audio> error', { code, msg, src: currentSrc });
     playing = false;
   }
@@ -253,7 +254,7 @@
         type="button"
         onclick={() => (error = null)}
         class="shrink-0 opacity-50 hover:opacity-100 transition-opacity inline-flex items-center cursor-pointer"
-        aria-label="Dismiss"
+        aria-label={m.common_dismiss()}
       >
         <XCircle size={14} strokeWidth={2.5} />
       </button>
@@ -277,7 +278,7 @@
         class="bg-brand-white border-[2.5px] border-brand-border-heavy rounded-2xl p-2 flex flex-col-reverse"
         style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
         role="group"
-        aria-label="Music volume"
+        aria-label={m.room_music_volume_aria()}
       >
         {#each Array(LEVELS) as _, i (i)}
           {@const n = i + 1}
@@ -286,7 +287,7 @@
             type="button"
             onclick={() => setLevel(n)}
             class="w-8 h-6 flex items-end justify-center cursor-pointer"
-            aria-label="Volume level {n}"
+            aria-label={m.room_music_volume_level_aria({ level: n })}
             aria-pressed={level === n}
           >
             <span
@@ -303,8 +304,8 @@
       type="button"
       onclick={toggle}
       class="h-11 w-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text-mid hover:text-brand-accent inline-flex items-center justify-center cursor-pointer transition-colors"
-      title={playing ? 'Mute music' : 'Play music'}
-      aria-label={playing ? 'Mute background music' : 'Play background music'}
+      title={playing ? m.room_music_mute_title() : m.room_music_play_title()}
+      aria-label={playing ? m.room_music_mute_aria() : m.room_music_play_aria()}
       aria-pressed={playing}
     >
       {#if playing && !muted}

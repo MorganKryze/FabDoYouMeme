@@ -51,6 +51,7 @@ func (h *Handler) SeedAdmin(ctx context.Context) error {
 		IsActive:  true,
 		InvitedBy: pgtype.UUID{Valid: false},
 		ConsentAt: consentAt,
+		Locale:    h.cfg.DefaultLocale,
 	})
 	if err != nil {
 		return fmt.Errorf("seed admin: create user: %w", err)

@@ -41,6 +41,7 @@ func MakeUser(t *testing.T, role string) db.User {
 		IsActive:  true,
 		InvitedBy: pgtype.UUID{Valid: false},
 		ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("MakeUser: %v", err)
@@ -95,6 +96,7 @@ func MakeInvite(t *testing.T, createdBy db.User) db.Invite {
 	params := db.CreateInviteParams{
 		Token:   "INV_" + SeedName(t) + "_" + randSuffix(),
 		MaxUses: 10,
+		Locale:  "en",
 	}
 	if createdBy.ID != uuid.Nil {
 		params.CreatedBy = pgtype.UUID{Bytes: createdBy.ID, Valid: true}
@@ -119,6 +121,7 @@ func MakePack(t *testing.T, owner db.User, withItems int) db.GamePack {
 		OwnerID:    pgtype.UUID{Bytes: owner.ID, Valid: true},
 		IsOfficial: false,
 		Visibility: "public",
+		Language:   "en",
 	})
 	if err != nil {
 		t.Fatalf("MakePack: create: %v", err)

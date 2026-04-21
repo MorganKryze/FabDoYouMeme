@@ -20,6 +20,7 @@ import (
 type patchMeRequest struct {
 	Username *string `json:"username,omitempty"`
 	Email    *string `json:"email,omitempty"`
+	Locale   *string `json:"locale,omitempty"`
 }
 
 // PatchMe handles PATCH /api/users/me.
@@ -93,7 +94,27 @@ func (h *Handler) PatchMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeError(w, r, http.StatusBadRequest, "bad_request", "Provide username or email to update")
+	if req.Locale != nil {
+		if *req.Locale != "en" && *req.Locale != "fr" {
+			writeError(w, r, http.StatusBadRequest, "e_invalid_locale", "Locale must be en or fr")
+			return
+		}
+		updated, err := h.db.UpdateUserLocale(r.Context(), db.UpdateUserLocaleParams{
+			ID:     userID,
+			Locale: *req.Locale,
+		})
+		if err != nil {
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Update failed")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{
+			"id":     updated.ID.String(),
+			"locale": updated.Locale,
+		})
+		return
+	}
+
+	writeError(w, r, http.StatusBadRequest, "bad_request", "Provide username, email, or locale to update")
 }
 
 type historyRoom struct {

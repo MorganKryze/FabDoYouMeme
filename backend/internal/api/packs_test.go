@@ -44,6 +44,7 @@ func seedAdmin(t *testing.T, q *db.Queries) db.User {
 		Role:      "admin",
 		IsActive:  true,
 		ConsentAt: time.Now(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("seedAdmin: %v", err)
@@ -61,7 +62,7 @@ func TestCreatePack_Success(t *testing.T) {
 	h, q := newPackHandler(t)
 	admin := seedAdmin(t, q)
 
-	body := `{"name":"Test Pack","description":"desc","visibility":"private"}`
+	body := `{"name":"Test Pack","description":"desc","visibility":"private","language":"en"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/packs", bytes.NewBufferString(body))
 	req = withUser(req, admin.ID.String(), admin.Username, admin.Email, admin.Role)
 	rec := httptest.NewRecorder()
@@ -94,6 +95,7 @@ func TestListPacks_ReturnsOwnPacks(t *testing.T) {
 		Name:       "My Pack",
 		OwnerID:    pgtype.UUID{Bytes: admin.ID, Valid: true},
 		Visibility: "private",
+		Language:   "en",
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/packs", nil)
@@ -120,6 +122,7 @@ func TestDeletePack_Success(t *testing.T) {
 		Name:       testutil.SeedName(t),
 		OwnerID:    pgtype.UUID{Bytes: admin.ID, Valid: true},
 		Visibility: "private",
+		Language:   "en",
 	})
 	if err != nil {
 		t.Fatalf("create pack: %v", err)
@@ -146,6 +149,7 @@ func TestDeletePack_NotOwner(t *testing.T) {
 		Role:      "player",
 		IsActive:  true,
 		ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("create player: %v", err)
@@ -156,6 +160,7 @@ func TestDeletePack_NotOwner(t *testing.T) {
 		Name:       testutil.SeedName(t) + "_adm",
 		OwnerID:    pgtype.UUID{Bytes: admin.ID, Valid: true},
 		Visibility: "private",
+		Language:   "en",
 	})
 
 	applyCtx := newChiCtx("id", pack.ID.String())
@@ -177,6 +182,7 @@ func TestSetStatus_InvalidStatus(t *testing.T) {
 		Name:       testutil.SeedName(t) + "_st",
 		OwnerID:    pgtype.UUID{Bytes: admin.ID, Valid: true},
 		Visibility: "private",
+		Language:   "en",
 	})
 
 	body := `{"status":"invalid_value"}`
@@ -199,6 +205,7 @@ func TestSetStatus_Flagged(t *testing.T) {
 		Name:       testutil.SeedName(t) + "_fl",
 		OwnerID:    pgtype.UUID{Bytes: admin.ID, Valid: true},
 		Visibility: "private",
+		Language:   "en",
 	})
 
 	body := `{"status":"flagged"}`
@@ -296,6 +303,7 @@ func TestGetPack_PublicPack_NonOwner_Returns200(t *testing.T) {
 	player, err := q.CreateUser(context.Background(), db.CreateUserParams{
 		Username: playerSlug, Email: playerSlug + "@test.com",
 		Role: "player", IsActive: true, ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("create player: %v", err)
@@ -305,6 +313,7 @@ func TestGetPack_PublicPack_NonOwner_Returns200(t *testing.T) {
 		Name:       testutil.SeedName(t),
 		OwnerID:    pgtype.UUID{Bytes: owner.ID, Valid: true},
 		Visibility: "public",
+		Language:   "en",
 	})
 
 	applyCtx := newChiCtx("id", pack.ID.String())

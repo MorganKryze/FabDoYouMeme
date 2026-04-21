@@ -1,0 +1,26 @@
+<!-- backend/internal/email/templates/notification_email_changed.html -->
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <title>Email address changed — FabDoYouMeme</title>
+  </head>
+  <body
+    style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px"
+  >
+    <h2>[FR] Hi {{.Username}},</h2>
+    <p>
+      Your FabDoYouMeme account email was changed to
+      <strong>{{.NewEmailMasked}}</strong>.
+    </p>
+    <p>If you made this change, no action is needed.</p>
+    <p style="color:#dc2626">
+      If you did <strong>NOT</strong> make this change, contact your admin
+      immediately.
+    </p>
+    <hr style="border:none;border-top:1px solid #e4e4e7;margin:24px 0" />
+    <p style="color:#71717a;font-size:12px">
+      <a href="{{.FrontendURL}}" style="color:#71717a">FabDoYouMeme</a>
+    </p>
+  </body>
+</html>

@@ -130,3 +130,41 @@ The frontend uses nonce-based CSP configured in `src/hooks.server.ts`. A fresh n
 - `frame-ancestors 'none'`
 
 In production, `ws:` should be replaced with `wss:` only.
+
+---
+
+## Internationalization
+
+The catalog lives at `frontend/messages/{en,fr}.json`. [Paraglide JS](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) compiles every key into a typed function in `src/lib/paraglide/messages/`.
+
+Usage from a component:
+
+```ts
+import * as m from '$lib/paraglide/messages';
+
+<button>{m.common_save()}</button>
+<p>{m.home_welcome_named({ username })}</p>
+```
+
+Key naming: domain-prefixed flat snake_case. Reserved prefixes:
+
+| Prefix         | Scope                                                          |
+| -------------- | -------------------------------------------------------------- |
+| `common_*`     | Buttons shared across pages (save, cancel, delete, confirm)    |
+| `auth_*`       | Register, login, verify, consent                               |
+| `home_*`       | Landing/dashboard                                              |
+| `host_*`       | Create-room flow                                               |
+| `room_*`       | Lobby, waiting stage, kick/ban dialogs                         |
+| `game_*`       | Shared game UI (timer, submissions, votes, results)            |
+| `game_<slug>_*`| Per-game-type strings (e.g. `game_meme_showdown_prompt`)       |
+| `profile_*`    | User settings                                                  |
+| `admin_*`      | Admin area                                                     |
+| `errors_<code>`| User-facing error messages, one per `e_*` code                 |
+| `toast_*`      | Flash messages                                                 |
+| `nav_*`        | Top-bar/user-menu labels                                       |
+
+Adding a string: add the key + EN value to `messages/en.json`, add the same key to `messages/fr.json` with a `"[FR] …"` placeholder (Phase 1 replaces these), then use `m.the_key()` at the call site. CI (`npm run i18n:check`) enforces parity and rejects `[FR]` placeholders inside `en.json` (source must stay canonical).
+
+Locale resolution priority (in `hooks.server.ts`): authenticated `user.locale` → `locale` cookie → `Accept-Language` header → `PUBLIC_DEFAULT_LOCALE`.
+
+Adding a new locale: (1) migration extending every CHECK constraint in `users.locale`, `game_packs.language`, `invites.locale`; (2) add the code to `SUPPORTED_LOCALES` in `src/lib/i18n/locale.ts`; (3) add the code to `project.inlang/settings.json` `languageTags`; (4) add `messages/<code>.json`; (5) add `backend/internal/email/templates/<code>/` with full template parity (startup fails otherwise).

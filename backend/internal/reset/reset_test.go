@@ -46,6 +46,7 @@ func seedGameHistory(t *testing.T, ctx context.Context, q *db.Queries, slug stri
 		Role:      "player",
 		IsActive:  true,
 		ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
@@ -53,6 +54,7 @@ func seedGameHistory(t *testing.T, ctx context.Context, q *db.Queries, slug stri
 	pack, err := q.CreatePack(ctx, db.CreatePackParams{
 		Name:       slug + "_pack",
 		Visibility: "private",
+		Language:   "en",
 	})
 	if err != nil {
 		t.Fatalf("CreatePack: %v", err)
@@ -164,6 +166,7 @@ func TestWipeInvites_DeletesOnlyInvites(t *testing.T) {
 		Role:      "player",
 		IsActive:  true,
 		ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
@@ -172,6 +175,7 @@ func TestWipeInvites_DeletesOnlyInvites(t *testing.T) {
 		_, err := q.CreateInvite(ctx, db.CreateInviteParams{
 			Token:   "INV_" + uuid.New().String(),
 			MaxUses: 1,
+			Locale:    "en",
 		})
 		if err != nil {
 			t.Fatalf("CreateInvite %d: %v", i, err)
@@ -212,6 +216,7 @@ func TestWipeSessions_ExcludesActingAdmin(t *testing.T) {
 			Role:      "player",
 			IsActive:  true,
 			ConsentAt: time.Now().UTC(),
+			Locale:    "en",
 		})
 		if err != nil {
 			t.Fatalf("CreateUser %s: %v", suffix, err)
@@ -340,6 +345,7 @@ func TestFullReset_PreservesSentinelAndBootstrapAndActing(t *testing.T) {
 		Role:      "admin",
 		IsActive:  true,
 		ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("CreateUser bootstrap: %v", err)
@@ -354,6 +360,7 @@ func TestFullReset_PreservesSentinelAndBootstrapAndActing(t *testing.T) {
 		Role:      "admin",
 		IsActive:  true,
 		ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("CreateUser acting: %v", err)
@@ -372,6 +379,7 @@ func TestFullReset_PreservesSentinelAndBootstrapAndActing(t *testing.T) {
 	_, err = q.CreateInvite(ctx, db.CreateInviteParams{
 		Token:   "FR_" + uuid.New().String(),
 		MaxUses: 1,
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("CreateInvite: %v", err)

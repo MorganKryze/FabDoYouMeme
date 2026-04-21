@@ -30,6 +30,7 @@ func createUser(t *testing.T, q *db.Queries, username, email string) db.User {
 		Role:      "player",
 		IsActive:  true,
 		ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("createUser %s: %v", username, err)
@@ -74,6 +75,7 @@ func TestCreateUser_Success(t *testing.T) {
 			Role:      "player",
 			IsActive:  true,
 			ConsentAt: time.Now().UTC(),
+			Locale:    "en",
 		})
 		if err != nil {
 			t.Fatalf("CreateUser: %v", err)
@@ -138,6 +140,7 @@ func TestHardDeleteUser_ReplacesSubmissionsWithSentinel(t *testing.T) {
 		Role:      "player",
 		IsActive:  true,
 		ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("create user: %v", err)
@@ -145,6 +148,7 @@ func TestHardDeleteUser_ReplacesSubmissionsWithSentinel(t *testing.T) {
 	pack, err := q.CreatePack(ctx, db.CreatePackParams{
 		Name:       slug + "_pack",
 		Visibility: "private",
+		Language:   "en",
 	})
 	if err != nil {
 		t.Fatalf("create pack: %v", err)
@@ -366,6 +370,7 @@ func TestCreateInvite_AndValidate(t *testing.T) {
 		inv, err := q.CreateInvite(ctx, db.CreateInviteParams{
 			Token:   "INVITE_" + uuid.New().String(),
 			MaxUses: 5,
+			Locale:    "en",
 		})
 		if err != nil {
 			t.Fatalf("CreateInvite: %v", err)
@@ -390,6 +395,7 @@ func TestInvite_MaxUsesExhausted(t *testing.T) {
 		inv, err := q.CreateInvite(ctx, db.CreateInviteParams{
 			Token:   "EXHAUST_" + uuid.New().String(),
 			MaxUses: 1,
+			Locale:    "en",
 		})
 		if err != nil {
 			t.Fatalf("CreateInvite: %v", err)
@@ -418,6 +424,7 @@ func TestStartupCleanup_MarksPlayingAsFinished(t *testing.T) {
 		pack, _ := q.CreatePack(ctx, db.CreatePackParams{
 			Name:       slug,
 			Visibility: "private",
+			Language:   "en",
 		})
 		room, err := q.CreateRoom(ctx, db.CreateRoomParams{
 			Code:       slug[:4],
@@ -467,6 +474,7 @@ func TestStartupCleanup_ClosesStaleLobbies(t *testing.T) {
 		Role:      "player",
 		IsActive:  true,
 		ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("create user: %v", err)
@@ -474,6 +482,7 @@ func TestStartupCleanup_ClosesStaleLobbies(t *testing.T) {
 	pack, _ := q.CreatePack(ctx, db.CreatePackParams{
 		Name:       slug + "_pk",
 		Visibility: "private",
+		Language:   "en",
 	})
 	room, err := q.CreateRoom(ctx, db.CreateRoomParams{
 		Code:       slug[:4],
@@ -517,7 +526,8 @@ func TestCreateRoom_StateIsLobby(t *testing.T) {
 		gt, _ := q.GetGameTypeBySlug(ctx, "meme-freestyle")
 		slug := "lobby_" + uuid.New().String()[:8]
 		user := createUser(t, q, slug, slug+"@test.com")
-		pack, _ := q.CreatePack(ctx, db.CreatePackParams{Name: slug, Visibility: "private"})
+		pack, _ := q.CreatePack(ctx, db.CreatePackParams{Name: slug, Visibility: "private",
+		Language:   "en",})
 
 		room, err := q.CreateRoom(ctx, db.CreateRoomParams{
 			Code:       slug[:4],

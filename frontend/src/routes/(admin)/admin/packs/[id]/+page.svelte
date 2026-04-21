@@ -19,6 +19,7 @@
   } from '$lib/icons';
   import type { ActionData, PageData } from './$types';
   import type { GameItem } from '$lib/api/types';
+  import * as m from '$lib/paraglide/messages';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
   let items = $state<GameItem[]>(untrack(() => data.items));
@@ -34,9 +35,9 @@
   $effect(() => {
     if (form === lastForm) return;
     lastForm = form;
-    if (form?.deleted) { items = items.filter((i) => i.id !== form.deleted); toast.show('Item deleted.', 'success'); }
+    if (form?.deleted) { items = items.filter((i) => i.id !== form.deleted); toast.show(m.admin_pack_detail_toast_deleted(), 'success'); }
     if (form?.deleteError) toast.show(form.deleteError, 'error');
-    if (form?.statusUpdated) { toast.show(`Pack marked ${form.statusUpdated}.`, 'success'); modMenuOpen = false; }
+    if (form?.statusUpdated) { toast.show(m.admin_pack_detail_toast_status_updated({ status: form.statusUpdated }), 'success'); modMenuOpen = false; }
     if (form?.statusError) toast.show(form.statusError, 'error');
   });
 
@@ -62,14 +63,14 @@
     const failed = [...rejected, ...result.failed];
     const ok = result.succeeded.length;
     const ko = failed.length;
-    if (ok > 0 && ko === 0) toast.show(`${ok} item${ok === 1 ? '' : 's'} uploaded.`, 'success');
-    else if (ok > 0 && ko > 0) toast.show(`${ok} uploaded, ${ko} failed.`, 'warning');
-    else toast.show(`Upload failed (${ko}/${ko}).`, 'error');
+    if (ok > 0 && ko === 0) toast.show(ok === 1 ? m.admin_pack_detail_toast_uploaded_one({ count: ok }) : m.admin_pack_detail_toast_uploaded_other({ count: ok }), 'success');
+    else if (ok > 0 && ko > 0) toast.show(m.admin_pack_detail_toast_uploaded_partial({ ok, ko }), 'warning');
+    else toast.show(m.admin_pack_detail_toast_upload_failed({ ko, total: ko }), 'error');
   }
 </script>
 
 <svelte:head>
-  <title>{data.pack.name} — Admin</title>
+  <title>{m.admin_pack_detail_page_title({ name: data.pack.name })}</title>
 </svelte:head>
 
 <div class="p-6 flex flex-col gap-4" use:reveal>
@@ -80,17 +81,17 @@
       class="inline-flex items-center gap-1 text-sm text-brand-text-muted hover:text-brand-text px-2 py-1 rounded-full"
     >
       <ArrowLeft size={14} strokeWidth={2.5} />
-      Packs
+      {m.admin_packs_heading()}
     </a>
     <span class="text-brand-text-muted">/</span>
     <h1 class="text-xl font-bold">{data.pack.name}</h1>
-    <span class="text-sm text-brand-text-muted ml-1">({items.length} items)</span>
+    <span class="text-sm text-brand-text-muted ml-1">{m.admin_pack_detail_items_count({ count: items.length })}</span>
     <div class="flex-1"></div>
 
     {#if data.pack.is_system}
       <span class="h-9 px-3 rounded-lg border border-brand-border text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted inline-flex items-center"
-            title="Bundled system pack — managed on the server filesystem">
-        System · read-only
+            title={m.admin_pack_detail_system_tooltip()}>
+        {m.admin_pack_detail_system_badge()}
       </span>
     {/if}
 
@@ -109,7 +110,7 @@
         aria-expanded={modMenuOpen}
       >
         <Gavel size={14} strokeWidth={2.5} />
-        Moderate
+        {m.admin_pack_detail_moderate()}
         <ChevronDown
           size={14}
           strokeWidth={2.5}
@@ -124,7 +125,7 @@
         <button
           type="button"
           class="fixed inset-0 z-10 cursor-default"
-          aria-label="Close menu"
+          aria-label={m.admin_pack_detail_close_menu()}
           onclick={() => (modMenuOpen = false)}
         ></button>
 
@@ -133,7 +134,7 @@
           role="menu"
         >
           <div class="px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted border-b border-brand-border">
-            Current: {data.pack.status}
+            {m.admin_pack_detail_current_status({ status: data.pack.status })}
           </div>
           <form method="POST" action="?/setStatus" use:enhance class="flex flex-col">
             <input type="hidden" name="pack_id" value={data.pack.id} />
@@ -147,7 +148,7 @@
               class="text-left px-3 py-2 text-sm inline-flex items-center gap-2 hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
             >
               <CheckCircle size={14} strokeWidth={2.5} class="text-green-600" />
-              Mark active
+              {m.admin_pack_detail_mark_active()}
             </button>
 
             <button
@@ -159,7 +160,7 @@
               class="text-left px-3 py-2 text-sm inline-flex items-center gap-2 hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
             >
               <Flag size={14} strokeWidth={2.5} class="text-yellow-600" />
-              Flag for review
+              {m.admin_pack_detail_flag_review()}
             </button>
 
             <button
@@ -171,7 +172,7 @@
               class="text-left px-3 py-2 text-sm inline-flex items-center gap-2 hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
             >
               <Ban size={14} strokeWidth={2.5} class="text-red-600" />
-              Ban pack
+              {m.admin_pack_detail_ban()}
             </button>
           </form>
         </div>
@@ -187,7 +188,7 @@
       >
         <input type="file" accept="image/jpeg,image/png,image/webp" multiple class="sr-only" onchange={handleFileInput} disabled={uploading} />
         <Upload size={14} strokeWidth={2.5} />
-        {uploading ? 'Uploading…' : 'Add Items'}
+        {uploading ? m.admin_pack_detail_uploading() : m.admin_pack_detail_add_items()}
       </label>
     {/if}
   </div>
@@ -200,9 +201,9 @@
        actions live in the Gavel dropdown above). owner_username lookup is a
        follow-up; raw owner_id (UUID) is shown for now. -->
   <div class="flex items-center gap-3 text-xs text-brand-text-muted">
-    <span>Owner: <b>{data.pack.owner_id ?? '—'}</b></span>
-    <span>Visibility: <b>{data.pack.visibility}</b></span>
-    <span>Status:
+    <span>{m.admin_pack_detail_owner()} <b>{data.pack.owner_id ?? '—'}</b></span>
+    <span>{m.admin_pack_detail_visibility()} <b>{data.pack.visibility}</b></span>
+    <span>{m.admin_pack_detail_status()}
       <b class={
         data.pack.status === 'banned' ? 'text-red-600'
         : data.pack.status === 'flagged' ? 'text-yellow-700'
@@ -216,9 +217,9 @@
       <thead>
         <tr class="border-b border-brand-border bg-muted/40 text-xs font-medium text-brand-text-muted">
           <th class="w-10 px-4 py-3">#</th>
-          <th class="text-left px-4 py-3">Preview</th>
-          <th class="text-left px-4 py-3">Name</th>
-          <th class="text-left px-4 py-3">Version</th>
+          <th class="text-left px-4 py-3">{m.admin_pack_detail_col_preview()}</th>
+          <th class="text-left px-4 py-3">{m.admin_pack_detail_col_name()}</th>
+          <th class="text-left px-4 py-3">{m.admin_pack_detail_col_version()}</th>
           <th class="px-4 py-3"></th>
         </tr>
       </thead>
@@ -236,17 +237,17 @@
               {/if}
             </td>
             <td class="px-4 py-3 font-medium">{item.name}</td>
-            <td class="px-4 py-3 text-brand-text-muted text-xs">v{item.version_number ?? 1}</td>
+            <td class="px-4 py-3 text-brand-text-muted text-xs">{m.admin_pack_detail_version_prefix({ version: item.version_number ?? 1 })}</td>
             <td class="px-4 py-3 text-right">
               {#if !data.pack.is_system}
                 <form method="POST" action="?/deleteItem" use:enhance
-                  onsubmit={(e) => !confirm(`Delete "${item.name}"?`) && e.preventDefault()}>
+                  onsubmit={(e) => !confirm(m.admin_pack_detail_delete_item_confirm({ name: item.name })) && e.preventDefault()}>
                   <input type="hidden" name="item_id" value={item.id} />
                   <button
                     type="submit"
                     use:hoverEffect={'swap'}
                     class="text-brand-text-muted hover:text-red-600 transition-colors inline-flex items-center p-1 rounded-full"
-                    aria-label="Delete item">
+                    aria-label={m.admin_pack_detail_delete_item_aria()}>
                     <Trash2 size={14} strokeWidth={2.5} />
                   </button>
                 </form>
@@ -257,7 +258,7 @@
         {#if items.length === 0}
           <tr>
             <td colspan={6} class="px-4 py-8 text-center text-brand-text-muted text-sm">
-              No items yet. Upload images to get started.
+              {m.admin_pack_detail_empty()}
             </td>
           </tr>
         {/if}

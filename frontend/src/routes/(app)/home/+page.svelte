@@ -21,6 +21,7 @@
     IdCard,
     XCircle,
   } from '$lib/icons';
+  import * as m from '$lib/paraglide/messages';
   import type { ActionData, PageData } from './$types';
   import type { HistoryRoom } from './+page.server';
 
@@ -114,14 +115,14 @@
   function formatRelative(iso: string): string {
     const diff = Date.now() - new Date(iso).getTime();
     const minutes = Math.floor(diff / 60_000);
-    if (minutes < 1) return 'just now';
-    if (minutes < 60) return `${minutes}m ago`;
+    if (minutes < 1) return m.home_relative_just_now();
+    if (minutes < 60) return m.home_relative_minutes({ minutes });
     const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
+    if (hours < 24) return m.home_relative_hours({ hours });
     const days = Math.floor(hours / 24);
-    if (days < 7) return `${days}d ago`;
+    if (days < 7) return m.home_relative_days({ days });
     const weeks = Math.floor(days / 7);
-    if (weeks < 5) return `${weeks}w ago`;
+    if (weeks < 5) return m.home_relative_weeks({ weeks });
     return new Date(iso).toLocaleDateString();
   }
 
@@ -134,7 +135,7 @@
 </script>
 
 <svelte:head>
-  <title>Dashboard — FabDoYouMeme</title>
+  <title>{m.home_page_title()}</title>
 </svelte:head>
 
 <div class="flex-1 flex justify-center p-6 pt-4 pb-10">
@@ -143,7 +144,7 @@
     <!-- ─── Hero row: greeting (full-width) ──────────────────── -->
     <section use:reveal class="flex flex-col justify-center gap-3" aria-live="polite">
       <p class="text-sm font-bold uppercase tracking-[0.3em] text-brand-text-mid">
-        Welcome back
+        {m.home_welcome_back()}
       </p>
       {#if greetingH1Parts && greetingSub}
         <h1
@@ -163,13 +164,13 @@
             {#if bestRank !== null}
               <span class="meta-chip">
                 <span class="glyph">★</span>
-                Best rank · {bestRank}
+                {m.home_best_rank({ rank: bestRank })}
               </span>
             {/if}
             {#if earnedMedalCount > 0}
               <span class="meta-chip">
                 <span class="glyph">♠</span>
-                {earnedMedalCount} medal{earnedMedalCount !== 1 ? 's' : ''}
+                {earnedMedalCount === 1 ? m.home_medals_one({ count: earnedMedalCount }) : m.home_medals_other({ count: earnedMedalCount })}
               </span>
             {/if}
           </div>
@@ -179,9 +180,9 @@
              aria-hidden so screen readers don't read the placeholder copy
              inside the aria-live region before the rotated greeting arrives. -->
         <!-- svelte-ignore a11y_hidden -->
-        <h1 aria-hidden="true" class="greeting-h1 font-extrabold blur-sm opacity-40 select-none m-0">Hey there.</h1>
+        <h1 aria-hidden="true" class="greeting-h1 font-extrabold blur-sm opacity-40 select-none m-0">{m.home_skeleton_greeting()}</h1>
         <p aria-hidden="true" class="font-semibold text-brand-text-mid m-0 blur-sm opacity-40 select-none" style="font-size: clamp(1rem, 1.6vw, 1.25rem);">
-          Jump back into a room, or spin up a new one.
+          {m.home_skeleton_subtitle()}
         </p>
       {/if}
     </section>
@@ -205,10 +206,10 @@
           <div class="relative flex items-center justify-between gap-4">
             <div class="flex flex-col gap-1 min-w-0">
               <span class="text-xs font-bold uppercase tracking-[0.2em] opacity-70">
-                {data.activeRoom.is_host ? 'Your room' : "You're in"} · {data.activeRoom.state === 'playing' ? 'In progress' : 'Lobby'}
+                {data.activeRoom.is_host ? m.home_active_room_your() : m.home_active_room_guest()} · {data.activeRoom.state === 'playing' ? m.home_active_room_playing() : m.home_active_room_lobby()}
               </span>
               <div class="text-xl font-bold leading-tight">
-                Return to <span class="wavy font-mono tracking-widest">{data.activeRoom.code}</span>
+                {m.home_active_room_return_prefix()} <span class="wavy font-mono tracking-widest">{data.activeRoom.code}</span>
               </div>
               <div class="text-xs font-bold uppercase tracking-[0.2em] opacity-70 truncate">
                 {prettyGameSlug(data.activeRoom.game_type_slug)}
@@ -221,7 +222,7 @@
             </div>
           </div>
           <p class="relative text-xs font-semibold opacity-70 mt-3">
-            You can only be in one room at a time. Leave or finish this one to create or join another.
+            {m.home_active_room_hint()}
           </p>
         </a>
       </section>
@@ -233,9 +234,9 @@
           style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
         >
           <div class="flex items-center justify-between">
-            <h2 class="text-lg font-bold">Got a code?</h2>
+            <h2 class="text-lg font-bold">{m.home_join_title()}</h2>
             <span class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
-              Jump in
+              {m.home_join_subtitle()}
             </span>
           </div>
 
@@ -266,7 +267,7 @@
               class="h-16 px-6 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-40 cursor-pointer inline-flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
             >
               <Play size={18} strokeWidth={2.5} />
-              Play
+              {m.home_join_play()}
             </button>
           </form>
         </div>
@@ -281,11 +282,11 @@
           style="box-shadow: 0 5px 0 rgba(0,0,0,0.2);"
         >
           <div class="text-xs font-bold uppercase tracking-[0.2em] opacity-70">
-            Host
+            {m.home_host_eyebrow()}
           </div>
-          <div class="text-xl font-bold leading-tight">Start a<br />new game</div>
+          <div class="text-xl font-bold leading-tight">{m.home_host_title_line1()}<br />{m.home_host_title_line2()}</div>
           <div class="text-xs font-bold uppercase tracking-[0.2em] opacity-70 inline-flex items-center gap-1 transition-transform group-hover:translate-x-0.5">
-            Pick a game →
+            {m.home_host_pick()}
           </div>
         </a>
       </section>
@@ -301,7 +302,7 @@
         <span class="bg-suit" aria-hidden="true">♠</span>
         <div class="relative flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
           <span class="font-mono" style="color: var(--brand-text);">♠</span>
-          Played
+          {m.home_stats_played()}
         </div>
         <div class="relative text-4xl font-bold leading-none mt-1 tabular-nums">{gamesPlayed}</div>
       </div>
@@ -314,7 +315,7 @@
         <span class="bg-suit" aria-hidden="true">♥</span>
         <div class="relative flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
           <span class="font-mono" style="color: var(--brand-accent);">♥</span>
-          Wins
+          {m.home_stats_wins()}
         </div>
         <div class="relative text-4xl font-bold leading-none mt-1 tabular-nums">{wins}</div>
       </div>
@@ -327,7 +328,7 @@
         <span class="bg-suit" aria-hidden="true">♦</span>
         <div class="relative flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
           <span class="font-mono" style="color: var(--brand-accent);">♦</span>
-          Win rate
+          {m.home_stats_winrate()}
         </div>
         <div class="relative text-4xl font-bold leading-none mt-1 tabular-nums">{winRate}%</div>
       </div>
@@ -340,10 +341,10 @@
         <span class="bg-suit" aria-hidden="true">♣</span>
         <div class="relative flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
           <span class="font-mono" style="color: var(--brand-text);">♣</span>
-          Favourite
+          {m.home_stats_favourite()}
         </div>
         <div class="relative text-lg font-bold leading-tight mt-1 line-clamp-1">
-          {favoriteGameType ? prettyGameSlug(favoriteGameType) : '—'}
+          {favoriteGameType ? prettyGameSlug(favoriteGameType) : m.home_stats_empty()}
         </div>
       </div>
     </section>
@@ -359,21 +360,21 @@
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <Clock size={16} strokeWidth={2.5} />
-            <h2 class="text-lg font-bold">Recent activity</h2>
+            <h2 class="text-lg font-bold">{m.home_activity_title()}</h2>
           </div>
           <a
             href="/games"
             class="text-xs font-bold text-brand-text hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
           >
-            See all →
+            {m.home_activity_see_all()}
           </a>
         </div>
 
         {#if history.length === 0}
           <div class="flex flex-col items-center text-center gap-3 py-6">
-            <p class="text-sm font-bold">No games yet.</p>
+            <p class="text-sm font-bold">{m.home_activity_empty_title()}</p>
             <p class="text-xs font-semibold text-brand-text-mid max-w-xs">
-              Your history lands here after the first round.
+              {m.home_activity_empty_subtitle()}
             </p>
             <a
               href="/host"
@@ -383,7 +384,7 @@
               style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
             >
               <Play size={14} strokeWidth={2.5} />
-              Host your first room
+              {m.home_activity_empty_cta()}
             </a>
           </div>
         {:else}
@@ -405,11 +406,11 @@
                     <div class="flex flex-col min-w-0">
                       <span class="inline-flex items-center gap-2 font-bold truncate">
                         {#if room.rank === 1}
-                          <span class="medal gold" aria-label="First place">1</span>
+                          <span class="medal gold" aria-label={m.home_activity_rank_first()}>1</span>
                         {:else if room.rank === 2}
-                          <span class="medal silver" aria-label="Second place">2</span>
+                          <span class="medal silver" aria-label={m.home_activity_rank_second()}>2</span>
                         {:else if room.rank === 3}
-                          <span class="medal bronze" aria-label="Third place">3</span>
+                          <span class="medal bronze" aria-label={m.home_activity_rank_third()}>3</span>
                         {/if}
                         <span class="truncate">{prettyGameSlug(room.game_type_slug)}</span>
                       </span>
@@ -421,7 +422,7 @@
                   <div class="flex items-center gap-4 shrink-0">
                     <div class="text-right hidden sm:block">
                       <div class="text-xs font-bold uppercase tracking-[0.15em] text-brand-text-mid">
-                        Rank
+                        {m.home_activity_rank_label()}
                       </div>
                       <div class="font-bold text-sm tabular-nums">
                         {room.rank}<span class="text-brand-text-mid">/{room.player_count}</span>
@@ -429,7 +430,7 @@
                     </div>
                     <div class="text-right">
                       <div class="text-xs font-bold uppercase tracking-[0.15em] text-brand-text-mid">
-                        Score
+                        {m.home_activity_score_label()}
                       </div>
                       <div class="font-bold text-sm tabular-nums">{room.score}</div>
                     </div>
@@ -447,19 +448,19 @@
         class="rounded-[22px] border-[2.5px] border-dashed border-brand-border-heavy bg-brand-white/40 p-5 flex flex-col gap-3 relative overflow-hidden"
       >
         <div class="absolute top-3 right-3 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid px-2 py-0.5 rounded-full border-[2px] border-brand-border-heavy bg-brand-white">
-          Coming soon
+          {m.home_circles_coming_soon()}
         </div>
         <div class="flex items-center gap-2">
           <Users size={16} strokeWidth={2.5} />
-          <h2 class="text-lg font-bold">Your circles</h2>
+          <h2 class="text-lg font-bold">{m.home_circles_title()}</h2>
         </div>
         <p class="text-xs font-semibold text-brand-text-mid">
-          Track the people you play with most. See who you keep beating (or losing to), revisit old rooms, tag your favourite opponents.
+          {m.home_circles_subtitle()}
         </p>
 
         <!-- Placeholder circle chips -->
         <div class="flex flex-col gap-2 mt-2 opacity-60 pointer-events-none select-none">
-          {#each ['Sunday crew', 'The office', 'D&D group'] as name}
+          {#each [m.home_circles_sample_1(), m.home_circles_sample_2(), m.home_circles_sample_3()] as name}
             <div
               class="flex items-center gap-2 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-3 py-1.5 text-xs"
             >
@@ -477,7 +478,7 @@
 
 <footer class="border-t border-brand-border px-6 py-6 flex items-center justify-between text-xs font-semibold text-brand-text-mid">
   <p>© {new Date().getFullYear()} FabDoYouMeme</p>
-  <a href="/privacy" class="hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60">Privacy Policy</a>
+  <a href="/privacy" class="hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60">{m.common_privacy_policy()}</a>
 </footer>
 
 <!-- ─── Floating Maker Card (home only) ─────────────────────────────
@@ -508,7 +509,7 @@
       type="button"
       onclick={() => (showMakerCard = true)}
       use:hoverEffect={'swap'}
-      aria-label="Show maker card"
+      aria-label={m.home_maker_card_aria()}
       class="fixed bottom-20 left-6 z-40 inline-flex items-center justify-center h-14 w-14 rounded-full bg-brand-white border-[2.5px] border-brand-border-heavy cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
       style="box-shadow: 0 4px 0 rgba(0,0,0,0.12);"
       in:fly={{ x: -300, duration: 360, delay: 140, easing: cubicOut }}

@@ -10,12 +10,15 @@ SELECT * FROM users WHERE email = $1;
 SELECT * FROM users WHERE username = $1;
 
 -- name: CreateUser :one
-INSERT INTO users (username, email, role, is_active, invited_by, consent_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO users (username, email, role, is_active, invited_by, consent_at, locale)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 RETURNING *;
 
 -- name: UpdateUserUsername :one
 UPDATE users SET username = $2 WHERE id = $1 RETURNING *;
+
+-- name: UpdateUserLocale :one
+UPDATE users SET locale = $2 WHERE id = $1 RETURNING *;
 
 -- name: SetPendingEmail :one
 UPDATE users SET pending_email = $2 WHERE id = $1 RETURNING *;
@@ -55,6 +58,7 @@ SELECT
   u.consent_at,
   u.created_at,
   u.is_protected,
+  u.locale,
   COALESCE((
     SELECT COUNT(*)
     FROM room_players rp

@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { Save, RotateCcw } from '$lib/icons';
+  import * as m from '$lib/paraglide/messages';
 
   let { src, onSave, readOnly = false }: {
     src: string | null;
@@ -148,11 +149,11 @@
     );
   }
 
-  const orientationOptions: { value: Orientation; label: string }[] = [
-    { value: 'landscape', label: 'Landscape 4:3' },
-    { value: 'square', label: 'Square 1:1' },
-    { value: 'portrait', label: 'Portrait 3:4' },
-  ];
+  const orientationOptions = $derived<{ value: Orientation; label: string }[]>([
+    { value: 'landscape', label: m.studio_image_orientation_landscape() },
+    { value: 'square', label: m.studio_image_orientation_square() },
+    { value: 'portrait', label: m.studio_image_orientation_portrait() },
+  ]);
 </script>
 
 <div class="flex flex-col gap-3">
@@ -170,7 +171,7 @@
       {/each}
     </div>
     <label class="flex items-center gap-2 text-xs text-brand-text-muted">
-      Zoom
+      {m.studio_image_zoom_label()}
       <input
         type="range"
         min="1"
@@ -186,7 +187,7 @@
       class="px-3 py-1.5 text-xs font-semibold rounded-md border border-brand-border bg-background hover:bg-muted inline-flex items-center gap-1 shadow-sm"
     >
       <RotateCcw size={12} strokeWidth={2.5} />
-      Reset
+      {m.studio_image_reset()}
     </button>
   </div>
 
@@ -219,7 +220,7 @@
       class="h-10 rounded-lg bg-primary text-primary-foreground text-sm font-medium inline-flex items-center justify-center gap-1.5"
     >
       <Save size={14} strokeWidth={2.5} />
-      Save as new version
+      {m.studio_image_save_version()}
     </button>
   {/if}
 </div>

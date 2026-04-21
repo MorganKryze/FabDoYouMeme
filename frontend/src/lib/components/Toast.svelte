@@ -1,6 +1,7 @@
 <script lang="ts">
   import { toast } from '$lib/state/toast.svelte';
   import { PartyPopper, Bell, XCircle } from '$lib/icons';
+  import * as m from '$lib/paraglide/messages';
 
   const iconFor = {
     success: PartyPopper,
@@ -46,7 +47,7 @@
         type="button"
         onclick={() => toast.dismiss(item.id)}
         class="shrink-0 ml-1 opacity-40 hover:opacity-100 transition-opacity inline-flex items-center cursor-pointer"
-        aria-label="Dismiss"
+        aria-label={m.common_dismiss()}
       >
         <XCircle size={16} strokeWidth={2.5} />
       </button>

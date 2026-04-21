@@ -2,6 +2,7 @@
   import { physCard } from '$lib/actions/physCard';
   import { reveal } from '$lib/actions/reveal';
   import type { Submission, LeaderboardEntry } from '$lib/api/types';
+  import * as m from '$lib/paraglide/messages';
 
   let {
     submissions,
@@ -52,7 +53,7 @@
   );
 
   function placeLabel(place: 1 | 2 | 3): string {
-    return place === 1 ? '1st' : place === 2 ? '2nd' : '3rd';
+    return place === 1 ? m.game_place_first() : place === 2 ? m.game_place_second() : m.game_place_third();
   }
 
   function medalClass(place: 1 | 2 | 3): string {
@@ -64,7 +65,7 @@
   <div use:reveal={{ delay: 0 }} class="flex flex-col gap-3">
     <div class="text-center">
       <span class="text-[10px] font-bold uppercase tracking-[0.25em] text-brand-text-muted">
-        Round results
+        {m.game_round_results()}
       </span>
     </div>
 
@@ -93,16 +94,16 @@
               class="absolute -top-3 left-1/2 z-10 inline-flex items-center gap-1 rounded-full border-[2.5px] border-brand-border-heavy px-3 py-0.5 text-[10px] font-bold tracking-[0.18em] uppercase whitespace-nowrap"
               style="transform: translateX(-50%); background: var(--brand-accent); color: #1A1A1A; box-shadow: 0 2px 0 rgba(0,0,0,0.2);"
             >
-              +{points} pts
+              {m.game_points_awarded({ points })}
             </span>
           {/if}
 
           <div class="flex items-center justify-between gap-2">
-            <span class={medalClass(entry.place)} aria-label="{placeLabel(entry.place)} place">
+            <span class={medalClass(entry.place)} aria-label={m.game_place_suffix_aria({ label: placeLabel(entry.place) })}>
               {entry.place}
             </span>
             <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
-              {votes} vote{votes !== 1 ? 's' : ''}
+              {votes === 1 ? m.game_votes_one({ count: votes }) : m.game_votes_other({ count: votes })}
             </span>
           </div>
 
@@ -122,7 +123,7 @@
                 class="font-bold rounded-full px-2.5 py-0.5 text-[10px] tracking-[0.15em] uppercase border-[2px] border-brand-border-heavy"
                 style="background: var(--brand-accent-2); color: #1A1A1A;"
               >
-                +{points}
+                {m.game_points_awarded_compact({ points })}
               </span>
             {/if}
           </div>
@@ -135,7 +136,7 @@
 {#if alsoRans.length > 0}
   <div use:reveal={{ delay: 4 }} class="flex flex-col gap-2.5">
     <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-text-muted px-1">
-      Also in the hand
+      {m.game_round_also_in_hand()}
     </span>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       {#each alsoRans as sub (sub.id)}
@@ -154,9 +155,9 @@
           <div class="flex items-center gap-2 text-[11px] font-bold text-brand-text-muted">
             <span class="text-brand-text">{sub.username}</span>
             <span>·</span>
-            <span>{votes} vote{votes !== 1 ? 's' : ''}</span>
+            <span>{votes === 1 ? m.game_votes_one({ count: votes }) : m.game_votes_other({ count: votes })}</span>
             {#if points > 0}
-              <span class="ml-auto font-mono tabular-nums text-brand-text">+{points}</span>
+              <span class="ml-auto font-mono tabular-nums text-brand-text">{m.game_points_awarded_compact({ points })}</span>
             {/if}
           </div>
         </div>
@@ -169,7 +170,7 @@
   <div use:reveal={{ delay: 5 }} class="flex flex-col gap-2.5">
     <span class="text-[10px] font-bold uppercase tracking-[0.2em] text-brand-text-muted px-1 inline-flex items-center gap-2">
       <span style="color: var(--brand-accent);">♠</span>
-      Leaderboard
+      {m.room_leaderboard()}
     </span>
     <ol class="flex flex-col gap-1.5 m-0 p-0 list-none">
       {#each leaderboard as entry, i (entry.player_id)}

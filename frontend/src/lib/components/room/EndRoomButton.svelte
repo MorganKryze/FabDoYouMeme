@@ -3,10 +3,12 @@
   import { room } from '$lib/state/room.svelte';
   import { toast } from '$lib/state/toast.svelte';
   import { roomsApi } from '$lib/api/rooms';
+  import { ApiError, errorMessage } from '$lib/api';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { X } from '$lib/icons';
   import { fade, scale } from 'svelte/transition';
   import { backOut } from 'svelte/easing';
+  import * as m from '$lib/paraglide/messages';
 
   interface Props {
     /** When true, renders a quiet text link instead of the large icon button.
@@ -59,7 +61,11 @@
     } catch (e) {
       pending = false;
       const message =
-        e instanceof Error ? e.message : 'Could not end the room. Try again.';
+        e instanceof ApiError
+          ? errorMessage(e.code, e.message)
+          : e instanceof Error
+            ? e.message
+            : m.room_end_error_default();
       error = message;
       toast.show(message, 'error');
     }
@@ -90,10 +96,10 @@
       type="button"
       onclick={openModal}
       class="text-xs text-brand-text-muted hover:text-red-500 font-semibold cursor-pointer transition-colors"
-      title="End game"
-      aria-label="End game"
+      title={m.room_end_game()}
+      aria-label={m.room_end_game()}
     >
-      End game
+      {m.room_end_game()}
     </button>
   {:else}
     <button
@@ -102,8 +108,8 @@
       type="button"
       onclick={openModal}
       class="h-14 w-14 shrink-0 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text-mid hover:text-red-600 hover:border-red-600 inline-flex items-center justify-center cursor-pointer transition-colors"
-      title="Cancel room"
-      aria-label="Cancel room"
+      title={m.room_end_cancel_room_aria()}
+      aria-label={m.room_end_cancel_room_aria()}
     >
       <X size={20} strokeWidth={2.5} />
     </button>
@@ -136,9 +142,9 @@
         onclick={(e) => e.stopPropagation()}
         transition:scale={{ duration: 180, start: 0.85, easing: backOut }}
       >
-      <h2 id="end-room-title" class="text-xl font-bold">Cancel this room?</h2>
+      <h2 id="end-room-title" class="text-xl font-bold">{m.room_end_cancel_title()}</h2>
       <p class="text-sm font-semibold text-brand-text-mid">
-        All players will be disconnected. This can't be undone.
+        {m.room_end_confirm_body()}
       </p>
       {#if error}
         <p class="text-sm font-semibold text-red-600">{error}</p>
@@ -151,7 +157,7 @@
           disabled={pending}
           class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-sm font-bold disabled:opacity-50 cursor-pointer"
         >
-          Keep playing
+          {m.room_end_cancel_keep_playing()}
         </button>
         <button
           use:pressPhysics={'dark'}
@@ -160,7 +166,7 @@
           disabled={pending}
           class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-red-600 text-white text-sm font-bold disabled:opacity-50 cursor-pointer"
         >
-          {pending ? 'Cancelling…' : 'Cancel room'}
+          {pending ? m.room_end_cancel_pending() : m.room_end_cancel_room()}
         </button>
       </div>
       </div>

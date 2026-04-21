@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { tone } from '$lib/state/tone.svelte';
   import { TONE_LABELS, DEFAULT_TONE, type ToneLevel } from '$lib/content/tonePools';
+  import * as m from '$lib/paraglide/messages';
 
   const LEVELS: ToneLevel[] = [0, 1, 2, 3, 4];
 
@@ -94,7 +95,7 @@
     class="track"
     role="slider"
     tabindex="0"
-    aria-label="Greeting tone"
+    aria-label={m.profile_tone_greeting_aria()}
     aria-valuemin={0}
     aria-valuemax={4}
     aria-valuenow={displayLevel}

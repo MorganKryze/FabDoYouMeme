@@ -109,6 +109,7 @@ open http://localhost:8025
 - **Startup cleanup**: backend marks stale `playing` rooms `finished` (crash recovery) + closes `lobby` rooms >24h old. Both idempotent.
 - **GDPR**: registration requires `consent: true` + `age_affirmation: true`; `users.consent_at` set once, never changed. Hard-delete replaces `submissions.user_id` AND `votes.voter_id` with the sentinel UUID before deleting the user. Game data purged at 2y, audit PII anonymized at 3y. See `docs/reference/gdpr.md`.
 - **Privacy page is env-driven**: `frontend/src/routes/(public)/privacy/+page.svelte` reads `PUBLIC_OPERATOR_*` via `$env/dynamic/public`. Never hardcode operator identity. Missing required var → visible red warning banner. See `docs/self-hosting.md → Legal / privacy policy`.
+- **Localization**: UI locale resolved in `hooks.server.ts` from user → cookie → `Accept-Language` → `PUBLIC_DEFAULT_LOCALE`; Paraglide catalog at `frontend/messages/{en,fr}.json`; `npm run i18n:check` enforces parity. Emails rendered from `backend/internal/email/templates/<locale>/` with startup parity validation. Packs are language-tagged (`game_packs.language`) and filtered at pick; items inherit pack language.
 
 ---
 

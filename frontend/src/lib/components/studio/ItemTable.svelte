@@ -14,6 +14,7 @@
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { Upload, Trash2, ImageIcon, FileText } from '$lib/icons';
   import type { GameItem } from '$lib/api/types';
+  import * as m from '$lib/paraglide/messages';
 
   let dragOverZone = $state(false);
   let uploading = $state(false);
@@ -39,7 +40,7 @@
   }
 
   async function handleDelete(item: GameItem) {
-    if (!confirm(`Delete "${item.name}"? This cannot be undone.`)) return;
+    if (!confirm(m.studio_confirm_delete_item({ name: item.name }))) return;
     try {
       await deleteItem(studio.selectedPackId!, item.id);
       studio.items = studio.items.filter((i) => i.id !== item.id);
@@ -49,7 +50,7 @@
         studio.selectedVersionIds = [];
       }
     } catch {
-      toast.show('Failed to delete item.', 'error');
+      toast.show(m.studio_toast_item_delete_failed(), 'error');
     }
   }
 
@@ -83,7 +84,7 @@
   async function bulkImportTextJson(file: File) {
     const raw = await file.text().catch(() => null);
     if (raw === null) {
-      toast.show('Could not read file.', 'error');
+      toast.show(m.studio_toast_read_file_failed(), 'error');
       return;
     }
     const parsed = parseTextItemsJson(raw);
@@ -92,7 +93,7 @@
       return;
     }
     if (parsed.items.length === 0) {
-      toast.show('JSON contained no items.', 'warning');
+      toast.show(m.studio_toast_json_empty(), 'warning');
       return;
     }
 
@@ -113,11 +114,21 @@
 
   function summarize(ok: number, ko: number) {
     if (ok > 0 && ko === 0) {
-      toast.show(`${ok} item${ok === 1 ? '' : 's'} added.`, 'success');
+      toast.show(
+        ok === 1
+          ? m.studio_toast_items_added_one({ count: ok })
+          : m.studio_toast_items_added_other({ count: ok }),
+        'success'
+      );
     } else if (ok > 0 && ko > 0) {
-      toast.show(`${ok} added, ${ko} failed.`, 'warning');
+      toast.show(m.studio_toast_items_partial({ ok, ko }), 'warning');
     } else if (ko > 0) {
-      toast.show(`Import failed (${ko} item${ko === 1 ? '' : 's'}).`, 'error');
+      toast.show(
+        ko === 1
+          ? m.studio_toast_items_all_failed_one({ count: ko })
+          : m.studio_toast_items_all_failed_other({ count: ko }),
+        'error'
+      );
     }
   }
 
@@ -150,15 +161,15 @@
   <!-- Header -->
   <div class="flex items-center gap-3 px-4 py-3 border-b border-brand-border shrink-0">
     <h2 class="text-sm font-semibold flex-1">
-      {studio.packs.find((p) => p.id === studio.selectedPackId)?.name ?? 'Items'}
+      {studio.packs.find((p) => p.id === studio.selectedPackId)?.name ?? m.studio_items_fallback_heading()}
       <span class="text-brand-text-muted font-normal">
-        {studio.items.length === 0 ? 'empty' : `(${studio.items.length})`}
+        {studio.items.length === 0 ? m.studio_items_count_empty() : m.studio_items_count({ count: studio.items.length })}
       </span>
     </h2>
 
     {#if isSystem}
-      <span class="text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted border border-brand-border rounded-full px-2 py-1" title="Bundled system pack — managed on the server filesystem">
-        Read-only
+      <span class="text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted border border-brand-border rounded-full px-2 py-1" title={m.studio_items_readonly_title()}>
+        {m.studio_items_readonly_badge()}
       </span>
     {:else if kind === 'image'}
       <label
@@ -167,17 +178,17 @@
       >
         <input type="file" accept="image/jpeg,image/png,image/webp" multiple class="sr-only" onchange={onImageFileInput} />
         <Upload size={12} strokeWidth={2.5} />
-        Bulk Import
+        {m.studio_items_bulk_import()}
       </label>
     {:else}
       <label
         use:pressPhysics={'ghost'}
-        title={'JSON: [{"name":"…","text":"…"}, …]'}
+        title={m.studio_items_import_json_title()}
         class="h-8 px-3 rounded-md border border-brand-border text-xs font-medium cursor-pointer flex items-center gap-1.5"
       >
         <input type="file" accept="application/json,.json" class="sr-only" onchange={onTextFileInput} />
         <Upload size={12} strokeWidth={2.5} />
-        Import JSON
+        {m.studio_items_import_json()}
       </label>
     {/if}
   </div>
@@ -193,38 +204,38 @@
     ondragleave={() => dragOverZone = false}
     ondrop={onDropZone}
     role="region"
-    aria-label={kind === 'image' ? 'Item list — drag images here to import' : 'Item list — drag a JSON file here to import'}
+    aria-label={kind === 'image' ? m.studio_items_drop_region_aria_image() : m.studio_items_drop_region_aria_text()}
   >
     {#if dragOverZone && !isSystem}
       <div class="absolute inset-0 z-10 border-2 border-dashed border-primary bg-primary/5 flex items-center justify-center">
         <p class="text-primary font-medium">
-          {kind === 'image' ? 'Drop images to import' : 'Drop a JSON file to import'}
+          {kind === 'image' ? m.studio_items_drop_label_image() : m.studio_items_drop_label_text()}
         </p>
       </div>
     {/if}
 
     {#if uploading && uploadProgress}
       <div class="px-4 py-2 bg-muted/50 text-xs text-brand-text-muted border-b border-brand-border">
-        Uploading {uploadProgress.name}… ({uploadProgress.done + 1}/{uploadProgress.total})
+        {m.studio_items_uploading_progress({ name: uploadProgress.name, done: uploadProgress.done + 1, total: uploadProgress.total })}
       </div>
     {/if}
 
     <!-- Item table -->
     {#if studio.items.length === 0}
       <div class="flex flex-col items-center justify-center h-48 text-brand-text-muted text-sm gap-2">
-        <p>No items yet.</p>
+        <p>{m.studio_items_empty_title()}</p>
         {#if kind === 'image'}
-          <p class="text-xs">Drag images here or use Bulk Import.</p>
+          <p class="text-xs">{m.studio_items_empty_hint_image()}</p>
         {:else}
-          <p class="text-xs">Add one on the right, or import JSON: <code class="text-[11px]">[{`{"name":"…","text":"…"}`}, …]</code></p>
+          <p class="text-xs">{m.studio_items_empty_hint_text_prefix()}<code class="text-[11px]">[{`{"name":"…","text":"…"}`}, …]</code></p>
         {/if}
       </div>
     {:else}
       <table class="w-full text-sm">
         <thead>
           <tr class="border-b border-brand-border text-xs text-brand-text-muted font-medium">
-            <th class="text-left px-4 py-2">Name</th>
-            <th class="text-right px-4 py-2">Ver.</th>
+            <th class="text-left px-4 py-2">{m.studio_items_col_name()}</th>
+            <th class="text-right px-4 py-2">{m.studio_items_col_version()}</th>
             <th class="px-4 py-2"></th>
           </tr>
         </thead>
@@ -266,7 +277,7 @@
                     type="button"
                     onclick={(e) => { e.stopPropagation(); handleDelete(item); }}
                     class="text-brand-text-muted hover:text-red-600 transition-colors inline-flex items-center p-1 rounded-full"
-                    aria-label="Delete item"
+                    aria-label={m.studio_items_delete_aria()}
                   >
                     <Trash2 size={14} strokeWidth={2.5} />
                   </button>

@@ -1,0 +1,11 @@
+[FR] Hi {{.Username}},
+
+Someone requested to change your FabDoYouMeme account email to this address.
+Click this link to confirm (expires in {{.ExpiryMinutes}} minutes):
+
+{{.MagicLinkURL}}
+
+If you didn't request this, your account is safe — the change will not take effect.
+Your current email address is still active.
+
+-- FabDoYouMeme: {{.FrontendURL}}

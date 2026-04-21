@@ -6,6 +6,7 @@
   import { physCard } from '$lib/actions/physCard';
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { ArrowLeft, Plus, Package, Check, User, Users } from '$lib/icons';
+  import * as m from '$lib/paraglide/messages';
   import type { ActionData, PageData } from './$types';
   import type { Pack, PaginatedResponse, GameType, RequiredPack } from '$lib/api/types';
 
@@ -40,20 +41,20 @@
   const packAborts: Record<string, AbortController | null> = {};
 
   function roleLabel(role: string): string {
-    if (role === 'image') return 'Image pack';
-    if (role === 'text') return 'Caption pack';
-    return `${role.charAt(0).toUpperCase()}${role.slice(1)} pack`;
+    if (role === 'image') return m.host_role_image();
+    if (role === 'text') return m.host_role_text();
+    return m.host_role_generic({ role: role.charAt(0).toUpperCase() + role.slice(1) });
   }
 
   function roleShort(role: string): string {
-    if (role === 'image') return 'Image';
-    if (role === 'text') return 'Caption';
-    return role.charAt(0).toUpperCase() + role.slice(1);
+    if (role === 'image') return m.host_role_image_short();
+    if (role === 'text') return m.host_role_text_short();
+    return m.host_role_generic_short({ role: role.charAt(0).toUpperCase() + role.slice(1) });
   }
 
   function roleHint(role: string): string {
-    if (role === 'image') return 'the meme canvas';
-    if (role === 'text') return 'the text options';
+    if (role === 'image') return m.host_role_image_hint();
+    if (role === 'text') return m.host_role_text_hint();
     return '';
   }
 
@@ -70,7 +71,9 @@
     else if (parts.length === 2) list = `${parts[0]} and ${parts[1]}`;
     else list = `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`;
     const n = requiredPacks.length;
-    return `${selectedGameType.name} needs ${n} pack${n > 1 ? 's' : ''}: ${list}.`;
+    return n === 1
+      ? m.host_explainer_single({ game: selectedGameType.name, count: n, list })
+      : m.host_explainer_plural({ game: selectedGameType.name, count: n, list });
   });
 
   async function loadPacksForRole(role: string) {
@@ -122,7 +125,7 @@
 </script>
 
 <svelte:head>
-  <title>Host a game — FabDoYouMeme</title>
+  <title>{m.host_page_title()}</title>
 </svelte:head>
 
 <div class="flex-1 flex items-start justify-center p-6 pt-8">
@@ -134,11 +137,11 @@
         use:pressPhysics={'ghost'}
         class="h-10 w-10 inline-flex items-center justify-center rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white"
         style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
-        aria-label="Back to home"
+        aria-label={m.host_back_aria()}
       >
         <ArrowLeft size={18} strokeWidth={2.5} />
       </a>
-      <h1 class="text-2xl font-bold">Host a game</h1>
+      <h1 class="text-2xl font-bold">{m.host_title()}</h1>
     </header>
 
     {#if form?.error}
@@ -153,7 +156,7 @@
 
     {#if step === 'game'}
       <section class="flex flex-col gap-4">
-        <p use:reveal={{ delay: 1 }} class="text-sm font-semibold text-brand-text-muted uppercase tracking-[0.2em]">Pick a game type</p>
+        <p use:reveal={{ delay: 1 }} class="text-sm font-semibold text-brand-text-muted uppercase tracking-[0.2em]">{m.host_step_game()}</p>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {#each data.gameTypes as gt, i}
             {@const variant = `a${(i % 6) + 1}`}
@@ -167,7 +170,7 @@
               style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
             >
               <div class="deck-art {variant}" aria-hidden="true">
-                Game card
+                {m.host_game_card_aria()}
               </div>
               <h3 class="text-lg font-bold m-0 leading-tight">
                 {gt.name}
@@ -179,12 +182,12 @@
                 {#if gt.supports_solo}
                   <span class="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-text-muted inline-flex items-center gap-1.5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-2.5 py-0.5">
                     <User size={12} strokeWidth={2.5} />
-                    Solo
+                    {m.host_badge_solo()}
                   </span>
                 {:else}
                   <span class="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-text-muted inline-flex items-center gap-1.5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-2.5 py-0.5">
                     <Users size={12} strokeWidth={2.5} />
-                    Multi
+                    {m.host_badge_multi()}
                   </span>
                 {/if}
               </div>
@@ -202,7 +205,7 @@
         <div class="flex flex-col gap-3">
           <div class="flex items-center justify-between gap-3">
             <p class="text-sm font-semibold text-brand-text-muted uppercase tracking-[0.2em]">
-              {requiredPacks.length > 1 ? 'Pick your packs' : 'Pick a pack'}
+              {requiredPacks.length > 1 ? m.host_step_pack_many() : m.host_step_pack_one()}
             </p>
             <button
               type="button"
@@ -212,7 +215,7 @@
               style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
             >
               <ArrowLeft size={12} strokeWidth={2.5} />
-              Change game
+              {m.host_change_game()}
             </button>
           </div>
 
@@ -284,7 +287,7 @@
             {/if}
             {#if typeof p.item_count === 'number'}
               <div class="mt-auto text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
-                {p.item_count} items
+                {m.host_pack_items({ count: p.item_count })}
               </div>
             {/if}
           </button>
@@ -317,16 +320,16 @@
               </div>
             </div>
             {#if loadingRoles[req.role]}
-              <p class="text-sm font-semibold text-brand-text-muted">Loading packs…</p>
+              <p class="text-sm font-semibold text-brand-text-muted">{m.host_packs_loading()}</p>
             {:else if (packsByRole[req.role] ?? []).length === 0}
               <p class="text-sm font-semibold text-brand-text-muted">
-                No compatible {req.role} packs for {selectedGameType?.name ?? 'this game'}.
+                {m.host_packs_empty({ role: req.role, game: selectedGameType?.name ?? m.host_packs_empty_fallback_game() })}
               </p>
             {:else}
               <div class="flex flex-col gap-6">
                 {#if officialOf(req.role).length > 0}
                   <div class="flex flex-col gap-3">
-                    <p class="text-[0.7rem] font-bold text-brand-text-muted uppercase tracking-[0.2em]">Official</p>
+                    <p class="text-[0.7rem] font-bold text-brand-text-muted uppercase tracking-[0.2em]">{m.host_section_official()}</p>
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {#each officialOf(req.role) as p, i (p.id)}
                         {@render packCard(p, req.role, i)}
@@ -336,7 +339,7 @@
                 {/if}
                 {#if personalOf(req.role).length > 0}
                   <div class="flex flex-col gap-3">
-                    <p class="text-[0.7rem] font-bold text-brand-text-muted uppercase tracking-[0.2em]">Personal</p>
+                    <p class="text-[0.7rem] font-bold text-brand-text-muted uppercase tracking-[0.2em]">{m.host_section_personal()}</p>
                     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {#each personalOf(req.role) as p, i (p.id)}
                         {@render packCard(p, req.role, i + officialOf(req.role).length)}
@@ -352,7 +355,7 @@
         {#if selectedGameType?.supports_solo}
           <label class="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" bind:checked={isSolo} class="h-4 w-4 rounded border-brand-border-heavy" />
-            <span class="text-sm font-semibold">Solo mode</span>
+            <span class="text-sm font-semibold">{m.host_solo_mode()}</span>
           </label>
         {/if}
 
@@ -364,7 +367,7 @@
           class="h-14 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-50 cursor-pointer inline-flex items-center justify-center gap-2"
         >
           <Plus size={18} strokeWidth={2.5} />
-          Spin up the room
+          {m.host_submit()}
         </button>
       </form>
     {/if}
@@ -373,5 +376,5 @@
 
 <footer class="border-t border-brand-border px-6 py-6 flex items-center justify-between text-xs font-semibold text-brand-text-muted">
   <p>© {new Date().getFullYear()} FabDoYouMeme</p>
-  <a href="/privacy" class="hover:text-brand-text transition-colors">Privacy Policy</a>
+  <a href="/privacy" class="hover:text-brand-text transition-colors">{m.common_privacy_policy()}</a>
 </footer>

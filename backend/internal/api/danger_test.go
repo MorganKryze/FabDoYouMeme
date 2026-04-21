@@ -63,6 +63,7 @@ func TestDangerWipeGameHistory_Succeeds(t *testing.T) {
 		Role:      "admin",
 		IsActive:  true,
 		ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("create user: %v", err)
@@ -111,6 +112,7 @@ func TestDangerWipeInvites_Succeeds(t *testing.T) {
 		Role:      "admin",
 		IsActive:  true,
 		ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("create admin: %v", err)

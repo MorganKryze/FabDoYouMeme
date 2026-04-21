@@ -5,6 +5,7 @@
   import RoomCodeInput from '$lib/components/RoomCodeInput.svelte';
   import { guest } from '$lib/state/guest.svelte';
   import { Play } from '$lib/icons';
+  import * as m from '$lib/paraglide/messages';
 
   let code = $state('');
   let displayName = $state('');
@@ -14,8 +15,8 @@
   async function onSubmit(e: Event) {
     e.preventDefault();
     error = null;
-    if (code.length !== 4) { error = 'Enter a 4-character room code.'; return; }
-    if (displayName.trim().length < 1) { error = 'Enter a display name.'; return; }
+    if (code.length !== 4) { error = m.join_error_code_required(); return; }
+    if (displayName.trim().length < 1) { error = m.join_error_name_required(); return; }
 
     submitting = true;
     try {
@@ -26,7 +27,7 @@
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        error = body.message ?? 'Could not join. Check the code and try again.';
+        error = body.message ?? m.join_error_generic();
         return;
       }
       const body = await res.json();
@@ -37,7 +38,7 @@
       });
       await goto(`/rooms/${code}?as=guest`);
     } catch {
-      error = 'Network error. Try again.';
+      error = m.join_error_network();
     } finally {
       submitting = false;
     }
@@ -45,12 +46,12 @@
 </script>
 
 <svelte:head>
-  <title>Join a room — FabDoYouMeme</title>
+  <title>{m.join_page_title()}</title>
 </svelte:head>
 
-<h1 class="text-2xl font-bold text-center">Join a room</h1>
+<h1 class="text-2xl font-bold text-center">{m.join_heading()}</h1>
 <p class="text-sm font-semibold text-brand-text-muted text-center -mt-4">
-  Drop your code and a name — no account needed.
+  {m.join_subtitle()}
 </p>
 
 <form onsubmit={onSubmit} class="flex flex-col gap-4">
@@ -64,18 +65,18 @@
   {/if}
 
   <div class="flex flex-col gap-1">
-    <label for="code" class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Room code</label>
+    <label for="code" class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">{m.join_field_code_label()}</label>
     <RoomCodeInput bind:value={code} autofocus />
   </div>
 
   <div class="flex flex-col gap-1">
-    <label for="display_name" class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">Display name</label>
+    <label for="display_name" class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">{m.join_field_display_name_label()}</label>
     <input
       id="display_name"
       bind:value={displayName}
       type="text"
       maxlength={32}
-      placeholder="Pick a nickname"
+      placeholder={m.common_pick_nickname()}
       class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-5 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
       style="box-shadow: 0 4px 0 rgba(0,0,0,0.06);"
     />
@@ -89,10 +90,10 @@
     class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-50 cursor-pointer inline-flex items-center justify-center gap-2"
   >
     <Play size={18} strokeWidth={2.5} />
-    {submitting ? 'Joining…' : 'Play'}
+    {submitting ? m.join_submitting() : m.join_submit()}
   </button>
 </form>
 
 <p class="text-center text-xs text-brand-text-muted">
-  Already have an account? <a href="/auth/magic-link" class="underline font-bold">Sign in</a>
+  {m.common_already_have_account_prefix()} <a href="/auth/magic-link" class="underline font-bold">{m.common_sign_in()}</a>
 </p>

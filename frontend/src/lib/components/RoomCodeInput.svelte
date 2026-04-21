@@ -1,4 +1,6 @@
 <script lang="ts">
+  import * as m from '$lib/paraglide/messages';
+
   interface Props {
     value?: string;
     name?: string;
@@ -117,7 +119,7 @@
 <div
   class="code-tiles inline-flex gap-2 w-full justify-center"
   role="group"
-  aria-label="Room code"
+  aria-label={m.room_code_input_aria()}
 >
   {#each slots as char, i (i)}
     <input

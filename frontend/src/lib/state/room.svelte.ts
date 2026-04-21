@@ -3,6 +3,8 @@ import type { GameType, Player, LeaderboardEntry, Submission, Round, WsMessage }
 import { toast } from './toast.svelte';
 import { ws } from './ws.svelte';
 import { handStore } from '$lib/games/meme-showdown/handStore.svelte';
+import { errorMessage } from '$lib/api/error-messages';
+import * as m from '$lib/paraglide/messages';
 
 type RoomPhase = 'idle' | 'countdown' | 'submitting' | 'voting' | 'results';
 type RoomStatus = 'lobby' | 'playing' | 'finished';
@@ -119,7 +121,7 @@ export class RoomState {
         // from the room_state snapshot (both users and guests use it as the
         // universal player identifier) so one comparison covers both kinds.
         if (this.ownUserId && this.ownUserId === d.user_id) {
-          toast.show('You were removed from the room', 'error');
+          toast.show(m.toast_player_kicked_self(), 'error');
           ws.disconnect();
           this.reset();
           if (typeof window !== 'undefined') {
@@ -354,7 +356,7 @@ export class RoomState {
       }
       case 'error': {
         const d = msg.data as { code: string; message?: string };
-        toast.show(d.message ?? d.code ?? 'An error occurred', 'error');
+        toast.show(errorMessage(d.code, d.message), 'error');
         if (d.code === 'submission_closed' || d.code === 'already_submitted') {
           this.hasSubmitted = true;
         }
@@ -364,7 +366,7 @@ export class RoomState {
         break;
       }
       case 'server_restarting':
-        toast.show('Server restarting — reconnecting…', 'warning');
+        toast.show(m.toast_server_restarting(), 'warning');
         break;
 
       case 'room_closed': {
@@ -372,8 +374,8 @@ export class RoomState {
         const reason = d?.reason ?? 'ended_by_host';
         const message =
           reason === 'ended_by_admin'
-            ? 'An admin ended this room'
-            : 'The host ended this room';
+            ? m.toast_room_ended_by_admin()
+            : m.toast_room_ended_by_host();
         ws.disconnect();
         toast.show(message, 'warning');
         this.reset();

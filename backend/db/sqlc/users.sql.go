@@ -15,7 +15,7 @@ import (
 )
 
 const confirmEmailChange = `-- name: ConfirmEmailChange :one
-UPDATE users SET email = pending_email, pending_email = NULL WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected
+UPDATE users SET email = pending_email, pending_email = NULL WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale
 `
 
 func (q *Queries) ConfirmEmailChange(ctx context.Context, id uuid.UUID) (User, error) {
@@ -32,6 +32,7 @@ func (q *Queries) ConfirmEmailChange(ctx context.Context, id uuid.UUID) (User, e
 		&i.ConsentAt,
 		&i.CreatedAt,
 		&i.IsProtected,
+		&i.Locale,
 	)
 	return i, err
 }
@@ -53,9 +54,9 @@ func (q *Queries) CountUsers(ctx context.Context, search *string) (int64, error)
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (username, email, role, is_active, invited_by, consent_at)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected
+INSERT INTO users (username, email, role, is_active, invited_by, consent_at, locale)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale
 `
 
 type CreateUserParams struct {
@@ -65,6 +66,7 @@ type CreateUserParams struct {
 	IsActive  bool        `json:"is_active"`
 	InvitedBy pgtype.UUID `json:"invited_by"`
 	ConsentAt time.Time   `json:"consent_at"`
+	Locale    string      `json:"locale"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -75,6 +77,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.IsActive,
 		arg.InvitedBy,
 		arg.ConsentAt,
+		arg.Locale,
 	)
 	var i User
 	err := row.Scan(
@@ -88,13 +91,14 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.ConsentAt,
 		&i.CreatedAt,
 		&i.IsProtected,
+		&i.Locale,
 	)
 	return i, err
 }
 
 const getSentinelUser = `-- name: GetSentinelUser :one
 
-SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected FROM users WHERE id = '00000000-0000-0000-0000-000000000001'
+SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale FROM users WHERE id = '00000000-0000-0000-0000-000000000001'
 `
 
 // Sentinel UUID: 00000000-0000-0000-0000-000000000001 (see auth.SentinelUserID in Go).
@@ -113,12 +117,13 @@ func (q *Queries) GetSentinelUser(ctx context.Context) (User, error) {
 		&i.ConsentAt,
 		&i.CreatedAt,
 		&i.IsProtected,
+		&i.Locale,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected FROM users WHERE email = $1
+SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -135,13 +140,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.ConsentAt,
 		&i.CreatedAt,
 		&i.IsProtected,
+		&i.Locale,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
 
-SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected FROM users WHERE id = $1
+SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale FROM users WHERE id = $1
 `
 
 // backend/db/queries/users.sql
@@ -159,12 +165,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.ConsentAt,
 		&i.CreatedAt,
 		&i.IsProtected,
+		&i.Locale,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected FROM users WHERE username = $1
+SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale FROM users WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -181,6 +188,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.ConsentAt,
 		&i.CreatedAt,
 		&i.IsProtected,
+		&i.Locale,
 	)
 	return i, err
 }
@@ -372,6 +380,7 @@ SELECT
   u.consent_at,
   u.created_at,
   u.is_protected,
+  u.locale,
   COALESCE((
     SELECT COUNT(*)
     FROM room_players rp
@@ -404,6 +413,7 @@ type ListUsersRow struct {
 	ConsentAt    time.Time   `json:"consent_at"`
 	CreatedAt    time.Time   `json:"created_at"`
 	IsProtected  bool        `json:"is_protected"`
+	Locale       string      `json:"locale"`
 	GamesPlayed  int64       `json:"games_played"`
 	LastLoginAt  interface{} `json:"last_login_at"`
 }
@@ -439,6 +449,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUse
 			&i.ConsentAt,
 			&i.CreatedAt,
 			&i.IsProtected,
+			&i.Locale,
 			&i.GamesPlayed,
 			&i.LastLoginAt,
 		); err != nil {
@@ -453,7 +464,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUse
 }
 
 const setPendingEmail = `-- name: SetPendingEmail :one
-UPDATE users SET pending_email = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected
+UPDATE users SET pending_email = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale
 `
 
 type SetPendingEmailParams struct {
@@ -475,12 +486,13 @@ func (q *Queries) SetPendingEmail(ctx context.Context, arg SetPendingEmailParams
 		&i.ConsentAt,
 		&i.CreatedAt,
 		&i.IsProtected,
+		&i.Locale,
 	)
 	return i, err
 }
 
 const setUserActive = `-- name: SetUserActive :one
-UPDATE users SET is_active = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected
+UPDATE users SET is_active = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale
 `
 
 type SetUserActiveParams struct {
@@ -502,6 +514,7 @@ func (q *Queries) SetUserActive(ctx context.Context, arg SetUserActiveParams) (U
 		&i.ConsentAt,
 		&i.CreatedAt,
 		&i.IsProtected,
+		&i.Locale,
 	)
 	return i, err
 }
@@ -533,7 +546,7 @@ func (q *Queries) UpdateSubmissionsSentinel(ctx context.Context, userID pgtype.U
 }
 
 const updateUserEmailAdmin = `-- name: UpdateUserEmailAdmin :one
-UPDATE users SET email = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected
+UPDATE users SET email = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale
 `
 
 type UpdateUserEmailAdminParams struct {
@@ -555,12 +568,41 @@ func (q *Queries) UpdateUserEmailAdmin(ctx context.Context, arg UpdateUserEmailA
 		&i.ConsentAt,
 		&i.CreatedAt,
 		&i.IsProtected,
+		&i.Locale,
+	)
+	return i, err
+}
+
+const updateUserLocale = `-- name: UpdateUserLocale :one
+UPDATE users SET locale = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale
+`
+
+type UpdateUserLocaleParams struct {
+	ID     uuid.UUID `json:"id"`
+	Locale string    `json:"locale"`
+}
+
+func (q *Queries) UpdateUserLocale(ctx context.Context, arg UpdateUserLocaleParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateUserLocale, arg.ID, arg.Locale)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.PendingEmail,
+		&i.Role,
+		&i.IsActive,
+		&i.InvitedBy,
+		&i.ConsentAt,
+		&i.CreatedAt,
+		&i.IsProtected,
+		&i.Locale,
 	)
 	return i, err
 }
 
 const updateUserRole = `-- name: UpdateUserRole :one
-UPDATE users SET role = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected
+UPDATE users SET role = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale
 `
 
 type UpdateUserRoleParams struct {
@@ -582,12 +624,13 @@ func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) 
 		&i.ConsentAt,
 		&i.CreatedAt,
 		&i.IsProtected,
+		&i.Locale,
 	)
 	return i, err
 }
 
 const updateUserUsername = `-- name: UpdateUserUsername :one
-UPDATE users SET username = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected
+UPDATE users SET username = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale
 `
 
 type UpdateUserUsernameParams struct {
@@ -609,6 +652,7 @@ func (q *Queries) UpdateUserUsername(ctx context.Context, arg UpdateUserUsername
 		&i.ConsentAt,
 		&i.CreatedAt,
 		&i.IsProtected,
+		&i.Locale,
 	)
 	return i, err
 }

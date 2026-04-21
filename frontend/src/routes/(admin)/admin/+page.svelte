@@ -22,6 +22,7 @@
     AuditEntry
   } from '$lib/api/types';
   import type { PageData } from './$types';
+  import * as m from '$lib/paraglide/messages';
 
   let { data }: { data: PageData } = $props();
 
@@ -58,20 +59,17 @@
 
   // ── Static config ────────────────────────────────────────────────────────
   const checks = [
-    { key: 'postgres', label: 'Postgres' },
-    { key: 'rustfs', label: 'RustFS (S3)' },
-    { key: 'smtp', label: 'SMTP' }
+    { key: 'postgres', label: m.admin_health_postgres() },
+    { key: 'rustfs', label: m.admin_health_rustfs() },
+    { key: 'smtp', label: m.admin_health_smtp() }
   ] as const;
 
   // Runbook hints shown inline when a check flips to degraded. Kept terse —
   // this is the "don't alt-tab during an incident" shortcut.
   const runbook: Record<string, string> = {
-    postgres:
-      'Likely causes: connection pool exhausted, slow query holding locks, or the DB container restarting. Check `docker compose logs postgres` and `pg_stat_activity`.',
-    rustfs:
-      'Likely causes: RustFS container crashed, network between backend ↔ pangolin broken, or credentials rotated. Verify RUSTFS_ENDPOINT reachable and the bucket exists.',
-    smtp:
-      'Likely causes: SMTP provider rate-limiting, credentials rotated, or relay DNS/TLS misconfig. Dev stacks should hit Mailpit; check SMTP_HOST and outbox toast state.'
+    postgres: m.admin_health_runbook_postgres(),
+    rustfs: m.admin_health_runbook_rustfs(),
+    smtp: m.admin_health_runbook_smtp()
   };
 
   // Versioned key: bump the suffix whenever the AdminStats shape changes
@@ -82,12 +80,12 @@
   // ── Helpers ──────────────────────────────────────────────────────────────
   function formatAge(ms: number): string {
     const seconds = Math.floor(ms / 1000);
-    if (seconds < 5) return 'just now';
-    if (seconds < 60) return `${seconds}s ago`;
+    if (seconds < 5) return m.admin_age_just_now();
+    if (seconds < 60) return m.admin_age_seconds({ seconds });
     const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
+    if (minutes < 60) return m.admin_age_minutes({ minutes });
     const hours = Math.floor(minutes / 60);
-    return `${hours}h ago`;
+    return m.admin_age_hours({ hours });
   }
 
   function recordSample(snap: DeepHealthResponse) {
@@ -234,7 +232,7 @@
     const ok = await fetchAll();
     refreshing = false;
     if (!ok) {
-      toast.show('Health check failed.', 'error');
+      toast.show(m.admin_health_toast_failed(), 'error');
     } else {
       // Manual refresh always resets the backoff — the operator is clearly
       // expecting things to work now.
@@ -282,9 +280,9 @@
   async function copyError(text: string) {
     try {
       await navigator.clipboard.writeText(text);
-      toast.show('Copied error to clipboard.', 'success');
+      toast.show(m.admin_health_toast_copied(), 'success');
     } catch {
-      toast.show('Copy failed — select manually.', 'error');
+      toast.show(m.admin_health_toast_copy_failed(), 'error');
     }
   }
 
@@ -293,28 +291,28 @@
 </script>
 
 <svelte:head>
-  <title>Admin Dashboard — FabDoYouMeme</title>
+  <title>{m.admin_dashboard_page_title()}</title>
 </svelte:head>
 
 <div class="p-6 flex flex-col gap-6" use:reveal>
-  <h1 class="text-2xl font-bold">Dashboard</h1>
+  <h1 class="text-2xl font-bold">{m.admin_dashboard_title()}</h1>
 
   {#if networkDegraded}
     <div
       class="rounded-xl border border-amber-300 bg-amber-50 text-amber-900 text-sm px-4 py-2"
       role="status"
     >
-      Network degraded — backing off to every {Math.round(pollDelayMs / 1000)}s.
+      {m.admin_network_degraded({ seconds: Math.round(pollDelayMs / 1000) })}
     </div>
   {/if}
 
   {#if stats}
     <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
       {#each [
-        { label: 'Active Rooms', value: stats.active_rooms, field: 'active_rooms' as const },
-        { label: 'Total Users', value: stats.total_users, field: 'total_users' as const },
-        { label: 'Games Played', value: stats.games_played, field: 'games_played' as const },
-        { label: 'Pending Invites', value: stats.pending_invites, field: 'pending_invites' as const },
+        { label: m.admin_card_active_rooms(), value: stats.active_rooms, field: 'active_rooms' as const },
+        { label: m.admin_card_total_users(), value: stats.total_users, field: 'total_users' as const },
+        { label: m.admin_card_games_played(), value: stats.games_played, field: 'games_played' as const },
+        { label: m.admin_card_pending_invites(), value: stats.pending_invites, field: 'pending_invites' as const },
       ] as card, i}
         {@const d = delta(card.field)}
         <div
@@ -338,7 +336,7 @@
 
   {#if storageStats}
     <section class="flex flex-col gap-3">
-      <h2 class="text-base font-semibold">Storage</h2>
+      <h2 class="text-base font-semibold">{m.admin_storage_heading()}</h2>
       <div
         use:reveal
         use:physCard
@@ -346,17 +344,17 @@
       >
         {#each [
           {
-            label: 'Packs',
+            label: m.admin_storage_packs(),
             value: storageStats.packs_count.toLocaleString(),
             Icon: Package,
           },
           {
-            label: 'Assets',
+            label: m.admin_storage_assets(),
             value: storageStats.assets_count.toLocaleString(),
             Icon: ImageIcon,
           },
           {
-            label: 'Used on RustFS',
+            label: m.admin_storage_used(),
             value: formatBytes(storageStats.total_bytes),
             Icon: Server,
           },
@@ -386,9 +384,9 @@
   {#if health}
     <section class="flex flex-col gap-3">
       <div class="flex items-center gap-3 flex-wrap">
-        <h2 class="text-base font-semibold">System health</h2>
+        <h2 class="text-base font-semibold">{m.admin_health_heading()}</h2>
         <span class="text-xs text-brand-text-muted" aria-live="polite">
-          Refreshed {refreshAge}
+          {m.admin_health_refreshed({ age: refreshAge })}
         </span>
         <button
           type="button"
@@ -403,7 +401,7 @@
             strokeWidth={2.5}
             class={refreshing ? 'animate-spin' : ''}
           />
-          {refreshing ? 'Refreshing…' : 'Refresh'}
+          {refreshing ? m.admin_refreshing() : m.admin_refresh()}
         </button>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -446,7 +444,7 @@
                 preserveAspectRatio="none"
                 class="w-full h-7 text-brand-text"
                 role="img"
-                aria-label={`${c.label} recent health samples`}
+                aria-label={m.admin_health_samples_aria({ label: c.label })}
               >
                 {#each Array(HISTORY_CAP) as _, idx}
                   {@const s = idx >= slotOffset ? samples[idx - slotOffset] : null}
@@ -461,14 +459,14 @@
                     fill-opacity={s ? 0.92 : 0.1}
                   >
                     {#if s}
-                      <title>{s.status} · {formatLatency(s.latency)}</title>
+                      <title>{m.admin_health_sample_tooltip({ status: s.status, latency: formatLatency(s.latency) })}</title>
                     {/if}
                   </rect>
                 {/each}
               </svg>
               <div class="flex justify-between text-[10px] uppercase tracking-wider text-brand-text-muted">
-                <span>~15 min ago</span>
-                <span>now</span>
+                <span>{m.admin_health_rail_past()}</span>
+                <span>{m.admin_health_rail_now()}</span>
               </div>
             </div>
 
@@ -477,8 +475,8 @@
                 <button
                   type="button"
                   onclick={() => copyError(info.error ?? '')}
-                  title="Copy error"
-                  aria-label="Copy error to clipboard"
+                  title={m.admin_health_copy_error_title()}
+                  aria-label={m.admin_health_copy_error_aria()}
                   class="absolute top-1 right-1 z-10 inline-flex items-center justify-center h-6 w-6 rounded border border-red-200 bg-white/80 hover:bg-white text-red-700"
                 >
                   <Copy size={12} strokeWidth={2.5} />
@@ -507,9 +505,9 @@
   {/if}
 
   <section class="flex flex-col gap-3">
-    <h2 class="text-base font-semibold">Recent Activity</h2>
+    <h2 class="text-base font-semibold">{m.admin_audit_heading()}</h2>
     {#if audit.length === 0}
-      <p class="text-sm text-brand-text-muted">No recent activity.</p>
+      <p class="text-sm text-brand-text-muted">{m.admin_audit_none()}</p>
     {:else}
       <ul
         class="flex flex-col divide-y divide-brand-border rounded-xl border border-brand-border bg-brand-white"

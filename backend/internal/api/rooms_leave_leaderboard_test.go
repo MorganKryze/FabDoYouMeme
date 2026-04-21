@@ -38,6 +38,7 @@ func roomInState(t *testing.T, q *db.Queries, host db.User, state string) db.Roo
 	pack, err := q.CreatePack(ctx, db.CreatePackParams{
 		Name:       testutil.SeedName(t) + "_rs",
 		Visibility: "private",
+		Language:   "en",
 	})
 	if err != nil {
 		t.Fatalf("roomInState: create pack: %v", err)

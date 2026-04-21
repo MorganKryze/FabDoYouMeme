@@ -17,6 +17,7 @@ type registerRequest struct {
 	Email          string `json:"email"`
 	Consent        bool   `json:"consent"`
 	AgeAffirmation bool   `json:"age_affirmation"`
+	Locale         string `json:"locale"`
 }
 
 // Register handles POST /api/auth/register.
@@ -82,6 +83,14 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	if invite.CreatedBy.Valid {
 		invitedBy = invite.CreatedBy
 	}
+	// Locale comes from the registration form. The frontend posts the active UI
+	// locale (resolved from cookie/Accept-Language at form-render time); on a
+	// missing or unknown value we fall back to "en" silently rather than
+	// rejecting — matches the frontend's own default-locale helper.
+	locale := req.Locale
+	if locale != "en" && locale != "fr" {
+		locale = "en"
+	}
 	newUser, err := q.CreateUser(r.Context(), db.CreateUserParams{
 		Username:  req.Username,
 		Email:     req.Email,
@@ -89,6 +98,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		IsActive:  true,
 		InvitedBy: invitedBy,
 		ConsentAt: h.clock.Now().UTC(),
+		Locale:    locale,
 	})
 	if err != nil {
 		var pgErr *pgconn.PgError

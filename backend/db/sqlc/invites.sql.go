@@ -17,7 +17,7 @@ UPDATE invites SET uses_count = uses_count + 1
 WHERE id = $1
   AND (max_uses = 0 OR uses_count < max_uses)
   AND (expires_at IS NULL OR expires_at > now())
-RETURNING id, token, created_by, label, restricted_email, max_uses, uses_count, expires_at, created_at
+RETURNING id, token, created_by, label, restricted_email, max_uses, uses_count, expires_at, created_at, locale
 `
 
 func (q *Queries) ConsumeInvite(ctx context.Context, id uuid.UUID) (Invite, error) {
@@ -33,6 +33,7 @@ func (q *Queries) ConsumeInvite(ctx context.Context, id uuid.UUID) (Invite, erro
 		&i.UsesCount,
 		&i.ExpiresAt,
 		&i.CreatedAt,
+		&i.Locale,
 	)
 	return i, err
 }
@@ -65,9 +66,9 @@ func (q *Queries) CountPendingInvites(ctx context.Context) (int64, error) {
 
 const createInvite = `-- name: CreateInvite :one
 
-INSERT INTO invites (token, created_by, label, restricted_email, max_uses, expires_at)
-VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, token, created_by, label, restricted_email, max_uses, uses_count, expires_at, created_at
+INSERT INTO invites (token, created_by, label, restricted_email, max_uses, expires_at, locale)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+RETURNING id, token, created_by, label, restricted_email, max_uses, uses_count, expires_at, created_at, locale
 `
 
 type CreateInviteParams struct {
@@ -77,6 +78,7 @@ type CreateInviteParams struct {
 	RestrictedEmail *string            `json:"restricted_email"`
 	MaxUses         int32              `json:"max_uses"`
 	ExpiresAt       pgtype.Timestamptz `json:"expires_at"`
+	Locale          string             `json:"locale"`
 }
 
 // backend/db/queries/invites.sql
@@ -88,6 +90,7 @@ func (q *Queries) CreateInvite(ctx context.Context, arg CreateInviteParams) (Inv
 		arg.RestrictedEmail,
 		arg.MaxUses,
 		arg.ExpiresAt,
+		arg.Locale,
 	)
 	var i Invite
 	err := row.Scan(
@@ -100,6 +103,7 @@ func (q *Queries) CreateInvite(ctx context.Context, arg CreateInviteParams) (Inv
 		&i.UsesCount,
 		&i.ExpiresAt,
 		&i.CreatedAt,
+		&i.Locale,
 	)
 	return i, err
 }
@@ -114,7 +118,7 @@ func (q *Queries) DeleteInvite(ctx context.Context, id uuid.UUID) error {
 }
 
 const getInviteByToken = `-- name: GetInviteByToken :one
-SELECT id, token, created_by, label, restricted_email, max_uses, uses_count, expires_at, created_at FROM invites WHERE token = $1
+SELECT id, token, created_by, label, restricted_email, max_uses, uses_count, expires_at, created_at, locale FROM invites WHERE token = $1
 `
 
 func (q *Queries) GetInviteByToken(ctx context.Context, token string) (Invite, error) {
@@ -130,12 +134,13 @@ func (q *Queries) GetInviteByToken(ctx context.Context, token string) (Invite, e
 		&i.UsesCount,
 		&i.ExpiresAt,
 		&i.CreatedAt,
+		&i.Locale,
 	)
 	return i, err
 }
 
 const listInvites = `-- name: ListInvites :many
-SELECT id, token, created_by, label, restricted_email, max_uses, uses_count, expires_at, created_at FROM invites ORDER BY created_at DESC LIMIT $2 OFFSET $1
+SELECT id, token, created_by, label, restricted_email, max_uses, uses_count, expires_at, created_at, locale FROM invites ORDER BY created_at DESC LIMIT $2 OFFSET $1
 `
 
 type ListInvitesParams struct {
@@ -162,6 +167,7 @@ func (q *Queries) ListInvites(ctx context.Context, arg ListInvitesParams) ([]Inv
 			&i.UsesCount,
 			&i.ExpiresAt,
 			&i.CreatedAt,
+			&i.Locale,
 		); err != nil {
 			return nil, err
 		}

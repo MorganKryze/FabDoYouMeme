@@ -67,7 +67,7 @@ func (q *Queries) DeleteSession(ctx context.Context, tokenHash string) error {
 }
 
 const getSessionByTokenHash = `-- name: GetSessionByTokenHash :one
-SELECT s.id, s.user_id, s.token_hash, s.expires_at, s.created_at, u.id AS u_id, u.username, u.email, u.role, u.is_active, u.created_at AS u_created_at
+SELECT s.id, s.user_id, s.token_hash, s.expires_at, s.created_at, u.id AS u_id, u.username, u.email, u.role, u.is_active, u.locale, u.created_at AS u_created_at
 FROM sessions s
 JOIN users u ON s.user_id = u.id
 WHERE s.token_hash = $1 AND s.expires_at > now()
@@ -84,6 +84,7 @@ type GetSessionByTokenHashRow struct {
 	Email      string    `json:"email"`
 	Role       string    `json:"role"`
 	IsActive   bool      `json:"is_active"`
+	Locale     string    `json:"locale"`
 	UCreatedAt time.Time `json:"u_created_at"`
 }
 
@@ -101,6 +102,7 @@ func (q *Queries) GetSessionByTokenHash(ctx context.Context, tokenHash string) (
 		&i.Email,
 		&i.Role,
 		&i.IsActive,
+		&i.Locale,
 		&i.UCreatedAt,
 	)
 	return i, err

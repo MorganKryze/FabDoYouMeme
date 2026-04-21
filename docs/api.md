@@ -16,11 +16,11 @@ Public endpoints — no session required.
 
 | Method | Path                   | Description                                                            |
 | ------ | ---------------------- | ---------------------------------------------------------------------- |
-| `POST` | `/api/auth/register`   | Register with invite token, username, email, and explicit consent      |
+| `POST` | `/api/auth/register`   | Register with invite token, username, email, explicit consent, and optional `locale` (`en`\|`fr`, defaults to `en`)      |
 | `POST` | `/api/auth/magic-link` | Request a magic login link — always returns `200`                      |
 | `POST` | `/api/auth/verify`     | Verify a magic link token and create a session                         |
 | `POST` | `/api/auth/logout`     | Delete the current session (session required)                          |
-| `GET`  | `/api/auth/me`         | Return current user `{ id, username, email, role }` (session required) |
+| `GET`  | `/api/auth/me`         | Return current user `{ id, username, email, role, locale, created_at }` (session required) |
 
 See [auth-and-identity.md](auth-and-identity.md) for full flow documentation.
 
@@ -30,7 +30,7 @@ Requires session.
 
 | Method  | Path                    | Description                                     |
 | ------- | ----------------------- | ----------------------------------------------- |
-| `PATCH` | `/api/users/me`         | Update own username or request email change     |
+| `PATCH` | `/api/users/me`         | Update own `username`, request `email` change, or set `locale` (`en`\|`fr`). Send exactly one of the three fields per call     |
 | `GET`   | `/api/users/me/history` | Paginated past rooms and final scores           |
 | `GET`   | `/api/users/me/export`  | Export all personal data as JSON (GDPR Art. 20) |
 
@@ -64,10 +64,10 @@ Requires session (read); owner or admin (write).
 
 | Method   | Path                                                  | Description                                     |
 | -------- | ----------------------------------------------------- | ----------------------------------------------- |
-| `GET`    | `/api/packs`                                          | List packs — visibility rules apply (see below). Supports filtering via `?game_type=<slug>&role=<image\|text>`; the handler drops packs that contain zero items compatible with the role's payload-version set |
-| `POST`   | `/api/packs`                                          | Create a pack                                   |
+| `GET`    | `/api/packs`                                          | List packs — visibility rules apply (see below). Supports filtering via `?game_type=<slug>&role=<image\|text>` and `?language=<en\|fr>`; the handler drops packs that contain zero items compatible with the role's payload-version set |
+| `POST`   | `/api/packs`                                          | Create a pack. Body requires `name`, `language` (`en`\|`fr`), optional `description` / `visibility`. Returns `400 e_pack_language_required` if `language` is missing |
 | `GET`    | `/api/packs/:id`                                      | Get pack details                                |
-| `PATCH`  | `/api/packs/:id`                                      | Update name, description, or visibility         |
+| `PATCH`  | `/api/packs/:id`                                      | Update name, description, visibility, or `language` (`en`\|`fr`)        |
 | `DELETE` | `/api/packs/:id`                                      | Soft-delete a pack                              |
 | `GET`    | `/api/packs/:id/items`                                | List items in a pack                            |
 | `POST`   | `/api/packs/:id/items`                                | Add an item                                     |
@@ -105,7 +105,7 @@ Requires session + admin role.
 | `PATCH`  | `/api/admin/users/:id`         | Update role, is_active, email, or username          |
 | `DELETE` | `/api/admin/users/:id`         | Hard-delete a user (GDPR erasure)                   |
 | `GET`    | `/api/admin/invites`           | List all invites (paginated)                        |
-| `POST`   | `/api/admin/invites`           | Create an invite                                    |
+| `POST`   | `/api/admin/invites`           | Create an invite. Accepts optional `locale` (`en`\|`fr`); defaults to the inviting admin's locale    |
 | `DELETE` | `/api/admin/invites/:id`       | Revoke an invite                                    |
 | `GET`    | `/api/admin/notifications`     | List admin notifications (pack published/modified)  |
 | `PATCH`  | `/api/admin/notifications/:id` | Mark notification as read                           |

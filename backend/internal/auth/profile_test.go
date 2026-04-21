@@ -100,6 +100,7 @@ func seedFinishedRoomForUser(t *testing.T, q *db.Queries, user db.User, withGame
 	pack, err := q.CreatePack(ctx, db.CreatePackParams{
 		Name:       testutil.SeedName(t) + "_" + user.Username + "_pk",
 		Visibility: "private",
+		Language:   "en",
 	})
 	if err != nil {
 		t.Fatalf("seedFinishedRoomForUser: create pack: %v", err)

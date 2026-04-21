@@ -10,6 +10,7 @@
   import { onMount } from 'svelte';
   import LabHelpDrawer from '$lib/components/studio/LabHelpDrawer.svelte';
   import Wordmark from '$lib/components/Wordmark.svelte';
+  import * as m from '$lib/paraglide/messages';
   import type { LayoutData } from './$types';
 
   let { children, data }: { children: any; data: LayoutData } = $props();
@@ -58,11 +59,11 @@
     prevWsStatus = status;
 
     if (status === 'reconnecting') {
-      toast.show('Connection lost — reconnecting…', 'warning');
+      toast.show(m.toast_connection_lost(), 'warning');
     } else if (status === 'error') {
-      toast.show('Connection failed.', 'error', { label: 'Retry', fn: () => ws.reconnect() });
+      toast.show(m.toast_connection_failed(), 'error', { label: m.toast_retry(), fn: () => ws.reconnect() });
     } else if (status === 'connected' && prev === 'reconnecting') {
-      toast.show('Reconnected.', 'success');
+      toast.show(m.toast_reconnected(), 'success');
     }
   });
 </script>
@@ -90,10 +91,10 @@
           use:hoverEffect={'swap'}
           class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-bold bg-brand-white border-[2.5px] border-brand-border-heavy no-underline"
           style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
-          aria-label="Admin panel"
+          aria-label={m.nav_admin_aria()}
         >
           <Shield size={16} strokeWidth={2.5} />
-          Admin
+          {m.nav_admin()}
         </a>
       {/if}
 
@@ -104,7 +105,7 @@
         style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
       >
         <Wrench size={16} strokeWidth={2.5} />
-        Lab
+        {m.nav_lab()}
       </a>
 
       <a
@@ -112,10 +113,10 @@
         use:hoverEffect={'swap'}
         class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-bold bg-brand-white border-[2.5px] border-brand-border-heavy no-underline"
         style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
-        aria-label="Settings"
+        aria-label={m.nav_settings_aria()}
       >
         <Settings size={16} strokeWidth={2.5} />
-        Settings
+        {m.nav_settings()}
       </a>
     </div>
   </header>
@@ -140,12 +141,12 @@
           style="box-shadow: 0 4px 0 rgba(0,0,0,0.12);"
         >
           <HelpCircle size={16} strokeWidth={2.5} />
-          How packs work
+          {m.nav_lab_help_open()}
         </button>
         <button
           type="button"
           onclick={dismissLabHelp}
-          aria-label="Dismiss help tip"
+          aria-label={m.nav_lab_help_dismiss_aria()}
           class="absolute -top-2 -right-2 inline-flex items-center justify-center h-6 w-6 rounded-full bg-brand-text text-brand-white border-[2.5px] border-brand-border-heavy cursor-pointer hover:scale-110 transition-transform"
           style="box-shadow: 0 2px 0 rgba(0,0,0,0.18);"
         >

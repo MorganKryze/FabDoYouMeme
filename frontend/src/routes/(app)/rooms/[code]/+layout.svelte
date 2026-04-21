@@ -6,6 +6,7 @@
   import { guest } from '$lib/state/guest.svelte';
   import type { WsMessage } from '$lib/api/types';
   import type { LayoutData } from './$types';
+  import * as m from '$lib/paraglide/messages';
 
   let { children, data }: { children: any; data: LayoutData } = $props();
 
@@ -42,6 +43,6 @@
     aria-live="polite"
   >
     <span class="h-2 w-2 rounded-full" style="background: var(--brand-accent);"></span>
-    Reconnecting… (attempt {ws.retryCount} / 10)
+    {m.room_reconnect_hint({ attempt: ws.retryCount })}
   </div>
 {/if}

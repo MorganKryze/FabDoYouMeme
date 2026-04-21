@@ -4,6 +4,7 @@
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import RoomCodeInput from '$lib/components/RoomCodeInput.svelte';
   import { Play, ChevronDown } from '$lib/icons';
+  import * as m from '$lib/paraglide/messages';
 
   let open = $state(false);
   let code = $state('');
@@ -50,7 +51,7 @@
     class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-bold bg-brand-white border-[2.5px] border-brand-border-heavy transition-colors"
     style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
   >
-    Got a code?
+    {m.marketing_popover_trigger()}
     <ChevronDown
       size={14}
       strokeWidth={2.5}
@@ -63,12 +64,12 @@
       class="absolute right-0 mt-3 w-[min(22rem,calc(100vw-2rem))] rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-3 z-50"
       style="box-shadow: 0 8px 0 rgba(0,0,0,0.08);"
       role="dialog"
-      aria-label="Join a room by code"
+      aria-label={m.marketing_popover_aria()}
     >
       <div class="text-center">
-        <p class="text-sm font-bold">Jump into a room</p>
+        <p class="text-sm font-bold">{m.marketing_popover_title()}</p>
         <p class="text-xs font-semibold text-brand-text-muted mt-0.5">
-          No account needed — just the code.
+          {m.marketing_popover_subtitle()}
         </p>
       </div>
 
@@ -83,7 +84,7 @@
         class="h-12 w-full rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-40 cursor-pointer inline-flex items-center justify-center gap-2"
       >
         <Play size={16} strokeWidth={2.5} />
-        Join
+        {m.marketing_popover_submit()}
       </button>
     </div>
   {/if}

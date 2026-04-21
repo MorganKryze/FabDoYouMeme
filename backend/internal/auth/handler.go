@@ -39,6 +39,9 @@ func New(pool *pgxpool.Pool, cfg *config.Config, email EmailSender, log *slog.Lo
 	if clk == nil {
 		clk = clock.Real{}
 	}
+	if cfg.DefaultLocale == "" {
+		cfg.DefaultLocale = "en"
+	}
 	return &Handler{
 		db:    db.New(pool),
 		pool:  pool,
@@ -57,10 +60,10 @@ func New(pool *pgxpool.Pool, cfg *config.Config, email EmailSender, log *slog.Lo
 // into at most one per interval, without needing a dedicated last_renewed_at
 // column — the extension delta itself tells us how long it has been since the
 // previous renewal.
-func (h *Handler) SessionLookupFn(ctx context.Context, tokenHash string) (string, string, string, string, bool, time.Time, error) {
+func (h *Handler) SessionLookupFn(ctx context.Context, tokenHash string) (string, string, string, string, string, bool, time.Time, error) {
 	row, err := h.db.GetSessionByTokenHash(ctx, tokenHash)
 	if err != nil {
-		return "", "", "", "", false, time.Time{}, err
+		return "", "", "", "", "", false, time.Time{}, err
 	}
 	newExpiry := h.clock.Now().Add(h.cfg.SessionTTL)
 	if h.cfg.SessionRenewInterval <= 0 || newExpiry.Sub(row.ExpiresAt) >= h.cfg.SessionRenewInterval {
@@ -71,7 +74,7 @@ func (h *Handler) SessionLookupFn(ctx context.Context, tokenHash string) (string
 			h.log.WarnContext(ctx, "session renewal failed", "err", err)
 		}
 	}
-	return row.UID.String(), row.Username, row.Email, row.Role, row.IsActive, row.UCreatedAt, nil
+	return row.UID.String(), row.Username, row.Email, row.Role, row.Locale, row.IsActive, row.UCreatedAt, nil
 }
 
 // prepareMagicLinkToken invalidates any prior tokens of the same purpose,
@@ -112,18 +115,22 @@ func (h *Handler) prepareMagicLinkToken(ctx context.Context, user db.User, purpo
 // hands it to the SMTP sender. Runs inline with the provided context — the
 // wrappers decide whether that context is the request's or a detached one.
 func (h *Handler) deliverMagicLink(ctx context.Context, user db.User, purpose, magicURL string, expiryMinutes int) error {
+	locale := user.Locale
+	if locale == "" {
+		locale = h.cfg.DefaultLocale
+	}
 	if purpose == "email_change" {
 		if user.PendingEmail == nil || *user.PendingEmail == "" {
 			return fmt.Errorf("email_change requested but pending_email is not set for user %s", user.ID)
 		}
-		return h.email.SendMagicLinkEmailChange(ctx, *user.PendingEmail, EmailChangeData{
+		return h.email.SendMagicLinkEmailChange(ctx, *user.PendingEmail, locale, EmailChangeData{
 			Username:      user.Username,
 			MagicLinkURL:  magicURL,
 			FrontendURL:   h.cfg.FrontendURL,
 			ExpiryMinutes: expiryMinutes,
 		})
 	}
-	return h.email.SendMagicLinkLogin(ctx, user.Email, LoginEmailData{
+	return h.email.SendMagicLinkLogin(ctx, user.Email, locale, LoginEmailData{
 		Username:      user.Username,
 		MagicLinkURL:  magicURL,
 		FrontendURL:   h.cfg.FrontendURL,

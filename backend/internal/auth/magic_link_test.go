@@ -32,16 +32,16 @@ func (s *countingEmail) count() int {
 	return s.sends
 }
 
-func (s *countingEmail) SendMagicLinkLogin(_ context.Context, _ string, _ auth.LoginEmailData) error {
+func (s *countingEmail) SendMagicLinkLogin(_ context.Context, _, _ string, _ auth.LoginEmailData) error {
 	s.mu.Lock()
 	s.sends++
 	s.mu.Unlock()
 	return nil
 }
-func (s *countingEmail) SendMagicLinkEmailChange(_ context.Context, _ string, _ auth.EmailChangeData) error {
+func (s *countingEmail) SendMagicLinkEmailChange(_ context.Context, _, _ string, _ auth.EmailChangeData) error {
 	return nil
 }
-func (s *countingEmail) SendEmailChangedNotification(_ context.Context, _ string, _ auth.EmailChangedNotificationData) error {
+func (s *countingEmail) SendEmailChangedNotification(_ context.Context, _, _ string, _ auth.EmailChangedNotificationData) error {
 	return nil
 }
 
@@ -53,6 +53,7 @@ func seedUser(t *testing.T, q *db.Queries, username, email string) db.User {
 		Role:      "player",
 		IsActive:  true,
 		ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("seedUser %s: %v", email, err)

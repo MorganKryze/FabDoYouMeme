@@ -1,17 +1,18 @@
 <script lang="ts">
   import { theme, type ThemePref } from '$lib/state/theme.svelte';
   import { Sparkles, Sun, Moon } from '$lib/icons';
+  import * as m from '$lib/paraglide/messages';
 
   type Option = { value: ThemePref; label: string; Icon: typeof Sparkles };
 
-  const options: Option[] = [
-    { value: 'auto', label: 'Auto', Icon: Sparkles },
-    { value: 'light', label: 'Light', Icon: Sun },
-    { value: 'dark', label: 'Dark', Icon: Moon },
-  ];
+  const options: Option[] = $derived([
+    { value: 'auto', label: m.common_theme_auto(), Icon: Sparkles },
+    { value: 'light', label: m.common_theme_light(), Icon: Sun },
+    { value: 'dark', label: m.common_theme_dark(), Icon: Moon },
+  ]);
 </script>
 
-<div class="theme-toggle" role="group" aria-label="Theme preference">
+<div class="theme-toggle" role="group" aria-label={m.common_theme_aria()}>
   {#each options as { value, label, Icon } (value)}
     <button
       type="button"

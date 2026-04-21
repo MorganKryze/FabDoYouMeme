@@ -112,9 +112,9 @@ func (q *Queries) CountCompatibleItems(ctx context.Context, arg CountCompatibleI
 
 const createPack = `-- name: CreatePack :one
 
-INSERT INTO game_packs (name, description, owner_id, is_official, visibility)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system
+INSERT INTO game_packs (name, description, owner_id, is_official, visibility, language)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language
 `
 
 type CreatePackParams struct {
@@ -123,6 +123,7 @@ type CreatePackParams struct {
 	OwnerID     pgtype.UUID `json:"owner_id"`
 	IsOfficial  bool        `json:"is_official"`
 	Visibility  string      `json:"visibility"`
+	Language    string      `json:"language"`
 }
 
 // backend/db/queries/game_packs.sql
@@ -133,6 +134,7 @@ func (q *Queries) CreatePack(ctx context.Context, arg CreatePackParams) (GamePac
 		arg.OwnerID,
 		arg.IsOfficial,
 		arg.Visibility,
+		arg.Language,
 	)
 	var i GamePack
 	err := row.Scan(
@@ -146,12 +148,13 @@ func (q *Queries) CreatePack(ctx context.Context, arg CreatePackParams) (GamePac
 		&i.CreatedAt,
 		&i.DeletedAt,
 		&i.IsSystem,
+		&i.Language,
 	)
 	return i, err
 }
 
 const getPackByID = `-- name: GetPackByID :one
-SELECT id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system FROM game_packs WHERE id = $1 AND deleted_at IS NULL
+SELECT id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language FROM game_packs WHERE id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetPackByID(ctx context.Context, id uuid.UUID) (GamePack, error) {
@@ -168,6 +171,7 @@ func (q *Queries) GetPackByID(ctx context.Context, id uuid.UUID) (GamePack, erro
 		&i.CreatedAt,
 		&i.DeletedAt,
 		&i.IsSystem,
+		&i.Language,
 	)
 	return i, err
 }
@@ -206,17 +210,20 @@ func (q *Queries) GetPackNamesByIDs(ctx context.Context, ids []uuid.UUID) ([]Get
 }
 
 const listAllPacksAdmin = `-- name: ListAllPacksAdmin :many
-SELECT id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system FROM game_packs WHERE deleted_at IS NULL
-ORDER BY created_at DESC LIMIT $2 OFFSET $1
+SELECT id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language FROM game_packs
+WHERE deleted_at IS NULL
+  AND ($1::text IS NULL OR language = $1::text)
+ORDER BY created_at DESC LIMIT $3 OFFSET $2
 `
 
 type ListAllPacksAdminParams struct {
-	Off int32 `json:"off"`
-	Lim int32 `json:"lim"`
+	Language *string `json:"language"`
+	Off      int32   `json:"off"`
+	Lim      int32   `json:"lim"`
 }
 
 func (q *Queries) ListAllPacksAdmin(ctx context.Context, arg ListAllPacksAdminParams) ([]GamePack, error) {
-	rows, err := q.db.Query(ctx, listAllPacksAdmin, arg.Off, arg.Lim)
+	rows, err := q.db.Query(ctx, listAllPacksAdmin, arg.Language, arg.Off, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -235,6 +242,7 @@ func (q *Queries) ListAllPacksAdmin(ctx context.Context, arg ListAllPacksAdminPa
 			&i.CreatedAt,
 			&i.DeletedAt,
 			&i.IsSystem,
+			&i.Language,
 		); err != nil {
 			return nil, err
 		}
@@ -247,21 +255,31 @@ func (q *Queries) ListAllPacksAdmin(ctx context.Context, arg ListAllPacksAdminPa
 }
 
 const listPacksForUser = `-- name: ListPacksForUser :many
-SELECT id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system FROM game_packs
+SELECT id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language FROM game_packs
 WHERE deleted_at IS NULL
   AND (owner_id = $1 OR (visibility = 'public' AND status = 'active'))
+  AND ($2::text IS NULL OR language = $2::text)
 ORDER BY created_at DESC
-LIMIT $3 OFFSET $2
+LIMIT $4 OFFSET $3
 `
 
 type ListPacksForUserParams struct {
-	UserID pgtype.UUID `json:"user_id"`
-	Off    int32       `json:"off"`
-	Lim    int32       `json:"lim"`
+	UserID   pgtype.UUID `json:"user_id"`
+	Language *string     `json:"language"`
+	Off      int32       `json:"off"`
+	Lim      int32       `json:"lim"`
 }
 
+// Optional language filter: when sqlc.narg(language) is NULL the predicate is a no-op
+// and every language is returned (preserves pre-i18n behaviour). Pass 'en' or 'fr' to
+// narrow.
 func (q *Queries) ListPacksForUser(ctx context.Context, arg ListPacksForUserParams) ([]GamePack, error) {
-	rows, err := q.db.Query(ctx, listPacksForUser, arg.UserID, arg.Off, arg.Lim)
+	rows, err := q.db.Query(ctx, listPacksForUser,
+		arg.UserID,
+		arg.Language,
+		arg.Off,
+		arg.Lim,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -280,6 +298,7 @@ func (q *Queries) ListPacksForUser(ctx context.Context, arg ListPacksForUserPara
 			&i.CreatedAt,
 			&i.DeletedAt,
 			&i.IsSystem,
+			&i.Language,
 		); err != nil {
 			return nil, err
 		}
@@ -292,7 +311,7 @@ func (q *Queries) ListPacksForUser(ctx context.Context, arg ListPacksForUserPara
 }
 
 const setPackStatus = `-- name: SetPackStatus :one
-UPDATE game_packs SET status = $2 WHERE id = $1 RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system
+UPDATE game_packs SET status = $2 WHERE id = $1 RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language
 `
 
 type SetPackStatusParams struct {
@@ -314,6 +333,7 @@ func (q *Queries) SetPackStatus(ctx context.Context, arg SetPackStatusParams) (G
 		&i.CreatedAt,
 		&i.DeletedAt,
 		&i.IsSystem,
+		&i.Language,
 	)
 	return i, err
 }
@@ -328,7 +348,7 @@ func (q *Queries) SoftDeletePack(ctx context.Context, id uuid.UUID) error {
 }
 
 const updatePack = `-- name: UpdatePack :one
-UPDATE game_packs SET name = $2, description = $3, visibility = $4 WHERE id = $1 RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system
+UPDATE game_packs SET name = $2, description = $3, visibility = $4, language = $5 WHERE id = $1 RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language
 `
 
 type UpdatePackParams struct {
@@ -336,6 +356,7 @@ type UpdatePackParams struct {
 	Name        string    `json:"name"`
 	Description *string   `json:"description"`
 	Visibility  string    `json:"visibility"`
+	Language    string    `json:"language"`
 }
 
 func (q *Queries) UpdatePack(ctx context.Context, arg UpdatePackParams) (GamePack, error) {
@@ -344,6 +365,7 @@ func (q *Queries) UpdatePack(ctx context.Context, arg UpdatePackParams) (GamePac
 		arg.Name,
 		arg.Description,
 		arg.Visibility,
+		arg.Language,
 	)
 	var i GamePack
 	err := row.Scan(
@@ -357,6 +379,7 @@ func (q *Queries) UpdatePack(ctx context.Context, arg UpdatePackParams) (GamePac
 		&i.CreatedAt,
 		&i.DeletedAt,
 		&i.IsSystem,
+		&i.Language,
 	)
 	return i, err
 }
@@ -372,7 +395,7 @@ ON CONFLICT (id) DO UPDATE
       status = 'active',
       is_system = true,
       deleted_at = NULL
-RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system
+RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language
 `
 
 type UpsertSystemPackParams struct {
@@ -399,6 +422,7 @@ func (q *Queries) UpsertSystemPack(ctx context.Context, arg UpsertSystemPackPara
 		&i.CreatedAt,
 		&i.DeletedAt,
 		&i.IsSystem,
+		&i.Language,
 	)
 	return i, err
 }

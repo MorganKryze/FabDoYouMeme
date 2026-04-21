@@ -4,6 +4,7 @@
   import { ArrowRight } from '$lib/icons';
   import type { Submission, LeaderboardEntry } from '$lib/api/types';
   import RoundReveal from './RoundReveal.svelte';
+  import * as m from '$lib/paraglide/messages';
 
   let {
     submissions,
@@ -34,11 +35,11 @@
         class="h-12 mx-auto px-8 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text font-bold cursor-pointer inline-flex items-center justify-center gap-2"
       >
         <ArrowRight size={18} strokeWidth={2.5} />
-        Next Round
+        {m.game_next_round()}
       </button>
     {:else}
       <p class="text-center text-sm font-bold text-brand-text-muted m-0">
-        Waiting for host to continue…
+        {m.game_waiting_for_host_continue()}
       </p>
     {/if}
   {/if}

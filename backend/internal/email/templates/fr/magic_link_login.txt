@@ -1,0 +1,9 @@
+[FR] Hi {{.Username}},
+
+Use this link to log in to FabDoYouMeme (expires in {{.ExpiryMinutes}} minutes, one-time use):
+
+{{.MagicLinkURL}}
+
+If you didn't request this, ignore this email.
+
+-- FabDoYouMeme: {{.FrontendURL}}

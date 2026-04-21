@@ -24,26 +24,26 @@ import (
 // stubEmail is a no-op EmailSender for tests.
 type stubEmail struct{}
 
-func (s *stubEmail) SendMagicLinkLogin(_ context.Context, _ string, _ auth.LoginEmailData) error {
+func (s *stubEmail) SendMagicLinkLogin(_ context.Context, _, _ string, _ auth.LoginEmailData) error {
 	return nil
 }
-func (s *stubEmail) SendMagicLinkEmailChange(_ context.Context, _ string, _ auth.EmailChangeData) error {
+func (s *stubEmail) SendMagicLinkEmailChange(_ context.Context, _, _ string, _ auth.EmailChangeData) error {
 	return nil
 }
-func (s *stubEmail) SendEmailChangedNotification(_ context.Context, _ string, _ auth.EmailChangedNotificationData) error {
+func (s *stubEmail) SendEmailChangedNotification(_ context.Context, _, _ string, _ auth.EmailChangedNotificationData) error {
 	return nil
 }
 
 // failingSender is an EmailSender that always returns an error — used to test SMTP failure paths.
 type failingSender struct{}
 
-func (s *failingSender) SendMagicLinkLogin(_ context.Context, _ string, _ auth.LoginEmailData) error {
+func (s *failingSender) SendMagicLinkLogin(_ context.Context, _, _ string, _ auth.LoginEmailData) error {
 	return fmt.Errorf("smtp: connection refused")
 }
-func (s *failingSender) SendMagicLinkEmailChange(_ context.Context, _ string, _ auth.EmailChangeData) error {
+func (s *failingSender) SendMagicLinkEmailChange(_ context.Context, _, _ string, _ auth.EmailChangeData) error {
 	return fmt.Errorf("smtp: connection refused")
 }
-func (s *failingSender) SendEmailChangedNotification(_ context.Context, _ string, _ auth.EmailChangedNotificationData) error {
+func (s *failingSender) SendEmailChangedNotification(_ context.Context, _, _ string, _ auth.EmailChangedNotificationData) error {
 	return fmt.Errorf("smtp: connection refused")
 }
 
@@ -82,6 +82,7 @@ func seedInvite(t *testing.T, q *db.Queries) db.Invite {
 	invite, err := q.CreateInvite(context.Background(), db.CreateInviteParams{
 		Token:   token,
 		MaxUses: 10,
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("seedInvite: %v", err)
@@ -157,6 +158,50 @@ func TestRegister_Success(t *testing.T) {
 	}
 }
 
+// TestRegister_PropagatesLocaleToEmailSender is the end-to-end guard that
+// proves a register with locale=fr causes the SMTP sender to receive "fr".
+// Regressions that silently drop locale anywhere on the chain
+// (handler → deliverMagicLink → EmailSender) surface here immediately.
+func TestRegister_PropagatesLocaleToEmailSender(t *testing.T) {
+	pool := testutil.Pool()
+	cfg := &config.Config{
+		FrontendURL:      "http://localhost:3000",
+		MagicLinkBaseURL: "http://localhost:3000",
+		MagicLinkTTL:     15 * time.Minute,
+		SessionTTL:       720 * time.Hour,
+	}
+	fake := testutil.NewFakeEmail()
+	h := auth.New(pool, cfg, fake, nil, clock.Real{})
+	q := db.New(pool)
+
+	// Use a restricted-email invite so register auto-fires the magic link.
+	slug := testutil.SeedName(t)
+	email := "fr_" + slug + "@test.com"
+	invite, err := q.CreateInvite(context.Background(), db.CreateInviteParams{
+		Token:           "FR_" + slug,
+		MaxUses:         1,
+		RestrictedEmail: &email,
+		Locale:          "fr",
+	})
+	if err != nil {
+		t.Fatalf("create invite: %v", err)
+	}
+	body := `{"invite_token":"` + invite.Token + `","username":"` + shortUser(t, "fr_") +
+		`","email":"` + email + `","consent":true,"age_affirmation":true,"locale":"fr"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+	h.Register(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("register: want 201, got %d — body: %s", rec.Code, rec.Body.String())
+	}
+	if len(fake.Sent) != 1 {
+		t.Fatalf("expected exactly 1 email, got %d", len(fake.Sent))
+	}
+	if got := fake.Sent[0].Locale; got != "fr" {
+		t.Errorf("SendMagicLinkLogin locale: want %q, got %q", "fr", got)
+	}
+}
+
 func TestRegister_DuplicateEmailReturns201(t *testing.T) {
 	h, q := newTestHandler(t)
 	invite := seedInvite(t, q)
@@ -192,6 +237,7 @@ func TestRegister_EmailMismatch(t *testing.T) {
 		Token:           "RESTRICTED_" + testutil.SeedName(t),
 		MaxUses:         5,
 		RestrictedEmail: &restrictedEmail,
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("create restricted invite: %v", err)
@@ -219,6 +265,7 @@ func TestRegister_InviteExhausted(t *testing.T) {
 	invite, err := q.CreateInvite(context.Background(), db.CreateInviteParams{
 		Token:   "EXHAUST_" + testutil.SeedName(t),
 		MaxUses: 1,
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("create invite: %v", err)
@@ -268,6 +315,7 @@ func TestRegister_SMTPFailureReturns201WithWarning(t *testing.T) {
 		Token:           "SMTPFAIL_" + slug,
 		MaxUses:         1,
 		RestrictedEmail: &restrictedEmail,
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("create restricted invite: %v", err)
@@ -295,9 +343,11 @@ func TestRegister_UsernameTaken(t *testing.T) {
 	h, q := newTestHandler(t)
 	slug := testutil.SeedName(t)
 
-	inv1 := db.CreateInviteParams{Token: "INV1_" + slug, MaxUses: 5}
+	inv1 := db.CreateInviteParams{Token: "INV1_" + slug, MaxUses: 5,
+		Locale:    "en",}
 	invite1, _ := q.CreateInvite(context.Background(), inv1)
-	inv2 := db.CreateInviteParams{Token: "INV2_" + slug, MaxUses: 5}
+	inv2 := db.CreateInviteParams{Token: "INV2_" + slug, MaxUses: 5,
+		Locale:    "en",}
 	invite2, _ := q.CreateInvite(context.Background(), inv2)
 
 	// Both registrations reuse the same username — point of the test is to

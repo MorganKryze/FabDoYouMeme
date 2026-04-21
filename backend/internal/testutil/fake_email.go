@@ -20,6 +20,7 @@ const (
 // LoginData / ChangeData / NotifyData is populated depending on Purpose.
 type FakeEmailMsg struct {
 	To         string
+	Locale     string
 	Purpose    FakeEmailPurpose
 	LoginData  auth.LoginEmailData
 	ChangeData auth.EmailChangeData
@@ -40,33 +41,33 @@ var _ auth.EmailSender = (*FakeEmail)(nil)
 // NewFakeEmail returns an empty FakeEmail.
 func NewFakeEmail() *FakeEmail { return &FakeEmail{} }
 
-func (f *FakeEmail) SendMagicLinkLogin(_ context.Context, to string, data auth.LoginEmailData) error {
+func (f *FakeEmail) SendMagicLinkLogin(_ context.Context, to, locale string, data auth.LoginEmailData) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.SendFail != nil {
 		return f.SendFail
 	}
-	f.Sent = append(f.Sent, FakeEmailMsg{To: to, Purpose: FakeEmailLogin, LoginData: data})
+	f.Sent = append(f.Sent, FakeEmailMsg{To: to, Locale: locale, Purpose: FakeEmailLogin, LoginData: data})
 	return nil
 }
 
-func (f *FakeEmail) SendMagicLinkEmailChange(_ context.Context, to string, data auth.EmailChangeData) error {
+func (f *FakeEmail) SendMagicLinkEmailChange(_ context.Context, to, locale string, data auth.EmailChangeData) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.SendFail != nil {
 		return f.SendFail
 	}
-	f.Sent = append(f.Sent, FakeEmailMsg{To: to, Purpose: FakeEmailChange, ChangeData: data})
+	f.Sent = append(f.Sent, FakeEmailMsg{To: to, Locale: locale, Purpose: FakeEmailChange, ChangeData: data})
 	return nil
 }
 
-func (f *FakeEmail) SendEmailChangedNotification(_ context.Context, to string, data auth.EmailChangedNotificationData) error {
+func (f *FakeEmail) SendEmailChangedNotification(_ context.Context, to, locale string, data auth.EmailChangedNotificationData) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.SendFail != nil {
 		return f.SendFail
 	}
-	f.Sent = append(f.Sent, FakeEmailMsg{To: to, Purpose: FakeEmailChangedNotify, NotifyData: data})
+	f.Sent = append(f.Sent, FakeEmailMsg{To: to, Locale: locale, Purpose: FakeEmailChangedNotify, NotifyData: data})
 	return nil
 }
 

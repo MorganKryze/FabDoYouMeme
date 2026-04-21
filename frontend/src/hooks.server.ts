@@ -1,6 +1,9 @@
 import type { Handle, HandleFetch, RequestEvent } from '@sveltejs/kit';
 import { randomBytes } from 'node:crypto';
 import { API_BASE } from '$lib/server/backend';
+import { paraglideMiddleware } from '$lib/paraglide/server';
+import { setLocale, getLocale } from '$lib/paraglide/runtime';
+import { isLocale } from '$lib/i18n/locale';
 
 // RFC 7230 §6.1 hop-by-hop headers — a proxy must not forward them.
 const HOP_BY_HOP = [
@@ -12,7 +15,7 @@ const HOP_BY_HOP = [
   'trailer',
   'transfer-encoding',
   'upgrade',
-  'host',
+  'host'
 ];
 
 // Forwards /api/* to the backend. Mirrors the production reverse-proxy
@@ -26,9 +29,7 @@ async function proxyToBackend(event: RequestEvent): Promise<Response> {
 
   const method = event.request.method;
   const body =
-    method === 'GET' || method === 'HEAD'
-      ? undefined
-      : await event.request.arrayBuffer();
+    method === 'GET' || method === 'HEAD' ? undefined : await event.request.arrayBuffer();
 
   const url = `${API_BASE}${event.url.pathname}${event.url.search}`;
 
@@ -46,15 +47,11 @@ async function proxyToBackend(event: RequestEvent): Promise<Response> {
   return new Response(res.body, {
     status: res.status,
     statusText: res.statusText,
-    headers: resHeaders,
+    headers: resHeaders
   });
 }
 
-export const handle: Handle = async ({ event, resolve }) => {
-  if (event.url.pathname.startsWith('/api/')) {
-    return proxyToBackend(event);
-  }
-
+async function appHandle(event: RequestEvent, resolve: Parameters<Handle>[0]['resolve']) {
   // Generate per-request CSP nonce
   const nonce = randomBytes(16).toString('base64');
   event.locals.nonce = nonce;
@@ -88,11 +85,30 @@ export const handle: Handle = async ({ event, resolve }) => {
     event.locals.user = null;
   }
 
-  const response = await resolve(event, {
+  // Authenticated-user locale wins over Paraglide's strategy chain result.
+  // Cookie → preferredLanguage → baseLocale already ran in the middleware
+  // wrapper below; if the signed-in user has a stored preference, override.
+  if (event.locals.user && isLocale(event.locals.user.locale)) {
+    const current = getLocale();
+    if (current !== event.locals.user.locale) {
+      setLocale(event.locals.user.locale, { reload: false });
+    }
+  }
+
+  return resolve(event, {
     transformPageChunk: ({ html }) => html.replace('%sveltekit.nonce%', nonce)
   });
+}
 
-  return response;
+export const handle: Handle = async ({ event, resolve }) => {
+  if (event.url.pathname.startsWith('/api/')) {
+    return proxyToBackend(event);
+  }
+
+  return paraglideMiddleware(event.request, ({ request }) => {
+    event.request = request;
+    return appHandle(event, resolve);
+  });
 };
 
 // Forward the browser's session cookie on every server-side `event.fetch`

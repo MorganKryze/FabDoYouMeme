@@ -6,18 +6,19 @@
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { Play, LogOut, Trophy, PartyPopper } from '$lib/icons';
   import type { LeaderboardEntry } from '$lib/api/types';
+  import * as m from '$lib/paraglide/messages';
 
-  const END_REASONS: Record<string, { headline: string; subtext: string | null }> = {
-    game_complete:             { headline: 'Game over!',          subtext: 'All rounds played.' },
-    pack_exhausted:            { headline: 'Pack ran out',        subtext: 'Add more items to this pack to play longer.' },
-    all_players_disconnected:  { headline: 'Everyone dropped',   subtext: 'The room ended because all players disconnected.' },
-    host_disconnected:         { headline: 'Host dropped',        subtext: 'The host disconnected; the room closed.' },
-  };
+  const END_REASONS = $derived<Record<string, { headline: string; subtext: string | null }>>({
+    game_complete:             { headline: m.room_end_reason_game_complete_headline(),     subtext: m.room_end_reason_game_complete_subtext() },
+    pack_exhausted:            { headline: m.room_end_reason_pack_exhausted_headline(),    subtext: m.room_end_reason_pack_exhausted_subtext() },
+    all_players_disconnected:  { headline: m.room_end_reason_all_disconnected_headline(),  subtext: m.room_end_reason_all_disconnected_subtext() },
+    host_disconnected:         { headline: m.room_end_reason_host_disconnected_headline(), subtext: m.room_end_reason_host_disconnected_subtext() },
+  });
 
   const endInfo = $derived(
     room.endReason && END_REASONS[room.endReason]
       ? END_REASONS[room.endReason]
-      : { headline: 'Game over', subtext: null }
+      : { headline: m.room_end_reason_default(), subtext: null }
   );
 
   // Match the lobby's per-player color palette so avatars stay visually
@@ -137,14 +138,14 @@
         class="inline-flex flex-wrap items-baseline justify-center gap-x-3 text-brand-text text-6xl sm:text-7xl md:text-8xl font-extrabold leading-none tracking-tight"
       >
         <span>{winner.display_name}</span>
-        <span class="wins-gradient">wins!</span>
+        <span class="wins-gradient">{m.room_wins_suffix()}</span>
       </h1>
       <p class="text-sm font-semibold text-brand-text-muted">
-        with <span class="font-bold text-brand-text tabular-nums">{winner.score} pts</span>
+        {m.room_wins_score({ score: winner.score })}
       </p>
     {:else}
       <h1 class="text-6xl sm:text-7xl md:text-8xl font-extrabold leading-none tracking-tight">
-        Final scores
+        {m.room_final_scores()}
       </h1>
     {/if}
   </div>
@@ -201,7 +202,7 @@
     >
       <h2 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted mb-3 inline-flex items-center gap-2">
         <Trophy size={12} strokeWidth={2.5} />
-        Final standings
+        {m.room_final_standings()}
       </h2>
       <ol class="flex flex-col gap-2">
         {#each rest as entry, i (entry.player_id)}
@@ -237,7 +238,7 @@
       style="box-shadow: 0 5px 0 rgba(0,0,0,0.22);"
     >
       <Play size={20} strokeWidth={2.5} />
-      New Game
+      {m.room_new_game()}
     </a>
 
     <a
@@ -247,7 +248,7 @@
       style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
     >
       <LogOut size={16} strokeWidth={2.5} />
-      Leave
+      {m.room_leave()}
     </a>
   </div>
 </div>

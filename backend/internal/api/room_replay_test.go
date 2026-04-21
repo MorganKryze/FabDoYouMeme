@@ -30,6 +30,7 @@ func seedFinishedReplayRoom(t *testing.T, q *db.Queries, user db.User, startRoun
 	pack, err := q.CreatePack(ctx, db.CreatePackParams{
 		Name:       testutil.SeedName(t) + "_" + user.Username + "_rpk",
 		Visibility: "private",
+		Language:   "en",
 	})
 	if err != nil {
 		t.Fatalf("create pack: %v", err)
@@ -146,6 +147,7 @@ func TestGetReplay_NonMember_Returns403(t *testing.T) {
 		Role:      "player",
 		IsActive:  true,
 		ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("create outsider: %v", err)
@@ -177,6 +179,7 @@ func TestGetReplay_AdminBypass_Returns200(t *testing.T) {
 		Role:      "admin",
 		IsActive:  true,
 		ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("create admin: %v", err)
@@ -202,6 +205,7 @@ func TestGetReplay_HappyPath_MemeFreestyle(t *testing.T) {
 	p2, err := q.CreateUser(ctx, db.CreateUserParams{
 		Username: slug, Email: slug + "@test.com", Role: "player",
 		IsActive: true, ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("create p2: %v", err)
@@ -335,6 +339,7 @@ func seedFinishedShowdownRoom(t *testing.T, q *db.Queries, host db.User, textPac
 	imgPack, err := q.CreatePack(ctx, db.CreatePackParams{
 		Name:       testutil.SeedName(t) + "_" + host.Username + "_img",
 		Visibility: "private",
+		Language:   "en",
 	})
 	if err != nil {
 		t.Fatalf("create image pack: %v", err)
@@ -408,6 +413,7 @@ func TestGetReplay_MemeShowdown_ResolvesCardText(t *testing.T) {
 	textPack, err := q.CreatePack(ctx, db.CreatePackParams{
 		Name:       testutil.SeedName(t) + "_txt",
 		Visibility: "private",
+		Language:   "en",
 	})
 	if err != nil {
 		t.Fatalf("create text pack: %v", err)
@@ -575,6 +581,7 @@ func TestGetReplay_DeletedAuthor_RendersAsDeleted(t *testing.T) {
 	victim, err := q.CreateUser(ctx, db.CreateUserParams{
 		Username: slug, Email: slug + "@test.com", Role: "player",
 		IsActive: true, ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("create victim: %v", err)

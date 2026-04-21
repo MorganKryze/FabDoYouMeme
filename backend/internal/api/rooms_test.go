@@ -49,6 +49,7 @@ func seedPackWithItems(t *testing.T, q *db.Queries, ctx context.Context, namePre
 	pack, err := q.CreatePack(ctx, db.CreatePackParams{
 		Name:       testutil.SeedName(t) + "_" + namePrefix,
 		Visibility: "private",
+		Language:   "en",
 	})
 	if err != nil {
 		t.Fatalf("create pack: %v", err)
@@ -94,6 +95,7 @@ func seedRoomUser(t *testing.T, q *db.Queries) db.User {
 		Role:      "player",
 		IsActive:  true,
 		ConsentAt: time.Now().UTC(),
+		Locale:    "en",
 	})
 	if err != nil {
 		t.Fatalf("seedRoomUser: %v", err)
@@ -115,6 +117,7 @@ func TestCreateRoom_ImagePackNoSupportedItems(t *testing.T) {
 	pack, err := q.CreatePack(context.Background(), db.CreatePackParams{
 		Name:       testutil.SeedName(t) + "_pk",
 		Visibility: "private",
+		Language:   "en",
 	})
 	if err != nil {
 		t.Fatalf("create pack: %v", err)
@@ -152,6 +155,7 @@ func TestCreateRoom_ImagePackInsufficient(t *testing.T) {
 	pack, _ := q.CreatePack(ctx, db.CreatePackParams{
 		Name:       testutil.SeedName(t) + "_insuf",
 		Visibility: "private",
+		Language:   "en",
 	})
 	q.CreateItem(ctx, db.CreateItemParams{PackID: pack.ID, Name: "test item", PayloadVersion: 1})
 
@@ -204,6 +208,7 @@ func seedLobbyRoom(t *testing.T, configJSON string) (*api.RoomHandler, *db.Queri
 	pack, _ := q.CreatePack(ctx, db.CreatePackParams{
 		Name:       testutil.SeedName(t) + "_cfg",
 		Visibility: "private",
+		Language:   "en",
 	})
 	code := fmt.Sprintf("C-%s-%d", testutil.SeedName(t), time.Now().UnixNano())
 	room, err := q.CreateRoom(ctx, db.CreateRoomParams{
@@ -314,6 +319,7 @@ func TestCreateRoom_DefaultsJokerCountAndAllowSkipVote(t *testing.T) {
 	pack, _ := q.CreatePack(ctx, db.CreatePackParams{
 		Name:       testutil.SeedName(t) + "_dflt",
 		Visibility: "private",
+		Language:   "en",
 	})
 	for i := 0; i < 11; i++ {
 		item, _ := q.CreateItem(ctx, db.CreateItemParams{
@@ -370,6 +376,7 @@ func TestGetRoom_ByCode_Found(t *testing.T) {
 	pack, _ := q.CreatePack(ctx, db.CreatePackParams{
 		Name:       testutil.SeedName(t) + "_gc",
 		Visibility: "private",
+		Language:   "en",
 	})
 	code := fmt.Sprintf("T%03d", time.Now().UnixNano()%1000)
 	room, err := q.CreateRoom(ctx, db.CreateRoomParams{

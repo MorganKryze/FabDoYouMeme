@@ -9,6 +9,7 @@
   import { Heart } from '$lib/icons';
   import { mediaSrc } from '$lib/api/media';
   import type { Round, Submission } from '$lib/api/types';
+  import * as m from '$lib/paraglide/messages';
 
   let { submissions, round = null }: { submissions: Submission[]; round?: Round | null } = $props();
 
@@ -43,7 +44,7 @@
       class="inline-flex items-center gap-2 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 py-1.5 text-xs font-bold text-brand-text-muted w-fit mx-auto"
       style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
     >
-      Everyone dropped — timer paused
+      {m.game_paused_everyone_dropped()}
     </div>
   {/if}
 
@@ -61,16 +62,16 @@
         >
           <img
             src={mediaSrc(round.item.media_url, room.code)}
-            alt="Round meme"
+            alt={m.game_round_meme_alt()}
             class="block w-full h-auto max-h-[55vh] object-cover"
           />
         </div>
       {/if}
       <div class="flex justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-brand-text-muted px-1">
         {#if round}
-          <span>Round {round.round_number}</span>
+          <span>{m.game_meme_showdown_round_number({ number: round.round_number })}</span>
         {/if}
-        <span>{submissions.length} plays</span>
+        <span>{m.game_meme_showdown_plays_count({ count: submissions.length })}</span>
       </div>
     </div>
 
@@ -85,23 +86,23 @@
       >♥</span>
       <div class="relative flex items-center justify-between gap-2">
         <span class="text-[10px] font-bold uppercase tracking-[0.25em] opacity-70">
-          Pick the funniest
+          {m.game_meme_showdown_vote_title()}
         </span>
         <span
           class="inline-flex items-center gap-1.5 rounded-full border-[2px] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em]"
           style="border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.08);"
         >
-          {submissions.length} in
+          {m.game_meme_showdown_submissions_in({ count: submissions.length })}
         </span>
       </div>
       <p
         class="relative m-0 font-bold leading-tight tracking-tight"
         style="font-size: clamp(1.5rem, 2.4vw, 2rem);"
       >
-        Cards are in. Time to vote.
+        {m.game_meme_showdown_cards_in()}
       </p>
       <span class="relative text-[11px] font-bold uppercase tracking-[0.2em] opacity-70 mt-auto">
-        One vote each · your own card is locked
+        {m.game_meme_showdown_one_vote()}
       </span>
     </div>
   </div>
@@ -118,7 +119,7 @@
         type="button"
         onclick={() => { if (!voted && !isOwn) selectedId = sub.id; }}
         disabled={voted || isOwn}
-        aria-label="Caption {letter}: {sub.text ?? ''}"
+        aria-label={m.game_meme_showdown_caption_aria({ letter, text: sub.text ?? '' })}
         aria-pressed={isSelected}
         class="relative rounded-[20px] p-3 flex flex-col gap-2.5 text-left transition-all duration-150"
         class:cursor-pointer={!isOwn && !voted}
@@ -142,7 +143,7 @@
           </span>
           {#if isSelected && !voted}
             <span class="chip-picked inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em]">
-              ♥ Picked
+              {m.game_meme_showdown_picked()}
             </span>
           {/if}
         </div>
@@ -152,13 +153,13 @@
             class="chip-voted absolute -top-2 right-2 z-20 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-[0.18em] uppercase"
             style="transform: rotate(6deg);"
           >
-            ♥ Voted
+            {m.game_meme_showdown_voted_chip()}
           </span>
         {/if}
 
         {#if isOwn}
           <span class="absolute top-2 right-2 z-10 text-[10px] font-bold uppercase tracking-[0.18em] px-2 py-0.5 rounded-full bg-brand-white border-[2px] border-brand-border-heavy text-brand-text-muted">
-            Yours
+            {m.game_meme_showdown_yours()}
           </span>
         {/if}
 
@@ -186,7 +187,7 @@
 
   {#if room.ownSkippedVote}
     <p class="text-center text-sm font-bold text-brand-text-mid m-0">
-      Skipped — waiting for the count…
+      {m.game_meme_showdown_skipped_waiting()}
     </p>
   {:else if !voted}
     <div class="flex flex-row items-center justify-center gap-3">
@@ -199,7 +200,7 @@
         class="h-12 px-8 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-50 cursor-pointer inline-flex items-center justify-center gap-2"
       >
         <Heart size={18} strokeWidth={2.5} />
-        Lock in my vote
+        {m.game_meme_showdown_lock_vote()}
       </button>
       {#if allowSkipVote && hasVoteable}
         <button
@@ -209,13 +210,13 @@
           onclick={abstain}
           class="h-12 px-6 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-surface text-brand-text-mid text-xs font-bold cursor-pointer inline-flex items-center justify-center"
         >
-          Skip
+          {m.game_meme_showdown_skip()}
         </button>
       {/if}
     </div>
   {:else}
     <p class="text-center text-sm font-bold text-brand-text-mid m-0">
-      Voted — waiting for the count…
+      {m.game_meme_showdown_voted_waiting()}
     </p>
   {/if}
 </div>
