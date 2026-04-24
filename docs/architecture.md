@@ -386,6 +386,55 @@ Content moderation inbox. Queued when a user creates or modifies a public pack. 
 | `created_at` | TIMESTAMPTZ           |                                         |
 | `read_at`    | TIMESTAMPTZ nullable  | null = unread                           |
 
+### groups (phase 1)
+
+Invite-only collections that own their own pack library (pack ownership extensions also added in migration 013, written in phase 3). Members hold a flat `admin`/`member` role — no separate owner. Soft-deleted with a 30-day restore window. Spec: `docs/superpowers/specs/2026-04-22-groups-paradigm-design.md`.
+
+| Column             | Type                  | Notes                                                                  |
+| ------------------ | --------------------- | ---------------------------------------------------------------------- |
+| `id`               | UUID PK               |                                                                        |
+| `name`             | TEXT                  | Stored as entered                                                      |
+| `name_normalized`  | TEXT generated        | `lower(name)`; partial UNIQUE index on live rows blocks case-collisions |
+| `description`      | TEXT                  | ≤ 500 chars (CHECK)                                                    |
+| `avatar_media_key` | TEXT nullable         | Optional asset reference                                               |
+| `language`         | TEXT                  | `'en'` / `'fr'` / `'multi'`                                            |
+| `classification`   | TEXT                  | `'sfw'` / `'nsfw'`                                                     |
+| `member_cap`       | INT                   | Default 100, platform-admin overridable                                |
+| `quota_bytes`      | BIGINT                | Asset cap, platform-admin set                                          |
+| `created_by`       | UUID → users nullable | `ON DELETE SET NULL`                                                   |
+| `created_at`       | TIMESTAMPTZ           |                                                                        |
+| `deleted_at`       | TIMESTAMPTZ nullable  | Soft-delete; restorable for 30 days, hard-delete after                 |
+
+`group_memberships` (PK on `(group_id, user_id)`), `group_bans` (same), and `user_invite_quotas` (per-user PK) ship in the same migration. Visibility of every group route is gated by the `FEATURE_GROUPS` env flag — handlers respond 404 when the flag is off, and the frontend mirrors with `PUBLIC_FEATURE_GROUPS`.
+
+### group_invites (phase 2)
+
+Migration 014. Per-(admin, group) rate limited (50 active, 20 mints/hour). Two `kind` values: `group_join` (existing platform user redeems via `POST /api/groups/invites/redeem`) and `platform_plus_group` (new user registers via the extended `POST /api/auth/register` and is enrolled in the same transaction). The latter consumes one slot from the issuer's `user_invite_quotas.allocated`.
+
+| Column             | Type                  | Notes                                                                              |
+| ------------------ | --------------------- | ---------------------------------------------------------------------------------- |
+| `id`               | UUID PK               |                                                                                    |
+| `token`            | TEXT UNIQUE           | Plaintext, mirrors the existing `invites.token` shape                              |
+| `group_id`         | UUID → groups         | `ON DELETE CASCADE`                                                                |
+| `created_by`       | UUID → users nullable | `ON DELETE SET NULL`; banned-issuer guard at redemption checks `users.is_active`   |
+| `kind`             | TEXT                  | `'group_join'` / `'platform_plus_group'`                                           |
+| `restricted_email` | TEXT nullable         | Per-code email gate (case-insensitive)                                             |
+| `max_uses`         | INT                   | `>= 1`; platform_plus codes are forced to 1                                        |
+| `uses_count`       | INT                   | Atomically incremented on redemption via the existing `invites` pattern            |
+| `expires_at`       | TIMESTAMPTZ nullable  | Bounded by the platform-wide 30-day max enforced at mint time                      |
+| `revoked_at`       | TIMESTAMPTZ nullable  | Set on admin revoke, never cleared (idempotent)                                    |
+| `created_at`       | TIMESTAMPTZ           |                                                                                    |
+
+Phase 2 also adds the `users.last_login_at` write on every successful magic-link verify (`backend/internal/auth/verify.go`), the boot-time `groupjobs.PromoteDormantAdmins` sweep (mounted from `cmd/server/main.go`), and the `groupjobs.CascadePlatformBan` hook fired by the admin-set-active-false path. See `backend/internal/groupjobs/`.
+
+### Group-scoped rooms (phase 4)
+
+`POST /api/rooms` accepts an optional `group_id`. When present: the actor must be a live member of the group, the chosen packs must be group-owned by that group or system packs, and the new `rooms.group_id` column is populated. The WS `join` handshake (`backend/internal/api/ws.go`) short-circuits guests with `group_scoped_room_requires_account` and non-members with `not_group_member` before upgrading — the in-game state machine remains group-unaware.
+
+### group_duplication_pending + group_notifications (phase 3)
+
+Migration 015. The `group_duplication_pending` table holds NSFW-into-SFW duplications awaiting admin approval; resolution is stamped on the same row. The `group_notifications` table is a parallel-to-`admin_notifications` in-group feed (duplication pending, pack evicted, member kicked/banned/joined, auto-promotion). Pack duplication itself is deep: items and current versions are copied under new IDs, with `media_key` references shared across rows until a future phase introduces object-storage ref-counting. The pack service lives at `backend/internal/pack/duplication.go` and exposes `Duplicate`, `ApprovePending`, and `RejectPending`; the HTTP surface lives on `backend/internal/api/group_packs.go`. `game_items.last_editor_user_id` + `last_edited_at` are stamped by any group-pack add/modify via the `BumpGroupItemEditor` query.
+
 ---
 
 ### Data retention and cleanup

@@ -448,11 +448,11 @@ func TestCreateRoom_MemeCaption_RejectsTextPack(t *testing.T) {
 	textPack := seedPackWithItems(t, q, ctx, "txt", 2, 5)
 
 	body, _ := json.Marshal(map[string]any{
-		"game_type_id":  gt.ID.String(),
-		"pack_id":       imgPack.ID.String(),
-		"text_pack_id":  textPack.ID.String(),
-		"mode":          "multiplayer",
-		"config":        json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
+		"game_type_id": gt.ID.String(),
+		"pack_id":      imgPack.ID.String(),
+		"text_pack_id": textPack.ID.String(),
+		"mode":         "multiplayer",
+		"config":       json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
 	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
@@ -481,11 +481,11 @@ func TestCreateRoom_MemeVote_TextPackInsufficient(t *testing.T) {
 	textPack := seedPackWithItems(t, q, ctx, "txt", 2, 2)
 
 	body, _ := json.Marshal(map[string]any{
-		"game_type_id":  gt.ID.String(),
-		"pack_id":       imgPack.ID.String(),
-		"text_pack_id":  textPack.ID.String(),
-		"mode":          "multiplayer",
-		"config":        json.RawMessage(`{"round_count":5,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5}`),
+		"game_type_id": gt.ID.String(),
+		"pack_id":      imgPack.ID.String(),
+		"text_pack_id": textPack.ID.String(),
+		"mode":         "multiplayer",
+		"config":       json.RawMessage(`{"round_count":5,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5}`),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
 	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
@@ -512,11 +512,11 @@ func TestCreateRoom_MemeVote_Success(t *testing.T) {
 	textPack := seedPackWithItems(t, q, ctx, "txt", 2, 120)
 
 	body, _ := json.Marshal(map[string]any{
-		"game_type_id":  gt.ID.String(),
-		"pack_id":       imgPack.ID.String(),
-		"text_pack_id":  textPack.ID.String(),
-		"mode":          "multiplayer",
-		"config":        json.RawMessage(`{"round_count":5,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5}`),
+		"game_type_id": gt.ID.String(),
+		"pack_id":      imgPack.ID.String(),
+		"text_pack_id": textPack.ID.String(),
+		"mode":         "multiplayer",
+		"config":       json.RawMessage(`{"round_count":5,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5}`),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
 	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)

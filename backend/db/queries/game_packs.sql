@@ -12,9 +12,20 @@ SELECT * FROM game_packs WHERE id = $1 AND deleted_at IS NULL;
 -- Optional language filter: when sqlc.narg(language) is NULL the predicate is a no-op
 -- and every language is returned (preserves pre-i18n behaviour). Pass 'en' or 'fr' to
 -- narrow.
+--
+-- The third WHERE branch includes packs belonging to groups the caller is a
+-- member of. Without it the host picker (and any other /api/packs consumer)
+-- stays blind to duplicated group content for non-admin members, which breaks
+-- the duplicate-then-host loop — admins got these rows through ListAllPacksAdmin
+-- but regular members had no visibility. The subquery hits
+-- group_memberships_user_idx, so the extra predicate is O(log n) per row.
 SELECT * FROM game_packs
 WHERE deleted_at IS NULL
-  AND (owner_id = sqlc.arg(user_id) OR (visibility = 'public' AND status = 'active'))
+  AND (
+    owner_id = sqlc.arg(user_id)
+    OR (visibility = 'public' AND status = 'active')
+    OR group_id IN (SELECT group_id FROM group_memberships WHERE user_id = sqlc.arg(user_id))
+  )
   AND (sqlc.narg(language)::text IS NULL OR language = sqlc.narg(language)::text)
 ORDER BY created_at DESC
 LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);

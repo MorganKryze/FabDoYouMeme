@@ -123,5 +123,24 @@ Database backups are retained for 7 days for disaster recovery. If you request e
 
 ---
 
-_Last updated: 2026-04-13_  
-_Version: 1.0_
+## 11. Groups (what happens when you join one)
+
+When you join a group (by invite code or at registration via a platform+group invite), some moderation decisions pass from the platform operator above to the **admin(s) of that group**. The platform operator still runs the infrastructure, still enforces age and SFW/NSFW rules at the platform level, and still holds your account data. But the group admin — another user, not the operator — decides who stays in the group, which content is evicted, and whether the group is labelled SFW or NSFW.
+
+This means:
+
+- **Group admins see your membership** in their group: your username, your role in the group, when you joined, and when you last logged in (for dormancy purposes). They do not see your email address, your registration timestamp, or any data outside the group.
+- **Moderation inside the group is on group admins, not us.** If you are kicked, banned, or have content evicted, that is an action by the group's own admin. You can report it to us only if you believe a classification breach happened (SFW/NSFW mismatch) or if the complaint is about the group admin themselves — in those cases the report bypasses the group and reaches us directly.
+- **Joining an NSFW group** requires a one-time age-affirmation at the moment you join, on top of the registration-time affirmation. We log that you confirmed; we do not record anything else beyond the consent action itself.
+- **Leaving a group** removes you from the group and any invite the admin may have issued you to rejoin. Rejoining requires a fresh invite.
+- **If the group is deleted**, active state (packs, membership, pending invites) enters a 30-day recovery window and is then hard-deleted. Historical games you played inside the group continue to be retained under the normal 2-year rule and show `[deleted]` for any removed references.
+- **If your account is deleted or banned**, you are removed from every group you were in. If you were the sole admin of a group, the system promotes another member to take your place so the group is not left orphaned.
+
+Group admins are **separate data controllers** for the group-level data listed above (GDPR Art. 4(7)). The platform operator is the controller for your account and for the platform-wide SFW/NSFW taxonomy. Group admins and the operator are not joint controllers — each is accountable for their own decisions.
+
+For data access or erasure that spans both layers (your account and the memberships you hold across groups), send a single request to the operator contact email at the top of this document. The operator will coordinate with group admins as needed.
+
+---
+
+_Last updated: 2026-04-23_  
+_Version: 1.1_

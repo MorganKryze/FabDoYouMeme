@@ -370,7 +370,7 @@ func TestCreateInvite_AndValidate(t *testing.T) {
 		inv, err := q.CreateInvite(ctx, db.CreateInviteParams{
 			Token:   "INVITE_" + uuid.New().String(),
 			MaxUses: 5,
-			Locale:    "en",
+			Locale:  "en",
 		})
 		if err != nil {
 			t.Fatalf("CreateInvite: %v", err)
@@ -395,7 +395,7 @@ func TestInvite_MaxUsesExhausted(t *testing.T) {
 		inv, err := q.CreateInvite(ctx, db.CreateInviteParams{
 			Token:   "EXHAUST_" + uuid.New().String(),
 			MaxUses: 1,
-			Locale:    "en",
+			Locale:  "en",
 		})
 		if err != nil {
 			t.Fatalf("CreateInvite: %v", err)
@@ -527,7 +527,7 @@ func TestCreateRoom_StateIsLobby(t *testing.T) {
 		slug := "lobby_" + uuid.New().String()[:8]
 		user := createUser(t, q, slug, slug+"@test.com")
 		pack, _ := q.CreatePack(ctx, db.CreatePackParams{Name: slug, Visibility: "private",
-		Language:   "en",})
+			Language: "en"})
 
 		room, err := q.CreateRoom(ctx, db.CreateRoomParams{
 			Code:       slug[:4],

@@ -75,6 +75,13 @@ type Config struct {
 	// middleware.ClientIP. Empty means "treat all connections as direct" —
 	// the safe default for deployments without a reverse proxy.
 	TrustedProxies []*net.IPNet
+
+	// Groups paradigm. The two cap fields are platform-wide soft limits
+	// applied by the create/join handlers — operators raise them per their
+	// cohort size. The former FEATURE_GROUPS kill-switch was retired in
+	// phase 5 once the surface stabilised.
+	MaxGroupsPerUser           int
+	MaxGroupMembershipsPerUser int
 }
 
 func Load() (*Config, error) {
@@ -169,6 +176,13 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("RATE_LIMIT_GLOBAL_RPM: %w", err)
 	}
 
+	if cfg.MaxGroupsPerUser, err = getEnvInt("MAX_GROUPS_PER_USER", 5); err != nil {
+		return nil, fmt.Errorf("MAX_GROUPS_PER_USER: %w", err)
+	}
+	if cfg.MaxGroupMembershipsPerUser, err = getEnvInt("MAX_GROUP_MEMBERSHIPS_PER_USER", 20); err != nil {
+		return nil, fmt.Errorf("MAX_GROUP_MEMBERSHIPS_PER_USER: %w", err)
+	}
+
 	// TRUSTED_PROXIES is comma-separated CIDR ranges or bare IPs (the latter
 	// are promoted to /32 or /128). Required only when running behind a
 	// reverse proxy that forwards X-Forwarded-For — without it, ClientIP
@@ -224,6 +238,8 @@ func (cfg *Config) validateBounds() error {
 		intBound("RATE_LIMIT_ROOMS_RPH", cfg.RateLimitRoomsRPH, 1, 100000),
 		intBound("RATE_LIMIT_UPLOADS_RPH", cfg.RateLimitUploadsRPH, 1, 100000),
 		intBound("RATE_LIMIT_GLOBAL_RPM", cfg.RateLimitGlobalRPM, 1, 100000),
+		intBound("MAX_GROUPS_PER_USER", cfg.MaxGroupsPerUser, 1, 10000),
+		intBound("MAX_GROUP_MEMBERSHIPS_PER_USER", cfg.MaxGroupMembershipsPerUser, 1, 10000),
 
 		int64Bound("WS_READ_LIMIT_BYTES", cfg.WSReadLimitBytes, 64, 1_048_576),
 		int64Bound("MAX_UPLOAD_SIZE_BYTES", cfg.MaxUploadSizeBytes, 1, 104_857_600),
@@ -274,6 +290,21 @@ func getEnvDuration(key string, fallback time.Duration) (time.Duration, error) {
 		return fallback, nil
 	}
 	return time.ParseDuration(v)
+}
+
+// getEnvBool accepts the canonical strconv truthy values (1/t/T/TRUE/true/True
+// and the matching false set). Unknown or empty values fall back rather than
+// erroring — feature flags should never block boot if the operator typo'd.
+func getEnvBool(key string, fallback bool) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return fallback
+	}
+	return b
 }
 
 // normalizeLocale maps DEFAULT_LOCALE to a known-good value. Any unknown or

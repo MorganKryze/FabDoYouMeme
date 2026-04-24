@@ -20,10 +20,31 @@
   let uploading = $state(false);
   let uploadProgress = $state<{ name: string; done: number; total: number } | null>(null);
 
-  const isSystem = $derived(
-    studio.packs.find((p) => p.id === studio.selectedPackId)?.is_system ?? false
+  import { user } from '$lib/state/user.svelte';
+
+  const selectedPack = $derived(
+    studio.packs.find((p) => p.id === studio.selectedPackId) ?? null
   );
+  const isSystem = $derived(selectedPack?.is_system ?? false);
   const kind = $derived(studio.kindFor(studio.selectedPackId));
+
+  // Per-spec: deleting an item from a group pack is admin-only. Regular
+  // members can still modify items (see uploads / version promote). Hide
+  // the trash button entirely when the caller can't perform the action —
+  // otherwise they'd click it and hit a 403 with no guidance.
+  const canDeleteItems = $derived.by(() => {
+    if (!selectedPack) return false;
+    if (selectedPack.is_system) return false;
+    if (user.role === 'admin') return true;
+    if (selectedPack.group_id) {
+      return (
+        studio.groups.find((g) => g.id === selectedPack.group_id)?.member_role === 'admin'
+      );
+    }
+    // Personal pack — only the owner can delete items. Public packs owned
+    // by others fall through to false.
+    return selectedPack.owner_id === user.id;
+  });
 
   function textSnippet(item: GameItem): string {
     const payload = item.payload;
@@ -272,7 +293,7 @@
               </td>
               <td class="px-4 py-2 text-right text-brand-text-muted">v{item.version_number ?? 1}</td>
               <td class="px-4 py-2 text-right">
-                {#if !isSystem}
+                {#if canDeleteItems}
                   <button
                     type="button"
                     onclick={(e) => { e.stopPropagation(); handleDelete(item); }}

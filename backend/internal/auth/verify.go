@@ -120,6 +120,13 @@ func (h *Handler) createSessionAndRespond(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Stamp users.last_login_at — drives the 90-day auto-promotion scan. A
+	// failure here is non-fatal: the session is already minted and the worst
+	// downside is one delayed scan cycle, which is better than failing login.
+	if err := h.db.TouchUserLastLogin(r.Context(), user.ID); err != nil && h.log != nil {
+		h.log.Error("verify: touch last_login_at failed", "error", err, "user_id", user.ID)
+	}
+
 	setSessionCookie(w, rawToken, h.cfg.SessionTTL, h.cfg.CookieDomain)
 	writeJSON(w, http.StatusOK, map[string]string{"user_id": user.ID.String()})
 }

@@ -59,10 +59,10 @@ func (s *Service) renderLocale(locale, name string, data any) (html, text string
 		lt = s.tree["en"]
 	}
 	var hbuf, tbuf bytes.Buffer
-	if err = lt.HTML.Lookup(name + ".html").Execute(&hbuf, data); err != nil {
+	if err = lt.HTML.Lookup(name+".html").Execute(&hbuf, data); err != nil {
 		return "", "", fmt.Errorf("render %s.html (%s): %w", name, locale, err)
 	}
-	if err = lt.Text.Lookup(name + ".txt").Execute(&tbuf, data); err != nil {
+	if err = lt.Text.Lookup(name+".txt").Execute(&tbuf, data); err != nil {
 		return "", "", fmt.Errorf("render %s.txt (%s): %w", name, locale, err)
 	}
 	return hbuf.String(), tbuf.String(), nil

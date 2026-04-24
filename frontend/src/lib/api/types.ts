@@ -54,6 +54,9 @@ export interface Pack {
   language: 'en' | 'fr' | 'multi';
   item_count?: number;
   created_at: string;
+  // Group-owned packs carry `group_id`. Phase 3 of the groups paradigm —
+  // studio renders these in a per-group section of the navigator.
+  group_id?: string | null;
 }
 
 export interface Room {

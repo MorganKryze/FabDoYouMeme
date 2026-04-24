@@ -1,6 +1,7 @@
 import { redirect, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { GameType } from '$lib/api/types';
+import type { GroupListItem } from '$lib/api/groups';
 import { API_BASE, apiFetch } from '$lib/server/backend';
 
 type ActiveRoomResponse = {
@@ -19,7 +20,24 @@ export const load: PageServerLoad = async ({ fetch, url }) => {
   const gameTypes = await apiFetch<GameType[]>(fetch, '/api/game-types');
   const preselectedSlug = url.searchParams.get('game_type') ?? '';
   const preselected = gameTypes.find((gt) => gt.slug === preselectedSlug) ?? null;
-  return { gameTypes, preselectedSlug, preselectedId: preselected?.id ?? '' };
+
+  // Preload the user's groups so the host page can render the room-scope
+  // toggle. Best-effort — a failed fetch just hides the selector.
+  let groups: GroupListItem[] = [];
+  try {
+    groups = await apiFetch<GroupListItem[]>(fetch, '/api/groups');
+  } catch {
+    groups = [];
+  }
+  const preselectedGroupID = url.searchParams.get('group') ?? '';
+
+  return {
+    gameTypes,
+    preselectedSlug,
+    preselectedId: preselected?.id ?? '',
+    groups,
+    preselectedGroupID
+  };
 };
 
 export const actions: Actions = {
@@ -29,6 +47,7 @@ export const actions: Actions = {
     const pack_id = data.get('pack_id') as string;
     const text_pack_id = (data.get('text_pack_id') as string | null) || '';
     const is_solo = data.get('is_solo') === 'true';
+    const group_id = (data.get('group_id') as string | null) || '';
 
     // Defaults only — host tunes rounds/durations/host_paced inside the
     // room's staging area (WaitingStage) via PATCH /api/rooms/{code}/config.
@@ -44,6 +63,7 @@ export const actions: Actions = {
       }
     };
     if (text_pack_id) payload.text_pack_id = text_pack_id;
+    if (group_id) payload.group_id = group_id;
     const res = await fetch(`${API_BASE}/api/rooms`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -75,7 +95,12 @@ export const actions: Actions = {
           'This game type does not use a text pack.',
         invalid_game_type: 'Invalid game type selected.',
         already_in_active_room:
-          "You're already in a room — return to it or leave it first."
+          "You're already in a room — return to it or leave it first.",
+        // Phase 4 (groups) — group-scoped room errors.
+        group_not_found: 'That group no longer exists.',
+        not_group_member: 'You are not a member of the selected group.',
+        pack_not_in_group:
+          'Group-scoped rooms only accept packs owned by the group or system packs. Duplicate your pack into the group first.'
       };
       return fail(400, {
         error: messages[code] ?? 'Could not create room. Try again.'

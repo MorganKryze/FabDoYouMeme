@@ -114,7 +114,7 @@ const createPack = `-- name: CreatePack :one
 
 INSERT INTO game_packs (name, description, owner_id, is_official, visibility, language)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language
+RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language, group_id, classification, duplicated_from_pack_id, duplicated_by_user_id
 `
 
 type CreatePackParams struct {
@@ -149,12 +149,16 @@ func (q *Queries) CreatePack(ctx context.Context, arg CreatePackParams) (GamePac
 		&i.DeletedAt,
 		&i.IsSystem,
 		&i.Language,
+		&i.GroupID,
+		&i.Classification,
+		&i.DuplicatedFromPackID,
+		&i.DuplicatedByUserID,
 	)
 	return i, err
 }
 
 const getPackByID = `-- name: GetPackByID :one
-SELECT id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language FROM game_packs WHERE id = $1 AND deleted_at IS NULL
+SELECT id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language, group_id, classification, duplicated_from_pack_id, duplicated_by_user_id FROM game_packs WHERE id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetPackByID(ctx context.Context, id uuid.UUID) (GamePack, error) {
@@ -172,6 +176,10 @@ func (q *Queries) GetPackByID(ctx context.Context, id uuid.UUID) (GamePack, erro
 		&i.DeletedAt,
 		&i.IsSystem,
 		&i.Language,
+		&i.GroupID,
+		&i.Classification,
+		&i.DuplicatedFromPackID,
+		&i.DuplicatedByUserID,
 	)
 	return i, err
 }
@@ -210,7 +218,7 @@ func (q *Queries) GetPackNamesByIDs(ctx context.Context, ids []uuid.UUID) ([]Get
 }
 
 const listAllPacksAdmin = `-- name: ListAllPacksAdmin :many
-SELECT id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language FROM game_packs
+SELECT id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language, group_id, classification, duplicated_from_pack_id, duplicated_by_user_id FROM game_packs
 WHERE deleted_at IS NULL
   AND ($1::text IS NULL OR language = $1::text)
 ORDER BY created_at DESC LIMIT $3 OFFSET $2
@@ -243,6 +251,10 @@ func (q *Queries) ListAllPacksAdmin(ctx context.Context, arg ListAllPacksAdminPa
 			&i.DeletedAt,
 			&i.IsSystem,
 			&i.Language,
+			&i.GroupID,
+			&i.Classification,
+			&i.DuplicatedFromPackID,
+			&i.DuplicatedByUserID,
 		); err != nil {
 			return nil, err
 		}
@@ -255,9 +267,13 @@ func (q *Queries) ListAllPacksAdmin(ctx context.Context, arg ListAllPacksAdminPa
 }
 
 const listPacksForUser = `-- name: ListPacksForUser :many
-SELECT id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language FROM game_packs
+SELECT id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language, group_id, classification, duplicated_from_pack_id, duplicated_by_user_id FROM game_packs
 WHERE deleted_at IS NULL
-  AND (owner_id = $1 OR (visibility = 'public' AND status = 'active'))
+  AND (
+    owner_id = $1
+    OR (visibility = 'public' AND status = 'active')
+    OR group_id IN (SELECT group_id FROM group_memberships WHERE user_id = $1)
+  )
   AND ($2::text IS NULL OR language = $2::text)
 ORDER BY created_at DESC
 LIMIT $4 OFFSET $3
@@ -273,6 +289,13 @@ type ListPacksForUserParams struct {
 // Optional language filter: when sqlc.narg(language) is NULL the predicate is a no-op
 // and every language is returned (preserves pre-i18n behaviour). Pass 'en' or 'fr' to
 // narrow.
+//
+// The third WHERE branch includes packs belonging to groups the caller is a
+// member of. Without it the host picker (and any other /api/packs consumer)
+// stays blind to duplicated group content for non-admin members, which breaks
+// the duplicate-then-host loop — admins got these rows through ListAllPacksAdmin
+// but regular members had no visibility. The subquery hits
+// group_memberships_user_idx, so the extra predicate is O(log n) per row.
 func (q *Queries) ListPacksForUser(ctx context.Context, arg ListPacksForUserParams) ([]GamePack, error) {
 	rows, err := q.db.Query(ctx, listPacksForUser,
 		arg.UserID,
@@ -299,6 +322,10 @@ func (q *Queries) ListPacksForUser(ctx context.Context, arg ListPacksForUserPara
 			&i.DeletedAt,
 			&i.IsSystem,
 			&i.Language,
+			&i.GroupID,
+			&i.Classification,
+			&i.DuplicatedFromPackID,
+			&i.DuplicatedByUserID,
 		); err != nil {
 			return nil, err
 		}
@@ -311,7 +338,7 @@ func (q *Queries) ListPacksForUser(ctx context.Context, arg ListPacksForUserPara
 }
 
 const setPackStatus = `-- name: SetPackStatus :one
-UPDATE game_packs SET status = $2 WHERE id = $1 RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language
+UPDATE game_packs SET status = $2 WHERE id = $1 RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language, group_id, classification, duplicated_from_pack_id, duplicated_by_user_id
 `
 
 type SetPackStatusParams struct {
@@ -334,6 +361,10 @@ func (q *Queries) SetPackStatus(ctx context.Context, arg SetPackStatusParams) (G
 		&i.DeletedAt,
 		&i.IsSystem,
 		&i.Language,
+		&i.GroupID,
+		&i.Classification,
+		&i.DuplicatedFromPackID,
+		&i.DuplicatedByUserID,
 	)
 	return i, err
 }
@@ -348,7 +379,7 @@ func (q *Queries) SoftDeletePack(ctx context.Context, id uuid.UUID) error {
 }
 
 const updatePack = `-- name: UpdatePack :one
-UPDATE game_packs SET name = $2, description = $3, visibility = $4, language = $5 WHERE id = $1 RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language
+UPDATE game_packs SET name = $2, description = $3, visibility = $4, language = $5 WHERE id = $1 RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language, group_id, classification, duplicated_from_pack_id, duplicated_by_user_id
 `
 
 type UpdatePackParams struct {
@@ -380,6 +411,10 @@ func (q *Queries) UpdatePack(ctx context.Context, arg UpdatePackParams) (GamePac
 		&i.DeletedAt,
 		&i.IsSystem,
 		&i.Language,
+		&i.GroupID,
+		&i.Classification,
+		&i.DuplicatedFromPackID,
+		&i.DuplicatedByUserID,
 	)
 	return i, err
 }
@@ -396,7 +431,7 @@ ON CONFLICT (id) DO UPDATE
       is_system = true,
       deleted_at = NULL,
       language = EXCLUDED.language
-RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language
+RETURNING id, name, description, owner_id, is_official, visibility, status, created_at, deleted_at, is_system, language, group_id, classification, duplicated_from_pack_id, duplicated_by_user_id
 `
 
 type UpsertSystemPackParams struct {
@@ -432,6 +467,10 @@ func (q *Queries) UpsertSystemPack(ctx context.Context, arg UpsertSystemPackPara
 		&i.DeletedAt,
 		&i.IsSystem,
 		&i.Language,
+		&i.GroupID,
+		&i.Classification,
+		&i.DuplicatedFromPackID,
+		&i.DuplicatedByUserID,
 	)
 	return i, err
 }

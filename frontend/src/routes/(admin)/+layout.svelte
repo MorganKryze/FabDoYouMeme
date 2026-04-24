@@ -13,6 +13,7 @@
   const navItems = [
     { href: '/admin', label: 'Dashboard', Icon: Home },
     { href: '/admin/users', label: 'Users', Icon: Users },
+    { href: '/admin/groups', label: 'Groups', Icon: Users },
     { href: '/admin/invites', label: 'Invites', Icon: Mail },
     { href: '/admin/packs', label: 'Packs', Icon: Package },
     { href: '/admin/game-types', label: 'Game Types', Icon: Sliders },

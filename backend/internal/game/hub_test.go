@@ -760,4 +760,3 @@ func TestHub_Reconnect_MidRound_SnapshotContainsPhase(t *testing.T) {
 		t.Errorf("want item.payload in reconnect snapshot")
 	}
 }
-

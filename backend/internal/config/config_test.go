@@ -157,18 +157,18 @@ func TestConfig_LoadRejectsOutOfBounds(t *testing.T) {
 // existing deploy fails to start.
 func TestConfig_LoadAcceptsBoundaryValues(t *testing.T) {
 	env := validBaseline()
-	env["SESSION_TTL"] = "1m"                // min
-	env["MAGIC_LINK_TTL"] = "24h"            // max
-	env["RECONNECT_GRACE_WINDOW"] = "1s"     // min
-	env["WS_READ_DEADLINE"] = "5s"           // min
-	env["WS_PING_INTERVAL"] = "5m"           // max
-	env["SESSION_RENEW_INTERVAL"] = "1m"     // min
-	env["WS_RATE_LIMIT"] = "1"               // min
-	env["SMTP_PORT"] = "65535"               // max
-	env["WS_READ_LIMIT_BYTES"] = "64"        // min
-	env["MAX_UPLOAD_SIZE_BYTES"] = "1"       // min
-	env["RATE_LIMIT_AUTH_RPM"] = "1"         // min
-	env["RATE_LIMIT_GLOBAL_RPM"] = "100000"  // max
+	env["SESSION_TTL"] = "1m"               // min
+	env["MAGIC_LINK_TTL"] = "24h"           // max
+	env["RECONNECT_GRACE_WINDOW"] = "1s"    // min
+	env["WS_READ_DEADLINE"] = "5s"          // min
+	env["WS_PING_INTERVAL"] = "5m"          // max
+	env["SESSION_RENEW_INTERVAL"] = "1m"    // min
+	env["WS_RATE_LIMIT"] = "1"              // min
+	env["SMTP_PORT"] = "65535"              // max
+	env["WS_READ_LIMIT_BYTES"] = "64"       // min
+	env["MAX_UPLOAD_SIZE_BYTES"] = "1"      // min
+	env["RATE_LIMIT_AUTH_RPM"] = "1"        // min
+	env["RATE_LIMIT_GLOBAL_RPM"] = "100000" // max
 	applyEnv(t, env)
 
 	cfg, err := config.Load()

@@ -49,6 +49,11 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 		TextPackID string          `json:"text_pack_id"`
 		Mode       string          `json:"mode"`
 		Config     json.RawMessage `json:"config"`
+		// Phase 4 (groups) — optional group scoping. When non-empty the
+		// room inherits the group's classification, rejects non-members
+		// and guests at WS join, and narrows pack sources to group-owned
+		// or system packs.
+		GroupID string `json:"group_id,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid JSON")
@@ -157,6 +162,64 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 	hostUUID, _ := uuid.Parse(u.UserID)
 	hostPG := pgtype.UUID{Bytes: hostUUID, Valid: true}
 
+	// Phase 4 — group-scoped room validation. The three preconditions live
+	// together so an invalid request shorts before pack-requirement checks
+	// run their DB reads:
+	//   1. Group exists and is not soft-deleted.
+	//   2. Actor is a member of the group.
+	//   3. The chosen image pack (and text pack, if any) belongs to this
+	//      group OR is a system pack. Personal packs are not allowed — by
+	//      design, so hosts duplicate into the group first.
+	var groupIDParam pgtype.UUID
+	if req.GroupID != "" {
+		gid, gerr := uuid.Parse(req.GroupID)
+		if gerr != nil {
+			writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid group_id")
+			return
+		}
+		group, gerr := h.db.GetGroupByID(r.Context(), gid)
+		if gerr != nil {
+			writeError(w, r, http.StatusNotFound, "group_not_found", "Group not found")
+			return
+		}
+		if _, merr := h.db.GetMembership(r.Context(), db.GetMembershipParams{
+			GroupID: group.ID, UserID: hostUUID,
+		}); merr != nil {
+			writeError(w, r, http.StatusForbidden, "not_group_member", "You are not a member of this group")
+			return
+		}
+		// Pack source gate: each referenced pack must be either group-owned
+		// by THIS group or a system pack. Anything else is a config error.
+		checkPackSource := func(pid uuid.UUID) *string {
+			p, perr := h.db.GetPackByID(r.Context(), pid)
+			if perr != nil {
+				s := "not_found"
+				return &s
+			}
+			if p.IsSystem {
+				return nil
+			}
+			if p.GroupID.Valid && p.GroupID.Bytes == group.ID {
+				return nil
+			}
+			s := "pack_not_in_group"
+			return &s
+		}
+		if code := checkPackSource(packID); code != nil {
+			writeError(w, r, http.StatusConflict, *code,
+				"Group-scoped rooms accept only group or system packs.")
+			return
+		}
+		if req.TextPackID != "" {
+			if code := checkPackSource(textPackID); code != nil {
+				writeError(w, r, http.StatusConflict, *code,
+					"Group-scoped rooms accept only group or system text packs.")
+				return
+			}
+		}
+		groupIDParam = pgtype.UUID{Bytes: group.ID, Valid: true}
+	}
+
 	// Single-room enforcement: a user can be a participant in at most one
 	// lobby/playing room. A free user returns pgx.ErrNoRows; anything else is
 	// a real database error.
@@ -182,6 +245,7 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 		HostID:     hostPG,
 		Mode:       req.Mode,
 		Config:     roomConfig,
+		GroupID:    groupIDParam,
 	})
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to create room")

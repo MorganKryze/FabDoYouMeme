@@ -2,7 +2,14 @@
 
 This document records how FabDoYouMeme meets GDPR obligations. Update it when the data model, retention policy, or lawful basis changes.
 
-**Scope:** FabDoYouMeme processes personal data of EU residents as a controller. It runs on a single self-hosted machine. No data processors handle personal data except the SMTP provider used for magic link delivery.
+**Scope:** FabDoYouMeme processes personal data of EU residents. It runs on a single self-hosted machine. The SMTP provider used for magic-link delivery is the only external data processor.
+
+**Two-controller model (phase-5 groups paradigm).** Responsibility is split rather than joint:
+
+- The **platform admin** (the person or entity operating the self-hosted instance) is controller for platform-level data: user accounts, email addresses, consent + age-affirmation records, the invite budget, and the SFW/NSFW taxonomy itself. The platform admin operates under a **notice-and-takedown** posture with respect to content inside groups — they do not routinely moderate group content.
+- Each **group admin** is a separate controller for group-level moderation data about their group: membership, kicks/bans, pack evictions, and the group's declared SFW/NSFW classification. Group admins are not joint controllers with the platform; they act independently within the authority the platform exposes.
+
+Both controllers' decisions are recorded in the shared `audit_logs` table (phase-5 wiring) so the platform admin retains pull-read visibility for structural invariants (classification breaches, age-gate enforcement) and incident response.
 
 ---
 
@@ -21,20 +28,26 @@ This document records how FabDoYouMeme meets GDPR obligations. Update it when th
 
 ## Personal data inventory (ROPA-lite, Art. 30)
 
-| Data element             | Table / location                               | Purpose              | Retention                                                                     |
-| ------------------------ | ---------------------------------------------- | -------------------- | ----------------------------------------------------------------------------- |
-| Email address            | `users.email`, `users.pending_email`           | Authentication       | Until erasure                                                                 |
-| Username                 | `users.username`                               | In-game display      | Until erasure                                                                 |
-| Consent timestamp        | `users.consent_at`                             | GDPR Art. 7 record   | Until erasure                                                                 |
-| Session token hash       | `sessions.token_hash`                          | Authentication state | 30 days (auto-expire) or until logout                                         |
-| Magic link token hash    | `magic_link_tokens.token_hash`                 | One-time auth        | 15 minutes (auto-expire); used tokens cleaned after 7 days                    |
-| Invite email restriction | `invites.restricted_email`                     | Invite targeting     | Until invite revoked                                                          |
-| Submissions (captions)   | `submissions.payload`                          | Game content         | Until room data is purged (2 years after game)                                |
-| Votes                    | `votes.voter_id`                               | Game scoring         | Until erasure (voter replaced by sentinel on hard-delete)                     |
-| Game scores              | `room_players.score`                           | Leaderboard          | Until erasure (row deleted on hard-delete via CASCADE)                        |
-| Audit log PII snapshot   | `audit_logs.changes` (`hard_delete_user` only) | Admin accountability | Retained 3 years, then anonymised (username/email replaced with SHA-256 hash) |
-| Operational logs         | Docker stdout/stderr                           | Security monitoring  | ≤ 30 days (Docker log rotation)                                               |
-| Database backups         | Full PostgreSQL dump                           | Disaster recovery    | 7 days; may contain recently-deleted user data for up to 7 days after erasure |
+| Data element              | Table / location                               | Controller           | Purpose                                        | Retention                                                                     |
+| ------------------------- | ---------------------------------------------- | -------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------- |
+| Email address             | `users.email`, `users.pending_email`           | Platform             | Authentication                                 | Until erasure                                                                 |
+| Username                  | `users.username`                               | Platform             | In-game display                                | Until erasure                                                                 |
+| Consent timestamp         | `users.consent_at`                             | Platform             | GDPR Art. 7 record                             | Until erasure                                                                 |
+| Last-login timestamp      | `users.last_login_at`                          | Platform             | Dormancy detection for group auto-promotion    | Until erasure                                                                 |
+| Session token hash        | `sessions.token_hash`                          | Platform             | Authentication state                           | 30 days (auto-expire) or until logout                                         |
+| Magic link token hash     | `magic_link_tokens.token_hash`                 | Platform             | One-time auth                                  | 15 minutes (auto-expire); used tokens cleaned after 7 days                    |
+| Invite email restriction  | `invites.restricted_email`                     | Platform             | Platform-level invite targeting                | Until invite revoked                                                          |
+| Group invite email limit  | `group_invites.restricted_email`               | Group admin          | Per-group invite targeting                     | Until invite revoked                                                          |
+| Group membership          | `group_memberships (group_id, user_id, role)`  | Group admin          | Who is in the group, admin vs member           | Until group hard-delete OR user erasure                                       |
+| Group ban list            | `group_bans (group_id, user_id, banned_by)`    | Group admin          | Block redemption for banned users              | Until unban OR group hard-delete OR user erasure                              |
+| Group moderation audit    | `audit_logs` rows with `group.*` actions       | Group admin (+ platform pull-read) | Accountability for group-level actions | 3 years, then anonymised (username/email → SHA-256)                      |
+| Group classification      | `groups.classification`                        | Group admin          | SFW/NSFW declaration for content invariants    | Until group hard-delete                                                       |
+| Submissions (captions)    | `submissions.payload`                          | Platform             | Game content                                   | Until room data is purged (2 years after game)                                |
+| Votes                     | `votes.voter_id`                               | Platform             | Game scoring                                   | Until erasure (voter replaced by sentinel on hard-delete)                     |
+| Game scores               | `room_players.score`                           | Platform             | Leaderboard                                    | Until erasure (row deleted on hard-delete via CASCADE)                        |
+| Audit log PII snapshot    | `audit_logs.changes` (`hard_delete_user` only) | Platform             | Admin accountability                           | Retained 3 years, then anonymised (username/email replaced with SHA-256 hash) |
+| Operational logs          | Docker stdout/stderr                           | Platform             | Security monitoring                            | ≤ 30 days (Docker log rotation)                                               |
+| Database backups          | Full PostgreSQL dump                           | Platform             | Disaster recovery                              | 7 days; may contain recently-deleted user data for up to 7 days after erasure |
 
 ---
 
@@ -94,6 +107,50 @@ GDPR Art. 28 requires a written Data Processing Agreement (DPA) with every third
 | SMTP provider (`SMTP_HOST`) | User email address, magic-link URL | Yes — sign before launch | Obtain from provider (Mailgun, SES, Sendgrid, etc.) |
 
 All other processing is on-premises (PostgreSQL, RustFS). No other data processors exist.
+
+---
+
+## Groups paradigm (phase 5+)
+
+### Controller split
+
+The platform admin and each group admin act as **separate controllers** over different slices of the data flow. The split is deliberate so the platform operator can maintain a **safe-harbour / notice-and-takedown** posture toward group content without inheriting liability for every moderation call a group admin makes.
+
+Platform-controller responsibilities:
+- Account lifecycle (registration, age affirmation, erasure).
+- SFW/NSFW **taxonomy integrity** — the rules themselves, not the labels on any given group.
+- Platform-wide invite budget (`user_invite_quotas`).
+- Structural invariants: classification breach escalation, age-gate enforcement, per-group quota enforcement.
+- Pull-read audit visibility over `audit_logs` rows scoped to `group:*` resources.
+
+Group-admin-controller responsibilities:
+- Membership decisions (admits, kicks, bans) within the group.
+- Pack evictions and group-pack moderation.
+- Classification **declaration** for their specific group (the label SFW or NSFW; the meaning of the label is platform-defined).
+- Responding to group-internal member reports.
+
+Platform admins **do not** routinely review group content, do not auto-receive member reports, and do not curate or recommend. They intervene on notice (classification breach, a report about a group admin themselves) or escalation.
+
+### Retention alignment
+
+Group **soft-delete** terminates live state only: packs, memberships, quotas, and active invite codes enter a 30-day recovery window, then hard-delete (see ADR-011 once written; mechanics live in `backend/cmd/server/main.go` cleanup). Historical game-play data that referenced the group's assets is **not** accelerated by group deletion — it follows the existing platform retention clock (2 years game data, 3 years audit PII). Replay-redaction renders deleted-pack content as `[deleted]` in historical rooms.
+
+Group admins cannot override platform retention policy. A group admin deleting their group does not force earlier erasure of submissions or votes authored inside it — those remain under the platform controller's purpose.
+
+### NSFW / age-gate record
+
+Joining an NSFW group requires an explicit one-time age affirmation at redemption time (on top of the platform-level age affirmation from registration). The affirmation is recorded in `audit_logs` with a `group.invite_redeemed_with_nsfw_affirmation` action; it is **not** persisted on the user row because the consent is scoped to that join action, not an ongoing status.
+
+### Data subject erasure under groups
+
+Hard-deleting a user cascades into the groups layer:
+- All `group_memberships` rows for the user are removed.
+- If any group falls to zero admins as a result, the auto-promotion job runs immediately for that group instead of waiting the 90-day dormancy window.
+- All pending invites the user minted are revoked.
+- Personal packs are deleted (same as pre-phase-5); group-owned packs (duplicated) survive because they belong to the group, not the user.
+- Replay-redaction already handles submissions/votes via the sentinel UUID (unchanged).
+
+Platform-ban (`users.is_active = false`) triggers the same cascade (see `backend/internal/groupjobs/CascadePlatformBan`).
 
 ---
 

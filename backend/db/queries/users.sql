@@ -35,6 +35,11 @@ UPDATE users SET is_active = $2 WHERE id = $1 RETURNING *;
 -- name: UpdateUserEmailAdmin :one
 UPDATE users SET email = $2 WHERE id = $1 RETURNING *;
 
+-- name: TouchUserLastLogin :exec
+-- Stamps users.last_login_at when the user mints a session. Drives the
+-- 90-day auto-promotion scan in phase 2 (see backend/internal/jobs/).
+UPDATE users SET last_login_at = now() WHERE id = $1;
+
 -- name: ListUsers :many
 -- Excludes the GDPR sentinel row (see SentinelUserID). The sentinel is a
 -- data-integrity placeholder, never a real account, so it must not appear

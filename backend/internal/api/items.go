@@ -24,7 +24,7 @@ type enrichedItem struct {
 
 // ListItems handles GET /api/packs/{id}/items.
 func (h *PackHandler) ListItems(w http.ResponseWriter, r *http.Request) {
-	_, ok := middleware.GetSessionUser(r)
+	u, ok := middleware.GetSessionUser(r)
 	if !ok {
 		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
@@ -32,6 +32,15 @@ func (h *PackHandler) ListItems(w http.ResponseWriter, r *http.Request) {
 	packID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid pack ID")
+		return
+	}
+	pack, err := h.db.GetPackByID(r.Context(), packID)
+	if err != nil {
+		writeError(w, r, http.StatusNotFound, "not_found", "Pack not found")
+		return
+	}
+	if !canReadPack(r, h.db, pack, u) {
+		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
 	limit, offset := parsePagination(r)
@@ -78,8 +87,7 @@ func (h *PackHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, "not_found", "Pack not found")
 		return
 	}
-	ownerID, _ := uuid.Parse(u.UserID)
-	if u.Role != "admin" && (!pack.OwnerID.Valid || pack.OwnerID.Bytes != ownerID) {
+	if !canEditItems(r, h.db, pack, u) {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
@@ -109,6 +117,7 @@ func (h *PackHandler) CreateItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to create item")
 		return
 	}
+	bumpGroupEditor(r, h.db, pack, item.ID, u)
 	writeJSON(w, http.StatusCreated, item)
 }
 
@@ -134,8 +143,7 @@ func (h *PackHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, "not_found", "Pack not found")
 		return
 	}
-	ownerID, _ := uuid.Parse(u.UserID)
-	if u.Role != "admin" && (!pack.OwnerID.Valid || pack.OwnerID.Bytes != ownerID) {
+	if !canEditItems(r, h.db, pack, u) {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
@@ -163,6 +171,7 @@ func (h *PackHandler) UpdateItem(w http.ResponseWriter, r *http.Request) {
 			writeError(w, r, http.StatusInternalServerError, "internal_error", "Update failed")
 			return
 		}
+		bumpGroupEditor(r, h.db, pack, itemID, u)
 		writeJSON(w, http.StatusOK, item)
 		return
 	}
@@ -191,8 +200,7 @@ func (h *PackHandler) DeleteItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, "not_found", "Pack not found")
 		return
 	}
-	ownerID, _ := uuid.Parse(u.UserID)
-	if u.Role != "admin" && (!pack.OwnerID.Valid || pack.OwnerID.Bytes != ownerID) {
+	if !canAdminPack(r, h.db, pack, u) {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
@@ -223,8 +231,7 @@ func (h *PackHandler) ReorderItems(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, "not_found", "Pack not found")
 		return
 	}
-	ownerID, _ := uuid.Parse(u.UserID)
-	if u.Role != "admin" && (!pack.OwnerID.Valid || pack.OwnerID.Bytes != ownerID) {
+	if !canEditItems(r, h.db, pack, u) {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}

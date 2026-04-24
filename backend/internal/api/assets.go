@@ -79,7 +79,7 @@ func (h *AssetHandler) UploadURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Authorization: admin or pack owner
+	// Authorization: admin, personal owner, or any member of the owning group.
 	packID, err := uuid.Parse(req.PackID)
 	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid pack_id")
@@ -90,8 +90,7 @@ func (h *AssetHandler) UploadURL(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, "not_found", "Pack not found")
 		return
 	}
-	ownerID, _ := uuid.Parse(u.UserID)
-	if u.Role != "admin" && (!pack.OwnerID.Valid || pack.OwnerID.Bytes != ownerID) {
+	if !canEditItems(r, h.db, pack, u) {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
@@ -182,14 +181,13 @@ func (h *AssetHandler) UploadDirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Authorization: admin or pack owner
+	// Authorization: admin, personal owner, or any member of the owning group.
 	pack, err := h.db.GetPackByID(r.Context(), packID)
 	if err != nil {
 		writeError(w, r, http.StatusNotFound, "not_found", "Pack not found")
 		return
 	}
-	ownerID, _ := uuid.Parse(u.UserID)
-	if u.Role != "admin" && (!pack.OwnerID.Valid || pack.OwnerID.Bytes != ownerID) {
+	if !canEditItems(r, h.db, pack, u) {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
@@ -367,7 +365,9 @@ func (h *AssetHandler) DownloadURL(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
-	var req struct{ MediaKey string `json:"media_key"` }
+	var req struct {
+		MediaKey string `json:"media_key"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.MediaKey == "" {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "media_key is required")
 		return

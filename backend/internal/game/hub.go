@@ -265,25 +265,25 @@ func NewHub(hc HubConfig) *Hub {
 		clk = clock.Real{}
 	}
 	return &Hub{
-		roomCode:     hc.RoomCode,
-		roomID:       hc.RoomID,
-		gameTypeSlug: hc.GameTypeSlug,
-		hostUserID:   hc.HostUserID,
-		registry:     hc.Registry,
-		db:           hc.DB,
-		cfg:          hc.Cfg,
-		log:          hc.Log,
-		clock:        clk,
+		roomCode:         hc.RoomCode,
+		roomID:           hc.RoomID,
+		gameTypeSlug:     hc.GameTypeSlug,
+		hostUserID:       hc.HostUserID,
+		registry:         hc.Registry,
+		db:               hc.DB,
+		cfg:              hc.Cfg,
+		log:              hc.Log,
+		clock:            clk,
 		state:            HubLobby,
 		players:          make(map[string]*connectedPlayer),
 		playerTypes:      make(map[string]bool),
-		register:         make(chan *connectedPlayer, 8),   // burst: ≤8 simultaneous joins before blocking
-		unregister:       make(chan *connectedPlayer, 8),   // burst: ≤8 simultaneous disconnects
-		incoming:         make(chan playerMessage, 64),     // 64 msgs queued before readPump blocks
-		graceExpired:     make(chan graceExpiredMsg, 16),   // 16 concurrent grace expirations
-		roundCtrl:        make(chan roundCtrlMsg, 8),       // round lifecycle signals from runRounds
-		roundGrace:       make(chan bool, 1),               // all-in-grace state changes for waitPhase
-		roundAdvanceCh:   make(chan struct{}, 1),           // host-paced advance signal from handleRoundCtrl
+		register:         make(chan *connectedPlayer, 8), // burst: ≤8 simultaneous joins before blocking
+		unregister:       make(chan *connectedPlayer, 8), // burst: ≤8 simultaneous disconnects
+		incoming:         make(chan playerMessage, 64),   // 64 msgs queued before readPump blocks
+		graceExpired:     make(chan graceExpiredMsg, 16), // 16 concurrent grace expirations
+		roundCtrl:        make(chan roundCtrlMsg, 8),     // round lifecycle signals from runRounds
+		roundGrace:       make(chan bool, 1),             // all-in-grace state changes for waitPhase
+		roundAdvanceCh:   make(chan struct{}, 1),         // host-paced advance signal from handleRoundCtrl
 		roundPhase:       phaseIdle,
 		roundSubmissions: make(map[string]Submission),
 		roundVotes:       make(map[string]Vote),
@@ -689,8 +689,8 @@ func (h *Hub) handleRoundCtrl(ctx context.Context, ctrl roundCtrlMsg) {
 				h.submissionsShown = shown
 				h.broadcast(buildMessage("submissions_closed", map[string]any{
 					"submissions_shown": json.RawMessage(shown),
-					"ends_at":          c.votingEndsAt.UTC().Format(time.RFC3339),
-					"duration_seconds": int(c.duration.Seconds()),
+					"ends_at":           c.votingEndsAt.UTC().Format(time.RFC3339),
+					"duration_seconds":  int(c.duration.Seconds()),
 				}))
 				h.maybeCloseVoting()
 				return
@@ -1570,7 +1570,9 @@ func (h *Hub) safeSend(p *connectedPlayer, msg []byte) {
 
 // extractType reads the "type" field from a JSON message for logging.
 func extractType(msg []byte) string {
-	var m struct{ Type string `json:"type"` }
+	var m struct {
+		Type string `json:"type"`
+	}
 	if err := json.Unmarshal(msg, &m); err != nil {
 		return "unknown"
 	}

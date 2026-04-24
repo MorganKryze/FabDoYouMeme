@@ -1,5 +1,15 @@
 import type { Pack, GameItem, ItemVersion } from '$lib/api/types';
 
+export interface StudioGroup {
+  id: string;
+  name: string;
+  classification: 'sfw' | 'nsfw';
+  language: 'en' | 'fr' | 'multi';
+  // Caller's role in the group — drives rename / delete visibility in the
+  // navigator. Mirrors GroupListItem.member_role from /api/groups.
+  member_role: 'admin' | 'member';
+}
+
 export type PackKind = 'image' | 'text';
 
 // Persisted in localStorage so the user's choice on the new-pack form survives
@@ -44,6 +54,10 @@ class StudioState {
   packs = $state<Pack[]>([]);
   items = $state<GameItem[]>([]);
   versions = $state<ItemVersion[]>([]);
+  // Groups the user is a member of, each with its duplicated packs. Rendered
+  // as distinct sections in PackNavigator so group packs don't leak into the
+  // "Official" / "Mine" buckets.
+  groups = $state<StudioGroup[]>([]);
 
   // Intent for newly created packs that don't yet have items. Once a pack
   // has items, kindFor() infers kind from items[0].payload_version and
@@ -101,6 +115,7 @@ class StudioState {
     this.packs = [];
     this.items = [];
     this.versions = [];
+    this.groups = [];
     this.intendedKind = {};
     saveIntendedKind(this.intendedKind);
   }

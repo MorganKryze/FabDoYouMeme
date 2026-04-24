@@ -21,7 +21,18 @@
   let email = $state(untrack(() => form?.email ?? ''));
   let consent = $state(untrack(() => form?.consent ?? false));
   let ageAffirmation = $state(untrack(() => form?.age_affirmation ?? false));
-  let canSubmit = $derived(consent && ageAffirmation);
+
+  // Phase 2 — when a platform+group invite is in the URL, we hide the
+  // generic invite_token input (the URL token replaces it) and show the
+  // target group identity. NSFW groups demand an extra age-affirmation
+  // checkbox; non-NSFW groups skip it entirely.
+  const groupInviteToken = $derived(data.groupInviteToken);
+  const groupPreview = $derived(data.groupPreview);
+  const isPlatformPlus = $derived(!!groupInviteToken && !!groupPreview);
+  const groupIsNSFW = $derived(!!groupPreview && groupPreview.group.classification === 'nsfw');
+  let nsfwAgeAffirmation = $state(untrack(() => form?.nsfw_age_affirmation ?? false));
+
+  let canSubmit = $derived(consent && ageAffirmation && (!groupIsNSFW || nsfwAgeAffirmation));
 
   // Captured at submit-time so the success card always shows the email the
   // server actually received, not whatever happens to be in the input now.
@@ -142,19 +153,35 @@
         </div>
       {/if}
 
-      <div class="flex flex-col gap-1">
-        <label for="invite_token" class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">{m.auth_register_invite_label()}</label>
-        <input
-          id="invite_token"
-          name="invite_token"
-          type="text"
-          required
-          bind:value={inviteToken}
-          oninput={clearError}
-          class="h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
-          placeholder={m.auth_register_invite_placeholder()}
-        />
-      </div>
+      {#if isPlatformPlus && groupPreview}
+        <!-- Platform+group invite: identify the target group instead of
+             asking for a token, and pass the URL token through hidden. -->
+        <input type="hidden" name="group_invite_token" value={groupInviteToken} />
+        <div
+          class="rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white px-4 py-3 flex flex-col gap-1"
+          style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
+        >
+          <p class="text-[0.6rem] font-bold uppercase tracking-[0.15em] text-brand-text-muted">
+            {m.auth_register_joining_group_kicker()}
+          </p>
+          <p class="text-sm font-bold m-0">{groupPreview.group.name}</p>
+          <p class="text-xs text-brand-text-muted m-0">{groupPreview.group.description}</p>
+        </div>
+      {:else}
+        <div class="flex flex-col gap-1">
+          <label for="invite_token" class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">{m.auth_register_invite_label()}</label>
+          <input
+            id="invite_token"
+            name="invite_token"
+            type="text"
+            required
+            bind:value={inviteToken}
+            oninput={clearError}
+            class="h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
+            placeholder={m.auth_register_invite_placeholder()}
+          />
+        </div>
+      {/if}
 
       <div class="flex flex-col gap-1">
         <label for="username" class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">{m.auth_register_username_label()}</label>
@@ -215,6 +242,20 @@
         />
         <span class="text-sm font-semibold leading-snug">{m.auth_register_age_affirmation()}</span>
       </label>
+
+      {#if groupIsNSFW}
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            name="nsfw_age_affirmation"
+            bind:checked={nsfwAgeAffirmation}
+            onchange={clearError}
+            class="mt-0.5 h-4 w-4 rounded border-brand-border-heavy"
+            required
+          />
+          <span class="text-sm font-semibold leading-snug">{m.groups_join_nsfw_age_affirmation()}</span>
+        </label>
+      {/if}
 
       <button
         type="submit"

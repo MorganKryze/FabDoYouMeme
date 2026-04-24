@@ -181,6 +181,15 @@ All rate limits are enforced in-memory per backend process. This is correct for 
 | ----------- | -------- | ------- | ---------------------------------------------- |
 | `LOG_LEVEL` | no       | `info`  | Verbosity: `debug` / `info` / `warn` / `error` |
 
+### Groups
+
+The groups paradigm is always-on as of phase 5 — the former `FEATURE_GROUPS` / `PUBLIC_FEATURE_GROUPS` kill-switch was retired once the surface stabilised. Only the per-user caps remain tunable.
+
+| Variable                          | Required | Default | Description                                                                                                                  |
+| --------------------------------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `MAX_GROUPS_PER_USER`             | no       | `5`     | How many live groups a single user can have created. Soft cap; raise per-deployment.                                         |
+| `MAX_GROUP_MEMBERSHIPS_PER_USER`  | no       | `20`    | How many groups a single user can belong to concurrently.                                                                    |
+
 ### Legal / privacy policy
 
 The Privacy Policy served at `/privacy` is rendered from a Svelte template at [`frontend/src/routes/(public)/privacy/+page.svelte`](../frontend/src/routes/(public)/privacy/+page.svelte), with the operator-specific fields injected at runtime via these `PUBLIC_*` environment variables. They are read through SvelteKit's `$env/dynamic/public`, so updating any of them only requires `docker compose up -d` — no rebuild.

@@ -22,6 +22,13 @@
   // button can check with `selectedPacks[role]` without undefined juggling.
   let selectedPacks = $state<Record<string, string>>({});
   let isSolo = $state(false);
+  // Phase 4 — group-scoped toggle. Empty string = Personal mode (today's
+  // behaviour). Any non-empty value is a group id from data.groups. The
+  // pack picker is intentionally NOT filtered client-side yet — the
+  // backend rejects cross-context picks with pack_not_in_group so the
+  // UX surfaces the right error when the user picks a personal pack in
+  // group mode. Filter UX is a phase-5 polish.
+  let selectedGroupID = $state(untrack(() => data.preselectedGroupID ?? ''));
   // One catalogue per role so pickers can display side by side without fighting
   // over a shared array.
   let packsByRole = $state<Record<string, Pack[]>>({});
@@ -114,9 +121,45 @@
     }
   });
 
+  // Clear any selected pack that's no longer valid under the current scope
+  // filter when the user toggles between personal and group modes. Without
+  // this, flipping the scope selector could leave a ghost selection the
+  // picker UI isn't even showing.
+  $effect(() => {
+    // Track selectedGroupID so the effect reruns when scope changes.
+    const scope = selectedGroupID;
+    for (const role of Object.keys(selectedPacks)) {
+      const id = selectedPacks[role];
+      if (!id) continue;
+      const pack = packsByRole[role]?.find((p) => p.id === id);
+      if (!pack) continue;
+      const validForScope = scope
+        ? pack.is_system || pack.group_id === scope
+        : !pack.group_id;
+      if (!validForScope) selectedPacks[role] = '';
+    }
+  });
+
   function pickGame(id: string) {
     selectedGameTypeId = id;
     step = 'pack';
+  }
+
+  // Room-scope filter: the backend rejects cross-scope picks with
+  // pack_not_in_group / personal-mode equivalent, so pre-filtering here
+  // prevents the user from picking something they'll only learn is wrong
+  // on submit. Since /api/packs now returns the caller's group packs (via
+  // the extended ListPacksForUser), we run both modes against the same
+  // source data.
+  //
+  // Personal mode (empty selectedGroupID): hide group packs.
+  // Group mode: keep system packs + that group's packs only.
+  function packsForRole(role: string): Pack[] {
+    const all = packsByRole[role] ?? [];
+    if (!selectedGroupID) {
+      return all.filter((p) => !p.group_id);
+    }
+    return all.filter((p) => p.is_system || p.group_id === selectedGroupID);
   }
 
   // Partition a role's packs into same-language (matching the UI locale) and
@@ -126,11 +169,11 @@
   // as same-language so hosts see them regardless of UI locale.
   function sameLangOf(role: string): Pack[] {
     const loc = getLocale();
-    return (packsByRole[role] ?? []).filter((p) => p.language === loc || p.language === 'multi');
+    return packsForRole(role).filter((p) => p.language === loc || p.language === 'multi');
   }
   function otherLangOf(role: string): Pack[] {
     const loc = getLocale();
-    return (packsByRole[role] ?? []).filter((p) => p.language !== loc && p.language !== 'multi');
+    return packsForRole(role).filter((p) => p.language !== loc && p.language !== 'multi');
   }
   function officialOf(packs: Pack[]): Pack[] {
     return packs.filter((p) => p.is_official || p.is_system);
@@ -224,6 +267,30 @@
         <input type="hidden" name="pack_id" value={selectedPacks.image ?? ''} />
         <input type="hidden" name="text_pack_id" value={selectedPacks.text ?? ''} />
         <input type="hidden" name="is_solo" value={String(isSolo)} />
+        <input type="hidden" name="group_id" value={selectedGroupID} />
+
+        {#if data.groups.length > 0}
+          <div
+            class="rounded-[18px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-3"
+            style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
+          >
+            <p class="text-[0.6rem] font-bold uppercase tracking-[0.15em] text-brand-text-muted m-0">
+              {m.host_group_scope_label()}
+            </p>
+            <select
+              bind:value={selectedGroupID}
+              class="h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
+            >
+              <option value="">{m.host_group_scope_personal()}</option>
+              {#each data.groups as g (g.id)}
+                <option value={g.id}>{g.name}</option>
+              {/each}
+            </select>
+            {#if selectedGroupID}
+              <p class="text-xs text-brand-text-muted m-0">{m.host_group_scope_hint()}</p>
+            {/if}
+          </div>
+        {/if}
 
         <div class="flex flex-col gap-3">
           <div class="flex items-center justify-between gap-3">
@@ -353,9 +420,11 @@
             </div>
             {#if loadingRoles[req.role]}
               <p class="text-sm font-semibold text-brand-text-muted">{m.host_packs_loading()}</p>
-            {:else if (packsByRole[req.role] ?? []).length === 0}
+            {:else if packsForRole(req.role).length === 0}
               <p class="text-sm font-semibold text-brand-text-muted">
-                {m.host_packs_empty({ role: req.role, game: selectedGameType ? localizeGameType(selectedGameType).name : m.host_packs_empty_fallback_game() })}
+                {selectedGroupID
+                  ? m.host_packs_empty_group({ game: selectedGameType ? localizeGameType(selectedGameType).name : m.host_packs_empty_fallback_game() })
+                  : m.host_packs_empty({ role: req.role, game: selectedGameType ? localizeGameType(selectedGameType).name : m.host_packs_empty_fallback_game() })}
               </p>
             {:else}
               {@const same = sameLangOf(req.role)}

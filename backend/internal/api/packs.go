@@ -51,6 +51,97 @@ func (h *PackHandler) ensureNotSystem(w http.ResponseWriter, r *http.Request, pa
 	return true
 }
 
+// canReadPack allows the studio UI (and item listing) to read a pack the user
+// has any relationship with: admin, personal owner, public-active (anyone),
+// or group member (for group-owned packs).
+func canReadPack(r *http.Request, q *db.Queries, pack db.GamePack, u middleware.SessionUser) bool {
+	if u.Role == "admin" {
+		return true
+	}
+	uid, err := uuid.Parse(u.UserID)
+	if err != nil {
+		return false
+	}
+	if pack.OwnerID.Valid && pack.OwnerID.Bytes == uid {
+		return true
+	}
+	if pack.Visibility == "public" && pack.Status == "active" && !pack.DeletedAt.Valid {
+		return true
+	}
+	if pack.GroupID.Valid {
+		_, merr := q.GetMembership(r.Context(), db.GetMembershipParams{
+			GroupID: pack.GroupID.Bytes, UserID: uid,
+		})
+		return merr == nil
+	}
+	return false
+}
+
+// canEditItems allows item-level writes (create item, create version, modify
+// item). Rules: admin, personal owner, or any group member of the owning
+// group. Per spec: any group member can add/modify items in a group pack.
+func canEditItems(r *http.Request, q *db.Queries, pack db.GamePack, u middleware.SessionUser) bool {
+	if u.Role == "admin" {
+		return true
+	}
+	uid, err := uuid.Parse(u.UserID)
+	if err != nil {
+		return false
+	}
+	if pack.OwnerID.Valid && pack.OwnerID.Bytes == uid {
+		return true
+	}
+	if pack.GroupID.Valid {
+		_, merr := q.GetMembership(r.Context(), db.GetMembershipParams{
+			GroupID: pack.GroupID.Bytes, UserID: uid,
+		})
+		return merr == nil
+	}
+	return false
+}
+
+// canAdminPack gates destructive or metadata-level operations on a pack:
+// rename, delete pack, delete item, delete version. Rules: admin, personal
+// owner, or group admin (of the owning group). Per spec: group admins — not
+// regular members — own these actions on group packs.
+func canAdminPack(r *http.Request, q *db.Queries, pack db.GamePack, u middleware.SessionUser) bool {
+	if u.Role == "admin" {
+		return true
+	}
+	uid, err := uuid.Parse(u.UserID)
+	if err != nil {
+		return false
+	}
+	if pack.OwnerID.Valid && pack.OwnerID.Bytes == uid {
+		return true
+	}
+	if pack.GroupID.Valid {
+		mem, merr := q.GetMembership(r.Context(), db.GetMembershipParams{
+			GroupID: pack.GroupID.Bytes, UserID: uid,
+		})
+		return merr == nil && mem.Role == "admin"
+	}
+	return false
+}
+
+// bumpGroupEditor stamps (last_editor_user_id, last_edited_at) on a group
+// pack item after a write through the generic /api/packs/{id}/items/... path.
+// No-op for personal packs. Mirrors the explicit calls in GroupPackHandler so
+// either entry point produces the same audit trail.
+func bumpGroupEditor(r *http.Request, q *db.Queries, pack db.GamePack, itemID uuid.UUID, u middleware.SessionUser) {
+	if !pack.GroupID.Valid {
+		return
+	}
+	uid, err := uuid.Parse(u.UserID)
+	if err != nil {
+		return
+	}
+	_ = q.BumpGroupItemEditor(r.Context(), db.BumpGroupItemEditorParams{
+		ID:               itemID,
+		LastEditorUserID: pgtype.UUID{Bytes: uid, Valid: true},
+	})
+}
+
 // Create handles POST /api/packs.
 func (h *PackHandler) Create(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.GetSessionUser(r)
@@ -214,10 +305,7 @@ func (h *PackHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, "not_found", "Pack not found")
 		return
 	}
-	ownerID, _ := uuid.Parse(u.UserID)
-	isOwner := pack.OwnerID.Valid && pack.OwnerID.Bytes == ownerID
-	isPublicActive := pack.Visibility == "public" && pack.Status == "active" && !pack.DeletedAt.Valid
-	if u.Role != "admin" && !isOwner && !isPublicActive {
+	if !canReadPack(r, h.db, pack, u) {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
@@ -241,23 +329,35 @@ func (h *PackHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, "not_found", "Pack not found")
 		return
 	}
-	ownerID, _ := uuid.Parse(u.UserID)
-	if u.Role != "admin" && (!pack.OwnerID.Valid || pack.OwnerID.Bytes != ownerID) {
+	if !canAdminPack(r, h.db, pack, u) {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
 	if !h.ensureNotSystem(w, r, pack) {
 		return
 	}
+	// `Description` is a pointer so the handler can tell "not provided"
+	// (stick with the stored value) from "explicit empty string" (clear to
+	// NULL). Without this, a PATCH that only sent `{ name }` — e.g. the
+	// navigator's inline rename — used to silently wipe the description.
 	var req struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-		Visibility  string `json:"visibility"`
-		Language    string `json:"language"`
+		Name        string  `json:"name"`
+		Description *string `json:"description,omitempty"`
+		Visibility  string  `json:"visibility"`
+		Language    string  `json:"language"`
 	}
 	json.NewDecoder(r.Body).Decode(&req)
 	if req.Name == "" {
 		req.Name = pack.Name
+	}
+	// Group packs are scoped to their group — visibility stays private, and
+	// language tracks the group's declared language (the duplication path
+	// enforces compatibility). A group admin editing name/description via the
+	// studio must not be able to flip those invariants from under the host
+	// picker, so we pin both fields to their stored values for group packs.
+	if pack.GroupID.Valid {
+		req.Visibility = pack.Visibility
+		req.Language = ""
 	}
 	if req.Visibility == "" {
 		req.Visibility = pack.Visibility
@@ -273,11 +373,15 @@ func (h *PackHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 		language = req.Language
 	}
+	description := pack.Description
+	if req.Description != nil {
+		description = strPtr(*req.Description)
+	}
 	oldVisibility := pack.Visibility
 	updated, err := h.db.UpdatePack(r.Context(), db.UpdatePackParams{
 		ID:          packID,
 		Name:        req.Name,
-		Description: strPtr(req.Description),
+		Description: description,
 		Visibility:  req.Visibility,
 		Language:    language,
 	})
@@ -293,6 +397,17 @@ func (h *PackHandler) Update(w http.ResponseWriter, r *http.Request) {
 			PackID:  pgtype.UUID{Bytes: packID, Valid: true},
 			ActorID: pgtype.UUID{Bytes: actorID, Valid: true},
 		})
+	}
+	// Group-admin pack renames are moderation actions per spec — record
+	// them in the audit log so platform admin has pull access to the trail.
+	// Only fires when the name actually changed and the pack is group-owned.
+	if pack.GroupID.Valid && pack.Name != updated.Name {
+		writeAuditLog(r.Context(), h.db, u.UserID, "group.rename_pack",
+			"group:"+uuid.UUID(pack.GroupID.Bytes).String(), map[string]string{
+				"pack_id":  packID.String(),
+				"old_name": pack.Name,
+				"new_name": updated.Name,
+			})
 	}
 	writeJSON(w, http.StatusOK, updated)
 }
@@ -314,8 +429,7 @@ func (h *PackHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, "not_found", "Pack not found")
 		return
 	}
-	ownerID, _ := uuid.Parse(u.UserID)
-	if u.Role != "admin" && (!pack.OwnerID.Valid || pack.OwnerID.Bytes != ownerID) {
+	if !canAdminPack(r, h.db, pack, u) {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
@@ -349,7 +463,9 @@ func (h *PackHandler) SetStatus(w http.ResponseWriter, r *http.Request) {
 	if !h.ensureNotSystem(w, r, pack) {
 		return
 	}
-	var req struct{ Status string `json:"status"` }
+	var req struct {
+		Status string `json:"status"`
+	}
 	json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck
 	if req.Status != "active" && req.Status != "flagged" && req.Status != "banned" {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "status must be active, flagged, or banned")

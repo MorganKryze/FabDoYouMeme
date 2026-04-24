@@ -262,6 +262,14 @@
     </p>
   </section>
 
+  <!-- §11 Groups -->
+  <section class="flex flex-col gap-3">
+    <h2 class="text-xl font-bold">{m.privacy_s11_heading()}</h2>
+    <p class="text-sm font-semibold text-brand-text-muted leading-relaxed whitespace-pre-line">
+      {m.privacy_s11_body()}
+    </p>
+  </section>
+
   <div class="pt-2 pb-4">
     <a href="/" class="text-sm font-bold underline hover:text-brand-text-muted transition-colors">{m.privacy_back_home()}</a>
   </div>

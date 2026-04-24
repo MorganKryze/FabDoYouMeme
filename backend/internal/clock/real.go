@@ -7,9 +7,9 @@ import "time"
 // and can be embedded or stored without concern.
 type Real struct{}
 
-func (Real) Now() time.Time                  { return time.Now() }
+func (Real) Now() time.Time                         { return time.Now() }
 func (Real) After(d time.Duration) <-chan time.Time { return time.After(d) }
-func (Real) Sleep(d time.Duration)            { time.Sleep(d) }
+func (Real) Sleep(d time.Duration)                  { time.Sleep(d) }
 
 func (Real) NewTimer(d time.Duration) Timer {
 	return &realTimer{t: time.NewTimer(d)}
@@ -38,10 +38,10 @@ func (r *realTimer) C() <-chan time.Time {
 	return r.t.C
 }
 
-func (r *realTimer) Stop() bool                { return r.t.Stop() }
+func (r *realTimer) Stop() bool                 { return r.t.Stop() }
 func (r *realTimer) Reset(d time.Duration) bool { return r.t.Reset(d) }
 
 type realTicker struct{ t *time.Ticker }
 
 func (r *realTicker) C() <-chan time.Time { return r.t.C }
-func (r *realTicker) Stop()                { r.t.Stop() }
+func (r *realTicker) Stop()               { r.t.Stop() }

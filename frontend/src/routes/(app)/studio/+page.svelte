@@ -2,6 +2,7 @@
   import { studio } from '$lib/state/studio.svelte';
   import { user } from '$lib/state/user.svelte';
   import { reveal } from '$lib/actions/reveal';
+  import { listItems } from '$lib/api/studio';
   import PackNavigator from '$lib/components/studio/PackNavigator.svelte';
   import ItemTable from '$lib/components/studio/ItemTable.svelte';
   import ItemEditor from '$lib/components/studio/ItemEditor.svelte';
@@ -12,8 +13,22 @@
 
   let { data }: { data: PageData } = $props();
 
+  // Deep-link preselection fires once per "navigation that carries a new
+  // pack id" — re-landing on the same id (e.g. a data-only refetch) must
+  // not thrash the selection the user may have since changed.
+  let lastHonoredPackId: string | null = null;
+
   $effect(() => {
     studio.packs = data.packs;
+    studio.groups = data.groups;
+    const deepLink = data.preselectedPackId;
+    if (deepLink && deepLink !== lastHonoredPackId) {
+      lastHonoredPackId = deepLink;
+      studio.selectPack(deepLink);
+      void listItems(deepLink).then((items) => {
+        if (studio.selectedPackId === deepLink) studio.items = items;
+      });
+    }
   });
 
   const isSelectedSystem = $derived(

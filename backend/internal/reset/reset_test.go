@@ -175,7 +175,7 @@ func TestWipeInvites_DeletesOnlyInvites(t *testing.T) {
 		_, err := q.CreateInvite(ctx, db.CreateInviteParams{
 			Token:   "INV_" + uuid.New().String(),
 			MaxUses: 1,
-			Locale:    "en",
+			Locale:  "en",
 		})
 		if err != nil {
 			t.Fatalf("CreateInvite %d: %v", i, err)
@@ -379,7 +379,7 @@ func TestFullReset_PreservesSentinelAndBootstrapAndActing(t *testing.T) {
 	_, err = q.CreateInvite(ctx, db.CreateInviteParams{
 		Token:   "FR_" + uuid.New().String(),
 		MaxUses: 1,
-		Locale:    "en",
+		Locale:  "en",
 	})
 	if err != nil {
 		t.Fatalf("CreateInvite: %v", err)

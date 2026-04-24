@@ -1,4 +1,3 @@
-
 package api_test
 
 import (
@@ -304,7 +303,7 @@ func TestGetPack_PublicPack_NonOwner_Returns200(t *testing.T) {
 	player, err := q.CreateUser(context.Background(), db.CreateUserParams{
 		Username: playerSlug, Email: playerSlug + "@test.com",
 		Role: "player", IsActive: true, ConsentAt: time.Now().UTC(),
-		Locale:    "en",
+		Locale: "en",
 	})
 	if err != nil {
 		t.Fatalf("create player: %v", err)

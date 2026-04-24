@@ -87,6 +87,30 @@ func (h *WSHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Phase 4 (groups) — group-scoped room gate. When rooms.group_id is set,
+	// guests are rejected outright (no platform account) and registered
+	// users must be a live member of the group. Mirrors the ban-gate shape
+	// below: runs before the upgrade so the JSON error reaches the client.
+	if h.queries != nil {
+		room, rerr := h.queries.GetRoomByCode(r.Context(), roomCode)
+		if rerr == nil && room.GroupID.Valid {
+			if ident.IsGuest {
+				writeError(w, r, http.StatusForbidden, "group_scoped_room_requires_account",
+					"This room is restricted to registered group members.")
+				return
+			}
+			if uid, perr := uuid.Parse(ident.ID); perr == nil {
+				if _, merr := h.queries.GetMembership(r.Context(), db.GetMembershipParams{
+					GroupID: room.GroupID.Bytes, UserID: uid,
+				}); merr != nil {
+					writeError(w, r, http.StatusForbidden, "not_group_member",
+						"You are not a member of this group.")
+					return
+				}
+			}
+		}
+	}
+
 	// Ban gate. Runs after identity resolution and the single-room check so a
 	// banned identity sees the same "you can't be here" signal as a legitimate
 	// mismatch would. Placed BEFORE the upgrade so the JSON error reaches the

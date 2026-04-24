@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,6 +18,7 @@ import (
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/auth"
+	"github.com/MorganKryze/FabDoYouMeme/backend/internal/groupjobs"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/storage"
 )
@@ -42,12 +44,17 @@ func writeAuditLog(ctx context.Context, q *db.Queries, adminUserID, action, reso
 
 // AdminHandler handles /api/admin/* routes (users, invites, notifications).
 type AdminHandler struct {
-	db    *db.Queries
-	store storage.Storage
+	pool   *pgxpool.Pool
+	db     *db.Queries
+	store  storage.Storage
+	logger *slog.Logger
 }
 
-func NewAdminHandler(pool *pgxpool.Pool, store storage.Storage) *AdminHandler {
-	return &AdminHandler{db: db.New(pool), store: store}
+// NewAdminHandler wires the admin handler. The logger is consumed by the
+// platform-ban → groupjobs.CascadePlatformBan path; tests pass nil and rely
+// on the default no-op logger inside groupjobs.
+func NewAdminHandler(pool *pgxpool.Pool, store storage.Storage, logger *slog.Logger) *AdminHandler {
+	return &AdminHandler{pool: pool, db: db.New(pool), store: store, logger: logger}
 }
 
 // ListUsers handles GET /api/admin/users.
@@ -126,6 +133,14 @@ func (h *AdminHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			writeError(w, r, http.StatusInternalServerError, "internal_error", "Update failed")
 			return
+		}
+		// Phase 2 (groups): a flip from active=true to active=false is a
+		// platform ban. Cascade into the groups subsystem so memberships
+		// drop, sole-admin groups get a fresh admin, and outstanding invites
+		// the banned user minted are revoked. Best-effort: an error here is
+		// logged inside CascadePlatformBan, never blocks the admin response.
+		if !*req.IsActive {
+			_ = groupjobs.CascadePlatformBan(r.Context(), h.pool, targetID, h.logger)
 		}
 		writeAuditLog(r.Context(), h.db, admin.UserID, "set_user_active",
 			fmt.Sprintf("user:%s", targetID),

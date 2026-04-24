@@ -4,10 +4,11 @@
   import { user } from '$lib/state/user.svelte';
   import { toast } from '$lib/state/toast.svelte';
   import { createPack, deletePack, listItems, updatePack } from '$lib/api/studio';
+  import { groupsApi } from '$lib/api/groups';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { Plus, Trash2, XCircle, Edit2, ImageIcon, Type } from '$lib/icons';
   import type { Pack } from '$lib/api/types';
-  import type { PackKind } from '$lib/state/studio.svelte';
+  import type { PackKind, StudioGroup } from '$lib/state/studio.svelte';
   import * as m from '$lib/paraglide/messages';
 
   let showNewPackForm = $state(false);
@@ -73,12 +74,28 @@
     else if (e.key === 'Escape') { e.preventDefault(); cancelRename(); }
   }
 
-  const officialPacks = $derived(studio.packs.filter((p) => p.owner_id === null));
+  // Group-owned packs carry `group_id`; everything else follows the original
+  // three-way split. Without excluding group packs here they leak into
+  // "Official" (owner_id is also null for group packs) and confuse hosts.
+  const officialPacks = $derived(
+    studio.packs.filter((p) => p.owner_id === null && !p.group_id)
+  );
   const myPacks = $derived(studio.packs.filter((p) => p.owner_id === user.id));
   const publicPacks = $derived(
-    studio.packs.filter((p) => p.owner_id !== null && p.owner_id !== user.id && p.status === 'active')
+    studio.packs.filter(
+      (p) => p.owner_id !== null && p.owner_id !== user.id && p.status === 'active' && !p.group_id
+    )
   );
   const flaggedPacks = $derived(studio.packs.filter((p) => p.status === 'flagged'));
+
+  // Group sections source packs from `studio.packs` (not `g.packs`) so inline
+  // renames — which only touch studio.packs — reflect in the navigator
+  // without re-sync. `studio.groups` still supplies the label + admin status.
+  const groupSections = $derived(
+    studio.groups
+      .map((g) => ({ g, packs: studio.packs.filter((p) => p.group_id === g.id) }))
+      .filter((s) => s.packs.length > 0)
+  );
 
   async function selectPack(packId: string) {
     studio.selectPack(packId);
@@ -129,7 +146,13 @@
     e.stopPropagation();
     if (!confirm(m.studio_confirm_delete_pack({ name: pack.name }))) return;
     try {
-      await deletePack(pack.id);
+      // Group packs need the group-scoped delete so audit trail + per-group
+      // quotas stay in sync. Personal packs take the existing /api/packs path.
+      if (pack.group_id) {
+        await groupsApi.deletePack(pack.group_id, pack.id);
+      } else {
+        await deletePack(pack.id);
+      }
       studio.packs = studio.packs.filter((p) => p.id !== pack.id);
       studio.forgetKind(pack.id);
       if (studio.selectedPackId === pack.id) {
@@ -140,6 +163,16 @@
     } catch {
       toast.show(m.studio_toast_pack_delete_failed(), 'error');
     }
+  }
+
+  // A group pack is "manageable" (renamable, deletable) when the caller is
+  // platform admin OR admin of that specific group — mirrors the spec and
+  // the access rules in the backend's canAdminPack helper.
+  function canManageGroupPack(pack: Pack): boolean {
+    if (!pack.group_id) return false;
+    if (user.role === 'admin') return true;
+    const g = studio.groups.find((g) => g.id === pack.group_id);
+    return g?.member_role === 'admin';
   }
 </script>
 
@@ -225,6 +258,13 @@
   {@render packGroup(m.studio_nav_group_official(), officialPacks, false)}
   {@render packGroup(m.studio_nav_group_public(), publicPacks, false)}
   {@render packGroup(m.studio_nav_group_mine(), myPacks, true)}
+
+  <!-- Phase 3 — one section per group the user is in. Any group pack is
+       deletable if the caller can admin it (platform admin or group admin);
+       otherwise it's a read-and-edit-items surface, not a manage surface. -->
+  {#each groupSections as s (s.g.id)}
+    {@render packGroup(m.studio_nav_group_group({ name: s.g.name }), s.packs, canManageGroupPack(s.packs[0]))}
+  {/each}
 
   <!-- Admin moderation section -->
   {#if user.role === 'admin' && flaggedPacks.length > 0}

@@ -22,6 +22,8 @@ Invite tokens are rate-limited at 20 attempts per hour per IP to prevent brute-f
 
 **Streamlined onboarding:** when `restricted_email` is set on an invite and a player registers, the backend immediately sends the first magic link without requiring a second request. The player receives one email, clicks once, and is authenticated.
 
+**Platform+group invites (phase 2).** A `group_invite_token` (kind `platform_plus_group`, minted at `/api/groups/{gid}/invites/platform_plus`) replaces the `invite_token` field and enrols the new user into the target group in the same registration transaction. NSFW groups additionally require a `nsfw_age_affirmation: true` field. The platform-registration slot is debited at mint time from the issuing admin's `user_invite_quotas` row, not at redemption. See `backend/internal/auth/register.go`.
+
 ---
 
 ## Registration flow
@@ -35,6 +37,7 @@ POST /api/auth/register  { invite_token, username, email,
 - The timestamp of consent is stored in `users.consent_at` at registration. It is never changed.
 - If the email is already registered, the response is still `201` — no enumeration.
 - On success, the invite's `uses_count` is atomically incremented.
+- **Phase 2+**: if `group_invite_token` is sent instead of `invite_token`, registration consumes a `group_invites` row (kind `platform_plus_group`) and inserts a `group_memberships` row (role=`member`) in the same transaction. `nsfw_age_affirmation: true` is required when the target group is classified NSFW. Sending both tokens is a 400.
 
 ---
 
@@ -78,6 +81,19 @@ Role and active status are never cached — a deactivated user or demoted admin 
 Sessions expire after 30 days (`SESSION_TTL`) but are renewed on each authenticated request, so an active player stays logged in indefinitely. For long-running WebSocket connections (where no HTTP request renews the session), the hub renews sessions in the background every `SESSION_RENEW_INTERVAL` (default 60 minutes).
 
 Logout deletes the session row. The cookie is cleared on the client. All other sessions for the same user remain valid until explicitly deleted.
+
+**Last-login stamping (phase 2).** Every successful magic-link verify stamps `users.last_login_at` with `now()`. The column drives the 90-day dormant-sole-admin scan in `backend/internal/groupjobs/PromoteDormantAdmins`; failure to stamp is logged but does not fail login.
+
+### Platform-ban cascade into groups (phase 2)
+
+Setting `users.is_active = false` via `PATCH /api/admin/users/{id}` is treated as a platform ban. In addition to the existing session-invalidation effect, the admin handler invokes `groupjobs.CascadePlatformBan` which:
+
+1. Snapshots the groups where the banned user is the sole admin.
+2. Deletes every `group_memberships` row for the user.
+3. Revokes every outstanding `group_invites` row the user minted (sets `revoked_at = now()`).
+4. For each sole-admin group in the snapshot, promotes the longest-tenured active member of that group to admin. When no candidate exists, a `group.auto_promote_no_candidate` audit-log entry is written so the platform admin can intervene.
+
+Failures inside steps 2–4 are logged but never block the admin's PATCH response. See `backend/internal/groupjobs/promote.go`.
 
 ---
 

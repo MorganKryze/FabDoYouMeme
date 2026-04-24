@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/auth"
@@ -82,7 +83,7 @@ func seedInvite(t *testing.T, q *db.Queries) db.Invite {
 	invite, err := q.CreateInvite(context.Background(), db.CreateInviteParams{
 		Token:   token,
 		MaxUses: 10,
-		Locale:    "en",
+		Locale:  "en",
 	})
 	if err != nil {
 		t.Fatalf("seedInvite: %v", err)
@@ -237,7 +238,7 @@ func TestRegister_EmailMismatch(t *testing.T) {
 		Token:           "RESTRICTED_" + testutil.SeedName(t),
 		MaxUses:         5,
 		RestrictedEmail: &restrictedEmail,
-		Locale:    "en",
+		Locale:          "en",
 	})
 	if err != nil {
 		t.Fatalf("create restricted invite: %v", err)
@@ -265,7 +266,7 @@ func TestRegister_InviteExhausted(t *testing.T) {
 	invite, err := q.CreateInvite(context.Background(), db.CreateInviteParams{
 		Token:   "EXHAUST_" + testutil.SeedName(t),
 		MaxUses: 1,
-		Locale:    "en",
+		Locale:  "en",
 	})
 	if err != nil {
 		t.Fatalf("create invite: %v", err)
@@ -315,7 +316,7 @@ func TestRegister_SMTPFailureReturns201WithWarning(t *testing.T) {
 		Token:           "SMTPFAIL_" + slug,
 		MaxUses:         1,
 		RestrictedEmail: &restrictedEmail,
-		Locale:    "en",
+		Locale:          "en",
 	})
 	if err != nil {
 		t.Fatalf("create restricted invite: %v", err)
@@ -344,10 +345,10 @@ func TestRegister_UsernameTaken(t *testing.T) {
 	slug := testutil.SeedName(t)
 
 	inv1 := db.CreateInviteParams{Token: "INV1_" + slug, MaxUses: 5,
-		Locale:    "en",}
+		Locale: "en"}
 	invite1, _ := q.CreateInvite(context.Background(), inv1)
 	inv2 := db.CreateInviteParams{Token: "INV2_" + slug, MaxUses: 5,
-		Locale:    "en",}
+		Locale: "en"}
 	invite2, _ := q.CreateInvite(context.Background(), inv2)
 
 	// Both registrations reuse the same username — point of the test is to
@@ -373,5 +374,148 @@ func TestRegister_UsernameTaken(t *testing.T) {
 	json.NewDecoder(rec2.Body).Decode(&resp)
 	if resp["code"] != "username_taken" {
 		t.Errorf("want username_taken, got %s", resp["code"])
+	}
+}
+
+// ─── Phase 2: platform+group registration path ──────────────────────────────
+
+// seedPlatformPlusInvite creates a group, an admin membership, and a
+// platform_plus_group invite for that group. Returns the group + token.
+func seedPlatformPlusInvite(t *testing.T, q *db.Queries, classification string) (db.Group, string, db.User) {
+	t.Helper()
+	slug := testutil.SeedName(t)
+	admin, err := q.CreateUser(context.Background(), db.CreateUserParams{
+		Username: "ad_" + slug, Email: "ad_" + slug + "@test.com",
+		Role: "admin", IsActive: true, ConsentAt: time.Now().UTC(), Locale: "en",
+	})
+	if err != nil {
+		t.Fatalf("seed admin: %v", err)
+	}
+	g, err := q.CreateGroup(context.Background(), db.CreateGroupParams{
+		Name: "G_" + slug, Description: "x", Language: "en",
+		Classification: classification, QuotaBytes: 500 * 1024 * 1024, MemberCap: 100,
+		CreatedBy: pgtype.UUID{Bytes: admin.ID, Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("seed group: %v", err)
+	}
+	if _, err := q.CreateMembership(context.Background(), db.CreateMembershipParams{
+		GroupID: g.ID, UserID: admin.ID, Role: "admin",
+	}); err != nil {
+		t.Fatalf("seed admin membership: %v", err)
+	}
+	token := "GINV_" + slug
+	if _, err := q.CreateGroupInvite(context.Background(), db.CreateGroupInviteParams{
+		Token: token, GroupID: g.ID, CreatedBy: pgtype.UUID{Bytes: admin.ID, Valid: true},
+		Kind: "platform_plus_group", MaxUses: 1,
+		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(time.Hour), Valid: true},
+	}); err != nil {
+		t.Fatalf("seed invite: %v", err)
+	}
+	return g, token, admin
+}
+
+func TestRegister_PlatformPlusGroup_HappyPath(t *testing.T) {
+	h, q := newTestHandler(t)
+	g, tok, _ := seedPlatformPlusInvite(t, q, "sfw")
+
+	username := shortUser(t, "pp_")
+	email := username + "@test.com"
+	body, _ := json.Marshal(map[string]any{
+		"group_invite_token": tok,
+		"username":           username,
+		"email":              email,
+		"consent":            true,
+		"age_affirmation":    true,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+	h.Register(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("want 201, got %d — body: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]string
+	json.NewDecoder(rec.Body).Decode(&resp)
+	uid, err := uuid.Parse(resp["user_id"])
+	if err != nil {
+		t.Fatalf("user_id parse: %v", err)
+	}
+	mem, err := q.GetMembership(context.Background(), db.GetMembershipParams{
+		GroupID: g.ID, UserID: uid,
+	})
+	if err != nil {
+		t.Fatalf("expected membership inserted, got err %v", err)
+	}
+	if mem.Role != "member" {
+		t.Fatalf("want role member, got %q", mem.Role)
+	}
+}
+
+func TestRegister_PlatformPlusGroup_NSFWWithoutAffirmationRejected(t *testing.T) {
+	h, q := newTestHandler(t)
+	_, tok, _ := seedPlatformPlusInvite(t, q, "nsfw")
+
+	username := shortUser(t, "pn_")
+	body, _ := json.Marshal(map[string]any{
+		"group_invite_token": tok,
+		"username":           username,
+		"email":              username + "@test.com",
+		"consent":            true,
+		"age_affirmation":    true,
+		// nsfw_age_affirmation deliberately omitted
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+	h.Register(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("want 400, got %d", rec.Code)
+	}
+	var resp map[string]string
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["code"] != "nsfw_age_affirmation_required" {
+		t.Fatalf("want nsfw_age_affirmation_required, got %s", resp["code"])
+	}
+}
+
+func TestRegister_PlatformPlusGroup_NSFWWithAffirmationSucceeds(t *testing.T) {
+	h, q := newTestHandler(t)
+	_, tok, _ := seedPlatformPlusInvite(t, q, "nsfw")
+
+	username := shortUser(t, "pn2_")
+	body, _ := json.Marshal(map[string]any{
+		"group_invite_token":   tok,
+		"username":             username,
+		"email":                username + "@test.com",
+		"consent":              true,
+		"age_affirmation":      true,
+		"nsfw_age_affirmation": true,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+	h.Register(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("want 201, got %d — body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestRegister_PlatformPlusGroup_BothTokensRejected(t *testing.T) {
+	h, q := newTestHandler(t)
+	platformInvite := seedInvite(t, q)
+	_, tok, _ := seedPlatformPlusInvite(t, q, "sfw")
+
+	username := shortUser(t, "pb_")
+	body, _ := json.Marshal(map[string]any{
+		"invite_token":       platformInvite.Token,
+		"group_invite_token": tok,
+		"username":           username,
+		"email":              username + "@test.com",
+		"consent":            true,
+		"age_affirmation":    true,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/register", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+	h.Register(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("want 400, got %d", rec.Code)
 	}
 }

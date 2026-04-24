@@ -31,6 +31,7 @@ import (
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/game"
 	memefreestyle "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_freestyle"
 	memeshowdown "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_showdown"
+	"github.com/MorganKryze/FabDoYouMeme/backend/internal/groupjobs"
 	mw "github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/storage"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/systempack"
@@ -139,10 +140,10 @@ func main() {
 	// ── Rate limiters ─────────────────────────────────────────────────────────
 	// All limiters share cfg.TrustedProxies so the per-IP bucket key is the
 	// real client (via ClientIP) rather than the reverse proxy's address.
-	authLimiter   := mw.NewRateLimiter(cfg.RateLimitAuthRPM, 60, clk, cfg.TrustedProxies)
+	authLimiter := mw.NewRateLimiter(cfg.RateLimitAuthRPM, 60, clk, cfg.TrustedProxies)
 	inviteLimiter := mw.NewRateLimiter(cfg.RateLimitInviteRPH, 3600, clk, cfg.TrustedProxies)
 	globalLimiter := mw.NewRateLimiter(cfg.RateLimitGlobalRPM, 60, clk, cfg.TrustedProxies)
-	roomLimiter   := mw.NewRateLimiter(cfg.RateLimitRoomsRPH, 3600, clk, cfg.TrustedProxies)
+	roomLimiter := mw.NewRateLimiter(cfg.RateLimitRoomsRPH, 3600, clk, cfg.TrustedProxies)
 	uploadLimiter := mw.NewRateLimiter(cfg.RateLimitUploadsRPH, 3600, clk, cfg.TrustedProxies)
 	// Per-user bucket on GDPR export: 5/hour/user is ample for a humane
 	// use case (Art. 20 data portability) while preventing a single
@@ -150,13 +151,20 @@ func main() {
 	exportLimiter := mw.NewRateLimiter(5, 3600, clk, cfg.TrustedProxies)
 
 	// ── HTTP handlers ─────────────────────────────────────────────────────────
-	packHandler      := api.NewPackHandler(pool, cfg, store, registry)
-	roomHandler      := api.NewRoomHandler(pool, cfg, manager, logger)
-	assetHandler     := api.NewAssetHandler(pool, cfg, store)
-	gameTypeHandler  := api.NewGameTypeHandler(pool, registry)
-	adminHTTPHandler := api.NewAdminHandler(pool, store)
-	wsHandler        := api.NewWSHandler(manager, queries, cfg.AllowedOrigins)
-	healthHandler    := api.NewHealthHandler(pool, store, emailSvc.Probe)
+	packHandler := api.NewPackHandler(pool, cfg, store, registry)
+	roomHandler := api.NewRoomHandler(pool, cfg, manager, logger)
+	assetHandler := api.NewAssetHandler(pool, cfg, store)
+	gameTypeHandler := api.NewGameTypeHandler(pool, registry)
+	adminHTTPHandler := api.NewAdminHandler(pool, store, logger)
+	wsHandler := api.NewWSHandler(manager, queries, cfg.AllowedOrigins)
+	healthHandler := api.NewHealthHandler(pool, store, emailSvc.Probe)
+	groupHandler := api.NewGroupHandler(pool, cfg)
+	groupMemberHandler := api.NewGroupMemberHandler(pool, cfg)
+	groupInviteHandler := api.NewGroupInviteHandler(pool, cfg)
+	groupPackHandler := api.NewGroupPackHandler(pool, cfg)
+	groupNotificationHandler := api.NewGroupNotificationHandler(pool, cfg)
+	adminQuotaHandler := api.NewAdminQuotaHandler(pool, cfg)
+	adminGroupsHandler := api.NewAdminGroupsHandler(pool)
 
 	// ── Router ───────────────────────────────────────────────────────────────
 	r := chi.NewRouter()
@@ -216,6 +224,19 @@ func main() {
 		r.Get("/stats", adminHTTPHandler.GetStats)
 		r.Get("/storage", adminHTTPHandler.GetStorageStats)
 		r.Get("/audit", adminHTTPHandler.ListAudit)
+
+		// Phase-1 groups: per-user platform+group invite allocation. Each
+		// handler short-circuits to 404 when FEATURE_GROUPS is off, so
+		// mounting unconditionally keeps the route table stable across
+		// runtime flips of the flag.
+		r.Get("/user-invite-quotas", adminQuotaHandler.List)
+		r.Put("/user-invite-quotas/{userID}", adminQuotaHandler.Set)
+
+		// Phase 5 — platform-wide group overview + per-group overrides.
+		r.Get("/groups", adminGroupsHandler.List)
+		r.Get("/groups/{gid}", adminGroupsHandler.Get)
+		r.Patch("/groups/{gid}/quota", adminGroupsHandler.SetQuota)
+		r.Patch("/groups/{gid}/member_cap", adminGroupsHandler.SetMemberCap)
 	})
 
 	// Destructive admin actions ("danger zone"). Mounted ONLY when
@@ -313,6 +334,75 @@ func main() {
 			r.Get("/{code}/replay", roomHandler.GetReplay)
 		})
 	})
+
+	// Groups (phase 1). Routes are mounted unconditionally; each handler
+	// returns 404 when FEATURE_GROUPS is off so toggling the flag at
+	// runtime works without a router rebuild.
+	r.With(mw.RequireAuth).Route("/api/groups", func(r chi.Router) {
+		r.Get("/", groupHandler.List)
+		r.Post("/", groupHandler.Create)
+		r.Get("/{id}", groupHandler.Get)
+		r.Patch("/{id}", groupHandler.Update)
+		r.Delete("/{id}", groupHandler.Delete)
+		r.Post("/{id}/restore", groupHandler.Restore)
+
+		r.Get("/{id}/members", groupMemberHandler.List)
+		r.Delete("/{id}/members/{userID}", groupMemberHandler.Kick)
+		r.Post("/{id}/members/{userID}/promote", groupMemberHandler.Promote)
+		r.Post("/{id}/members/self/demote", groupMemberHandler.SelfDemote)
+		r.Delete("/{id}/members/self", groupMemberHandler.Leave)
+
+		r.Post("/{id}/bans", groupMemberHandler.Ban)
+		r.Delete("/{id}/bans/{userID}", groupMemberHandler.Unban)
+		r.Get("/{id}/bans", groupMemberHandler.ListBans)
+
+		// Phase 2 — invites. Mint paths share the per-(admin, group) rate
+		// limits inside the handler. Redemption of group_join codes lives
+		// at /api/groups/invites/redeem because the URL has no group id at
+		// redemption time (the token implies it).
+		r.Get("/{id}/invites", groupInviteHandler.List)
+		r.Post("/{id}/invites", groupInviteHandler.MintGroupJoin)
+		r.Post("/{id}/invites/platform_plus", groupInviteHandler.MintPlatformPlus)
+		r.Delete("/{id}/invites/{inviteID}", groupInviteHandler.Revoke)
+		r.Post("/invites/redeem", groupInviteHandler.Redeem)
+
+		// Phase 3 — group packs + duplication queue. Duplicate lives under
+		// the group route because the source pack is the payload; add/modify
+		// member paths live under a specific pack. The approval queue is
+		// the admin-only terminus for NSFW→SFW duplications.
+		r.Get("/{id}/packs", groupPackHandler.List)
+		r.Post("/{id}/packs/duplicate", groupPackHandler.Duplicate)
+		r.Post("/{id}/packs/{packID}/items", groupPackHandler.AddItem)
+		r.Patch("/{id}/packs/{packID}/items/{itemID}", groupPackHandler.ModifyItem)
+		r.Delete("/{id}/packs/{packID}/items/{itemID}", groupPackHandler.DeleteItem)
+		r.Delete("/{id}/packs/{packID}", groupPackHandler.DeletePack)
+		r.Post("/{id}/packs/{packID}/evict", groupPackHandler.Evict)
+
+		r.Get("/{id}/duplication-queue", groupPackHandler.ListPending)
+		r.Post("/{id}/duplication-queue/{queueID}/accept", groupPackHandler.AcceptPending)
+		r.Post("/{id}/duplication-queue/{queueID}/reject", groupPackHandler.RejectPending)
+
+		// Phase 5 — group notifications feed (admin-only reads, mark-read).
+		r.Get("/{id}/notifications", groupNotificationHandler.List)
+		r.Patch("/{id}/notifications/{nid}/read", groupNotificationHandler.MarkRead)
+	})
+
+	// Phase 2 — preview is intentionally unauthenticated. A platform+group
+	// invite recipient has no account yet; a group_join recipient may be
+	// logged out when they click the link. The endpoint returns only
+	// public-shape group identity (name, description, classification),
+	// matching the data the receiver would see on the join page anyway.
+	r.Get("/api/groups/invites/preview", groupInviteHandler.Preview)
+
+	// Startup auto-promotion sweep. Idempotent and best-effort: failures
+	// are logged but never block boot. Runs unconditionally now that the
+	// groups paradigm is GA — the sweep is cheap on an empty dataset.
+	if rep, err := groupjobs.PromoteDormantAdmins(context.Background(), pool, logger); err != nil {
+		logger.Error("startup: promote dormant admins", "error", err)
+	} else {
+		logger.Info("startup cleanup", "event", "group.auto_promote_pass",
+			"scanned", rep.Scanned, "promoted", rep.Promoted, "no_candidate", rep.NoCandidate)
+	}
 
 	// WebSocket — intentionally not gated by RequireAuth. The handler resolves
 	// identity itself (session cookie OR guest_token query param) and rejects

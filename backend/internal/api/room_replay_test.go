@@ -205,7 +205,7 @@ func TestGetReplay_HappyPath_MemeFreestyle(t *testing.T) {
 	p2, err := q.CreateUser(ctx, db.CreateUserParams{
 		Username: slug, Email: slug + "@test.com", Role: "player",
 		IsActive: true, ConsentAt: time.Now().UTC(),
-		Locale:    "en",
+		Locale: "en",
 	})
 	if err != nil {
 		t.Fatalf("create p2: %v", err)
@@ -581,7 +581,7 @@ func TestGetReplay_DeletedAuthor_RendersAsDeleted(t *testing.T) {
 	victim, err := q.CreateUser(ctx, db.CreateUserParams{
 		Username: slug, Email: slug + "@test.com", Role: "player",
 		IsActive: true, ConsentAt: time.Now().UTC(),
-		Locale:    "en",
+		Locale: "en",
 	})
 	if err != nil {
 		t.Fatalf("create victim: %v", err)

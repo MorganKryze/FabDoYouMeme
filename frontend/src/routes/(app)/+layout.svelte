@@ -6,7 +6,7 @@
   import { user } from '$lib/state/user.svelte';
   import { page } from '$app/stores';
   import { hoverEffect } from '$lib/actions/hoverEffect';
-  import { Wrench, HelpCircle, Shield, Settings, X } from '$lib/icons';
+  import { Wrench, HelpCircle, Shield, Settings, Users, X } from '$lib/icons';
   import { onMount } from 'svelte';
   import LabHelpDrawer from '$lib/components/studio/LabHelpDrawer.svelte';
   import Wordmark from '$lib/components/Wordmark.svelte';
@@ -97,6 +97,16 @@
           {m.nav_admin()}
         </a>
       {/if}
+
+      <a
+        href="/groups"
+        use:hoverEffect={'swap'}
+        class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-bold bg-brand-white border-[2.5px] border-brand-border-heavy no-underline"
+        style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
+      >
+        <Users size={16} strokeWidth={2.5} />
+        {m.nav_groups()}
+      </a>
 
       <a
         href="/studio"

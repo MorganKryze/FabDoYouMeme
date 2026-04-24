@@ -1,8 +1,8 @@
 -- backend/db/queries/rooms.sql
 
 -- name: CreateRoom :one
-INSERT INTO rooms (code, game_type_id, pack_id, text_pack_id, host_id, mode, config)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO rooms (code, game_type_id, pack_id, text_pack_id, host_id, mode, config, group_id)
+VALUES ($1, $2, $3, $4, $5, $6, $7, sqlc.narg(group_id))
 RETURNING *;
 
 -- name: GetRoomByCode :one

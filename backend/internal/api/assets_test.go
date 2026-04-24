@@ -42,8 +42,8 @@ func pngBase64(t *testing.T) string {
 func uploadURLRequest(t *testing.T, mime string, sizeBytes int64, previewBase64 string) *http.Request {
 	t.Helper()
 	body := map[string]any{
-		"pack_id":       "00000000-0000-0000-0000-000000000001",
-		"item_id":       "00000000-0000-0000-0000-000000000002",
+		"pack_id":        "00000000-0000-0000-0000-000000000001",
+		"item_id":        "00000000-0000-0000-0000-000000000002",
 		"version_number": 1,
 		"filename":       "test.png",
 		"mime_type":      mime,

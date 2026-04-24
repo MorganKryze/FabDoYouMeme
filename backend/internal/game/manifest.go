@@ -113,8 +113,8 @@ func LoadManifest(raw []byte) (*Manifest, error) {
 
 func (b Bounds) selfCheck(slug string) error {
 	checks := []struct {
-		field            string
-		min, max, deflt  int
+		field           string
+		min, max, deflt int
 	}{
 		{"round_duration_seconds", b.MinRoundDurationSeconds, b.MaxRoundDurationSeconds, b.DefaultRoundDurationSeconds},
 		{"voting_duration_seconds", b.MinVotingDurationSeconds, b.MaxVotingDurationSeconds, b.DefaultVotingDurationSeconds},

@@ -15,7 +15,7 @@ import (
 )
 
 const confirmEmailChange = `-- name: ConfirmEmailChange :one
-UPDATE users SET email = pending_email, pending_email = NULL WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale
+UPDATE users SET email = pending_email, pending_email = NULL WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale, last_login_at
 `
 
 func (q *Queries) ConfirmEmailChange(ctx context.Context, id uuid.UUID) (User, error) {
@@ -33,6 +33,7 @@ func (q *Queries) ConfirmEmailChange(ctx context.Context, id uuid.UUID) (User, e
 		&i.CreatedAt,
 		&i.IsProtected,
 		&i.Locale,
+		&i.LastLoginAt,
 	)
 	return i, err
 }
@@ -56,7 +57,7 @@ func (q *Queries) CountUsers(ctx context.Context, search *string) (int64, error)
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, email, role, is_active, invited_by, consent_at, locale)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale
+RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale, last_login_at
 `
 
 type CreateUserParams struct {
@@ -92,13 +93,14 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.CreatedAt,
 		&i.IsProtected,
 		&i.Locale,
+		&i.LastLoginAt,
 	)
 	return i, err
 }
 
 const getSentinelUser = `-- name: GetSentinelUser :one
 
-SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale FROM users WHERE id = '00000000-0000-0000-0000-000000000001'
+SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale, last_login_at FROM users WHERE id = '00000000-0000-0000-0000-000000000001'
 `
 
 // Sentinel UUID: 00000000-0000-0000-0000-000000000001 (see auth.SentinelUserID in Go).
@@ -118,12 +120,13 @@ func (q *Queries) GetSentinelUser(ctx context.Context) (User, error) {
 		&i.CreatedAt,
 		&i.IsProtected,
 		&i.Locale,
+		&i.LastLoginAt,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale FROM users WHERE email = $1
+SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale, last_login_at FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -141,13 +144,14 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.CreatedAt,
 		&i.IsProtected,
 		&i.Locale,
+		&i.LastLoginAt,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
 
-SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale FROM users WHERE id = $1
+SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale, last_login_at FROM users WHERE id = $1
 `
 
 // backend/db/queries/users.sql
@@ -166,12 +170,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.CreatedAt,
 		&i.IsProtected,
 		&i.Locale,
+		&i.LastLoginAt,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale FROM users WHERE username = $1
+SELECT id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale, last_login_at FROM users WHERE username = $1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -189,6 +194,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.CreatedAt,
 		&i.IsProtected,
 		&i.Locale,
+		&i.LastLoginAt,
 	)
 	return i, err
 }
@@ -464,7 +470,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]ListUse
 }
 
 const setPendingEmail = `-- name: SetPendingEmail :one
-UPDATE users SET pending_email = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale
+UPDATE users SET pending_email = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale, last_login_at
 `
 
 type SetPendingEmailParams struct {
@@ -487,12 +493,13 @@ func (q *Queries) SetPendingEmail(ctx context.Context, arg SetPendingEmailParams
 		&i.CreatedAt,
 		&i.IsProtected,
 		&i.Locale,
+		&i.LastLoginAt,
 	)
 	return i, err
 }
 
 const setUserActive = `-- name: SetUserActive :one
-UPDATE users SET is_active = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale
+UPDATE users SET is_active = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale, last_login_at
 `
 
 type SetUserActiveParams struct {
@@ -515,6 +522,7 @@ func (q *Queries) SetUserActive(ctx context.Context, arg SetUserActiveParams) (U
 		&i.CreatedAt,
 		&i.IsProtected,
 		&i.Locale,
+		&i.LastLoginAt,
 	)
 	return i, err
 }
@@ -536,6 +544,17 @@ func (q *Queries) SetUserProtected(ctx context.Context, arg SetUserProtectedPara
 	return err
 }
 
+const touchUserLastLogin = `-- name: TouchUserLastLogin :exec
+UPDATE users SET last_login_at = now() WHERE id = $1
+`
+
+// Stamps users.last_login_at when the user mints a session. Drives the
+// 90-day auto-promotion scan in phase 2 (see backend/internal/jobs/).
+func (q *Queries) TouchUserLastLogin(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, touchUserLastLogin, id)
+	return err
+}
+
 const updateSubmissionsSentinel = `-- name: UpdateSubmissionsSentinel :exec
 UPDATE submissions SET user_id = '00000000-0000-0000-0000-000000000001' WHERE user_id = $1
 `
@@ -546,7 +565,7 @@ func (q *Queries) UpdateSubmissionsSentinel(ctx context.Context, userID pgtype.U
 }
 
 const updateUserEmailAdmin = `-- name: UpdateUserEmailAdmin :one
-UPDATE users SET email = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale
+UPDATE users SET email = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale, last_login_at
 `
 
 type UpdateUserEmailAdminParams struct {
@@ -569,12 +588,13 @@ func (q *Queries) UpdateUserEmailAdmin(ctx context.Context, arg UpdateUserEmailA
 		&i.CreatedAt,
 		&i.IsProtected,
 		&i.Locale,
+		&i.LastLoginAt,
 	)
 	return i, err
 }
 
 const updateUserLocale = `-- name: UpdateUserLocale :one
-UPDATE users SET locale = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale
+UPDATE users SET locale = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale, last_login_at
 `
 
 type UpdateUserLocaleParams struct {
@@ -597,12 +617,13 @@ func (q *Queries) UpdateUserLocale(ctx context.Context, arg UpdateUserLocalePara
 		&i.CreatedAt,
 		&i.IsProtected,
 		&i.Locale,
+		&i.LastLoginAt,
 	)
 	return i, err
 }
 
 const updateUserRole = `-- name: UpdateUserRole :one
-UPDATE users SET role = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale
+UPDATE users SET role = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale, last_login_at
 `
 
 type UpdateUserRoleParams struct {
@@ -625,12 +646,13 @@ func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) 
 		&i.CreatedAt,
 		&i.IsProtected,
 		&i.Locale,
+		&i.LastLoginAt,
 	)
 	return i, err
 }
 
 const updateUserUsername = `-- name: UpdateUserUsername :one
-UPDATE users SET username = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale
+UPDATE users SET username = $2 WHERE id = $1 RETURNING id, username, email, pending_email, role, is_active, invited_by, consent_at, created_at, is_protected, locale, last_login_at
 `
 
 type UpdateUserUsernameParams struct {
@@ -653,6 +675,7 @@ func (q *Queries) UpdateUserUsername(ctx context.Context, arg UpdateUserUsername
 		&i.CreatedAt,
 		&i.IsProtected,
 		&i.Locale,
+		&i.LastLoginAt,
 	)
 	return i, err
 }

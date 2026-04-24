@@ -39,6 +39,8 @@ type GameItem struct {
 	CreatedAt        time.Time          `json:"created_at"`
 	Name             string             `json:"name"`
 	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	LastEditorUserID pgtype.UUID        `json:"last_editor_user_id"`
+	LastEditedAt     pgtype.Timestamptz `json:"last_edited_at"`
 }
 
 type GameItemVersion struct {
@@ -52,17 +54,21 @@ type GameItemVersion struct {
 }
 
 type GamePack struct {
-	ID          uuid.UUID          `json:"id"`
-	Name        string             `json:"name"`
-	Description *string            `json:"description"`
-	OwnerID     pgtype.UUID        `json:"owner_id"`
-	IsOfficial  bool               `json:"is_official"`
-	Visibility  string             `json:"visibility"`
-	Status      string             `json:"status"`
-	CreatedAt   time.Time          `json:"created_at"`
-	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
-	IsSystem    bool               `json:"is_system"`
-	Language    string             `json:"language"`
+	ID                   uuid.UUID          `json:"id"`
+	Name                 string             `json:"name"`
+	Description          *string            `json:"description"`
+	OwnerID              pgtype.UUID        `json:"owner_id"`
+	IsOfficial           bool               `json:"is_official"`
+	Visibility           string             `json:"visibility"`
+	Status               string             `json:"status"`
+	CreatedAt            time.Time          `json:"created_at"`
+	DeletedAt            pgtype.Timestamptz `json:"deleted_at"`
+	IsSystem             bool               `json:"is_system"`
+	Language             string             `json:"language"`
+	GroupID              pgtype.UUID        `json:"group_id"`
+	Classification       string             `json:"classification"`
+	DuplicatedFromPackID pgtype.UUID        `json:"duplicated_from_pack_id"`
+	DuplicatedByUserID   pgtype.UUID        `json:"duplicated_by_user_id"`
 }
 
 type GameType struct {
@@ -74,6 +80,73 @@ type GameType struct {
 	SupportsSolo bool            `json:"supports_solo"`
 	Config       json.RawMessage `json:"config"`
 	CreatedAt    time.Time       `json:"created_at"`
+}
+
+type Group struct {
+	ID             uuid.UUID          `json:"id"`
+	Name           string             `json:"name"`
+	NameNormalized *string            `json:"name_normalized"`
+	Description    string             `json:"description"`
+	AvatarMediaKey *string            `json:"avatar_media_key"`
+	Language       string             `json:"language"`
+	Classification string             `json:"classification"`
+	MemberCap      int32              `json:"member_cap"`
+	QuotaBytes     int64              `json:"quota_bytes"`
+	CreatedBy      pgtype.UUID        `json:"created_by"`
+	CreatedAt      time.Time          `json:"created_at"`
+	DeletedAt      pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type GroupBan struct {
+	ID       uuid.UUID   `json:"id"`
+	GroupID  uuid.UUID   `json:"group_id"`
+	UserID   uuid.UUID   `json:"user_id"`
+	BannedBy pgtype.UUID `json:"banned_by"`
+	BannedAt time.Time   `json:"banned_at"`
+}
+
+type GroupDuplicationPending struct {
+	ID           uuid.UUID          `json:"id"`
+	GroupID      uuid.UUID          `json:"group_id"`
+	SourcePackID uuid.UUID          `json:"source_pack_id"`
+	RequestedBy  uuid.UUID          `json:"requested_by"`
+	RequestedAt  time.Time          `json:"requested_at"`
+	ResolvedAt   pgtype.Timestamptz `json:"resolved_at"`
+	ResolvedBy   pgtype.UUID        `json:"resolved_by"`
+	Resolution   *string            `json:"resolution"`
+}
+
+type GroupInvite struct {
+	ID              uuid.UUID          `json:"id"`
+	Token           string             `json:"token"`
+	GroupID         uuid.UUID          `json:"group_id"`
+	CreatedBy       pgtype.UUID        `json:"created_by"`
+	Kind            string             `json:"kind"`
+	RestrictedEmail *string            `json:"restricted_email"`
+	MaxUses         int32              `json:"max_uses"`
+	UsesCount       int32              `json:"uses_count"`
+	ExpiresAt       pgtype.Timestamptz `json:"expires_at"`
+	RevokedAt       pgtype.Timestamptz `json:"revoked_at"`
+	CreatedAt       time.Time          `json:"created_at"`
+}
+
+type GroupMembership struct {
+	ID       uuid.UUID `json:"id"`
+	GroupID  uuid.UUID `json:"group_id"`
+	UserID   uuid.UUID `json:"user_id"`
+	Role     string    `json:"role"`
+	JoinedAt time.Time `json:"joined_at"`
+}
+
+type GroupNotification struct {
+	ID        uuid.UUID          `json:"id"`
+	GroupID   uuid.UUID          `json:"group_id"`
+	Type      string             `json:"type"`
+	ActorID   pgtype.UUID        `json:"actor_id"`
+	SubjectID pgtype.UUID        `json:"subject_id"`
+	Payload   json.RawMessage    `json:"payload"`
+	CreatedAt time.Time          `json:"created_at"`
+	ReadAt    pgtype.Timestamptz `json:"read_at"`
 }
 
 type GuestPlayer struct {
@@ -121,6 +194,7 @@ type Room struct {
 	FinishedAt             pgtype.Timestamptz `json:"finished_at"`
 	RematchWindowExpiresAt pgtype.Timestamptz `json:"rematch_window_expires_at"`
 	TextPackID             pgtype.UUID        `json:"text_pack_id"`
+	GroupID                pgtype.UUID        `json:"group_id"`
 }
 
 type RoomBan struct {
@@ -167,17 +241,25 @@ type Submission struct {
 }
 
 type User struct {
-	ID           uuid.UUID   `json:"id"`
-	Username     string      `json:"username"`
-	Email        string      `json:"email"`
-	PendingEmail *string     `json:"pending_email"`
-	Role         string      `json:"role"`
-	IsActive     bool        `json:"is_active"`
-	InvitedBy    pgtype.UUID `json:"invited_by"`
-	ConsentAt    time.Time   `json:"consent_at"`
-	CreatedAt    time.Time   `json:"created_at"`
-	IsProtected  bool        `json:"is_protected"`
-	Locale       string      `json:"locale"`
+	ID           uuid.UUID          `json:"id"`
+	Username     string             `json:"username"`
+	Email        string             `json:"email"`
+	PendingEmail *string            `json:"pending_email"`
+	Role         string             `json:"role"`
+	IsActive     bool               `json:"is_active"`
+	InvitedBy    pgtype.UUID        `json:"invited_by"`
+	ConsentAt    time.Time          `json:"consent_at"`
+	CreatedAt    time.Time          `json:"created_at"`
+	IsProtected  bool               `json:"is_protected"`
+	Locale       string             `json:"locale"`
+	LastLoginAt  pgtype.Timestamptz `json:"last_login_at"`
+}
+
+type UserInviteQuota struct {
+	UserID    uuid.UUID `json:"user_id"`
+	Allocated int32     `json:"allocated"`
+	Used      int32     `json:"used"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type Vote struct {

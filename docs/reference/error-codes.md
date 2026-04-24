@@ -49,6 +49,56 @@ Canonical reference for every `snake_case` error code emitted by the system.
 | `system_pack_readonly`     | 403  | Every mutating pack/item handler                 | Attempt to modify a pack managed by `systempack` (bundled demo pack). The filesystem is the only way to update it.         |
 | `rate_limited`             | 429  | Rate-limit middleware                            | Too many requests — see [self-hosting.md](../self-hosting.md) for per-route limits                                         |
 
+### Groups (phase 1)
+
+Emitted by `/api/groups*` and `/api/admin/user-invite-quotas*`. Every group route returns `not_found` (404) when `FEATURE_GROUPS=false`, regardless of the underlying state.
+
+| Code                          | HTTP | Where                                                | Meaning                                                                                       |
+| ----------------------------- | ---- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `group_not_found`             | 404  | `/api/groups/{id}*`                                  | Group does not exist or is hard-deleted (soft-deleted groups also 404 to non-restore reads).  |
+| `not_group_member`            | 403  | Any `/api/groups/{id}*` route                        | Actor is not a member of the target group.                                                    |
+| `not_group_admin`             | 403  | Admin-only group/member routes                       | Actor is a member but lacks the `admin` role required for the action.                         |
+| `group_name_taken`            | 409  | `POST /api/groups`, `PATCH /api/groups/{id}`         | A live (non-soft-deleted) group already uses the case-insensitive name.                       |
+| `group_cap_reached`           | 409  | `POST /api/groups`                                   | Actor has already created `MAX_GROUPS_PER_USER` live groups.                                  |
+| `last_admin_cannot_leave`     | 409  | `DELETE /api/groups/{id}/members/self`, demote       | Sole admin must promote another member or delete the group before stepping down.              |
+| `cannot_kick_self`            | 409  | `DELETE /api/groups/{id}/members/{userID}`, ban      | Use the leave endpoint to remove yourself; this code also fires on a self-ban attempt.        |
+| `group_not_deleted`           | 409  | `POST /api/groups/{id}/restore`                      | Restore called on a group that is not in a soft-deleted state.                                |
+| `group_restore_window_elapsed`| 410  | `POST /api/groups/{id}/restore`                      | The 30-day soft-delete retention window has already elapsed; restore is no longer possible.   |
+| `quota_below_used`            | 409  | `PUT /api/admin/user-invite-quotas/{userID}`         | Allocation cannot be lowered below the user's current `used` count.                           |
+
+#### Phase 2 (invites)
+
+| Code                                  | HTTP | Where                                                | Meaning                                                                                       |
+| ------------------------------------- | ---- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `invite_revoked`                      | 410  | `POST /api/groups/invites/redeem`, register          | Code has been revoked by an admin.                                                            |
+| `invite_expired`                      | 410  | `POST /api/groups/invites/redeem`, register          | Code is past its TTL.                                                                         |
+| `invite_exhausted`                    | 410  | `POST /api/groups/invites/redeem`, register          | `uses_count >= max_uses`. Also fired on the atomic redemption race.                           |
+| `invite_rate_limit_active_codes`      | 429  | `POST /api/groups/{id}/invites*`                     | Actor has 50+ active codes for this group; revoke or wait for some to expire.                 |
+| `invite_rate_limit_per_hour`          | 429  | `POST /api/groups/{id}/invites*`                     | Actor has minted 20+ codes in this group within the last hour.                                |
+| `platform_plus_quota_exhausted`       | 409  | `POST /api/groups/{id}/invites/platform_plus`        | Actor has no remaining platform-registration slots in `user_invite_quotas`.                   |
+| `wrong_invite_kind`                   | 400  | `POST /api/groups/invites/redeem`, register          | Group-join code submitted to register, or platform+group code submitted to redeem endpoint.   |
+| `user_banned_from_group`              | 403  | `POST /api/groups/invites/redeem`                    | Redeemer is on the target group's ban list.                                                   |
+| `email_mismatch`                      | 403  | `POST /api/groups/invites/redeem`                    | `restricted_email` set on the invite does not match the redeemer's email.                     |
+| `membership_cap_reached`              | 409  | `POST /api/groups/invites/redeem`                    | Redeemer is at `MAX_GROUP_MEMBERSHIPS_PER_USER`.                                              |
+| `member_cap_reached`                  | 409  | `POST /api/groups/invites/redeem`                    | Target group has hit its `member_cap`.                                                        |
+| `nsfw_age_affirmation_required`       | 400  | `POST /api/groups/invites/redeem`, register          | Joining an NSFW group requires the dedicated checkbox; not provided.                          |
+
+#### Phase 3 (packs + duplication)
+
+| Code                                  | HTTP | Where                                                | Meaning                                                                                       |
+| ------------------------------------- | ---- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `source_pack_unavailable`             | 403  | `POST /api/groups/{id}/packs/duplicate`              | Actor cannot read the source pack (not owned, not system, not public-active).                 |
+| `language_mismatch`                   | 409  | `POST /api/groups/{id}/packs/duplicate`              | Source pack language does not match the target group's declared language.                    |
+| `group_quota_exceeded`                | 409  | `POST /api/groups/{id}/packs/duplicate`              | Duplication would push the group past its `quota_bytes` ceiling.                              |
+| `duplication_already_resolved`        | 409  | `POST /api/groups/{id}/duplication-queue/{qid}/*`    | Queue entry has already been accepted or rejected.                                            |
+
+#### Phase 4 (group-scoped rooms)
+
+| Code                                  | HTTP | Where                                                | Meaning                                                                                       |
+| ------------------------------------- | ---- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `pack_not_in_group`                   | 409  | `POST /api/rooms`                                    | Group-scoped room requested with a pack that is neither group-owned nor a system pack.        |
+| `group_scoped_room_requires_account`  | 403  | `GET /api/ws/rooms/{code}`                           | Guest tried to join a group-scoped room. Registered group members only.                       |
+
 ### Special: smtp_failure (201 + warning)
 
 When `POST /api/auth/register` is used with a `restricted_email` invite and SMTP fails to deliver the auto-sent magic link, the response is `201 Created` with a `warning` field:

@@ -23,14 +23,28 @@ type enrichedVersion struct {
 
 // ListVersions handles GET /api/packs/{id}/items/{item_id}/versions.
 func (h *PackHandler) ListVersions(w http.ResponseWriter, r *http.Request) {
-	_, ok := middleware.GetSessionUser(r)
+	u, ok := middleware.GetSessionUser(r)
 	if !ok {
 		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+	packID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid pack ID")
 		return
 	}
 	itemID, err := uuid.Parse(chi.URLParam(r, "item_id"))
 	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid item ID")
+		return
+	}
+	pack, err := h.db.GetPackByID(r.Context(), packID)
+	if err != nil {
+		writeError(w, r, http.StatusNotFound, "not_found", "Pack not found")
+		return
+	}
+	if !canReadPack(r, h.db, pack, u) {
+		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
 	versions, err := h.db.ListVersionsForItem(r.Context(), itemID)
@@ -73,8 +87,7 @@ func (h *PackHandler) CreateVersion(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, "not_found", "Pack not found")
 		return
 	}
-	ownerID, _ := uuid.Parse(u.UserID)
-	if u.Role != "admin" && (!pack.OwnerID.Valid || pack.OwnerID.Bytes != ownerID) {
+	if !canEditItems(r, h.db, pack, u) {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
@@ -103,6 +116,7 @@ func (h *PackHandler) CreateVersion(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to create version")
 		return
 	}
+	bumpGroupEditor(r, h.db, pack, itemID, u)
 	writeJSON(w, http.StatusCreated, version)
 }
 
@@ -133,8 +147,7 @@ func (h *PackHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusNotFound, "not_found", "Pack not found")
 		return
 	}
-	ownerID, _ := uuid.Parse(u.UserID)
-	if u.Role != "admin" && (!pack.OwnerID.Valid || pack.OwnerID.Bytes != ownerID) {
+	if !canEditItems(r, h.db, pack, u) {
 		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
 		return
 	}
@@ -146,14 +159,25 @@ func (h *PackHandler) RestoreVersion(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Restore failed")
 		return
 	}
+	bumpGroupEditor(r, h.db, pack, itemID, u)
 	writeJSON(w, http.StatusOK, item)
 }
 
 // SoftDeleteVersion handles DELETE /api/packs/{id}/items/{item_id}/versions/{vid}.
 func (h *PackHandler) SoftDeleteVersion(w http.ResponseWriter, r *http.Request) {
-	_, ok := middleware.GetSessionUser(r)
+	u, ok := middleware.GetSessionUser(r)
 	if !ok {
 		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
+		return
+	}
+	packID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid pack ID")
+		return
+	}
+	itemID, err := uuid.Parse(chi.URLParam(r, "item_id"))
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid item ID")
 		return
 	}
 	versionID, err := uuid.Parse(chi.URLParam(r, "vid"))
@@ -161,10 +185,20 @@ func (h *PackHandler) SoftDeleteVersion(w http.ResponseWriter, r *http.Request) 
 		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid version ID")
 		return
 	}
+	pack, err := h.db.GetPackByID(r.Context(), packID)
+	if err != nil {
+		writeError(w, r, http.StatusNotFound, "not_found", "Pack not found")
+		return
+	}
+	if !canEditItems(r, h.db, pack, u) {
+		writeError(w, r, http.StatusForbidden, "forbidden", "Access denied")
+		return
+	}
 	if err := h.db.SoftDeleteVersion(r.Context(), versionID); err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Delete failed")
 		return
 	}
+	bumpGroupEditor(r, h.db, pack, itemID, u)
 	w.WriteHeader(http.StatusNoContent)
 }
 
