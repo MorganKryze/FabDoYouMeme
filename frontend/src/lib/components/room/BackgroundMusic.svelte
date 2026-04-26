@@ -243,7 +243,7 @@
 ></audio>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">
+<div class="fixed bottom-24 right-6 z-40 flex flex-col items-end gap-2">
   {#if error}
     <div
       class="bg-brand-white border-[2.5px] border-red-400 rounded-2xl pl-3 pr-2 py-2 text-xs font-semibold text-red-600 max-w-xs inline-flex items-start gap-2"

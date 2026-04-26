@@ -1,7 +1,6 @@
 <script lang="ts">
   import { untrack, onMount } from 'svelte';
   import { reveal } from '$lib/actions/reveal';
-  import { physCard } from '$lib/actions/physCard';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { adminApi } from '$lib/api/admin';
@@ -317,7 +316,6 @@
         {@const d = delta(card.field)}
         <div
           use:reveal={{ delay: i }}
-          use:physCard
           class="rounded-xl border border-brand-border bg-brand-white p-4"
         >
           <p class="text-sm text-brand-text-muted">{card.label}</p>
@@ -339,7 +337,6 @@
       <h2 class="text-base font-semibold">{m.admin_storage_heading()}</h2>
       <div
         use:reveal
-        use:physCard
         class="rounded-xl border border-brand-border bg-brand-white p-4 grid grid-cols-1 sm:grid-cols-3 gap-4 sm:divide-x sm:divide-brand-border"
       >
         {#each [

@@ -20,6 +20,7 @@
     Users,
     IdCard,
     XCircle,
+    Plus,
   } from '$lib/icons';
   import * as m from '$lib/paraglide/messages';
   import type { ActionData, PageData } from './$types';
@@ -442,34 +443,81 @@
         {/if}
       </div>
 
-      <!-- Circles (mocked placeholder) -->
+      <!-- Groups card — wired to /api/groups, see backend.GroupHandler.List.
+           Each row deep-links to /groups/{id}; trailing CTA opens the
+           creator. Empty state nudges to /groups/new. -->
       <div
         use:reveal={{ delay: 3 }}
-        class="rounded-[22px] border-[2.5px] border-dashed border-brand-border-heavy bg-brand-white/40 p-5 flex flex-col gap-3 relative overflow-hidden"
+        class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-white p-5 flex flex-col gap-3"
+        style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
       >
-        <div class="absolute top-3 right-3 text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid px-2 py-0.5 rounded-full border-[2px] border-brand-border-heavy bg-brand-white">
-          {m.home_circles_coming_soon()}
-        </div>
-        <div class="flex items-center gap-2">
-          <Users size={16} strokeWidth={2.5} />
-          <h2 class="text-lg font-bold">{m.home_circles_title()}</h2>
+        <div class="flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <Users size={16} strokeWidth={2.5} />
+            <h2 class="text-lg font-bold">{m.home_circles_title()}</h2>
+          </div>
+          {#if data.groups.length > 0}
+            <a
+              href="/groups"
+              use:hoverEffect={'swap'}
+              class="text-xs font-bold uppercase tracking-[0.18em] text-brand-text-mid hover:text-brand-text rounded-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+            >
+              {m.home_circles_browse()}
+            </a>
+          {/if}
         </div>
         <p class="text-xs font-semibold text-brand-text-mid">
           {m.home_circles_subtitle()}
         </p>
 
-        <!-- Placeholder circle chips -->
-        <div class="flex flex-col gap-2 mt-2 opacity-60 pointer-events-none select-none">
-          {#each [m.home_circles_sample_1(), m.home_circles_sample_2(), m.home_circles_sample_3()] as name}
-            <div
-              class="flex items-center gap-2 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-3 py-1.5 text-xs"
-            >
-              <div class="h-6 w-6 rounded-full bg-brand-surface border-[2px] border-brand-border-heavy"></div>
-              <span class="font-bold">{name}</span>
-              <span class="ml-auto text-xs font-semibold text-brand-text-mid">—</span>
-            </div>
-          {/each}
-        </div>
+        {#if data.groups.length === 0}
+          <p class="text-xs font-semibold text-brand-text-mid mt-1">
+            {m.home_circles_empty()}
+          </p>
+          <a
+            href="/groups/new"
+            use:pressPhysics={'dark'}
+            use:hoverEffect={'swap'}
+            class="mt-2 self-start h-10 px-4 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold inline-flex items-center gap-2"
+          >
+            <Plus size={14} strokeWidth={2.5} />
+            {m.home_circles_new()}
+          </a>
+        {:else}
+          <ul class="flex flex-col gap-2 mt-1 list-none p-0 m-0">
+            {#each data.groups.slice(0, 4) as g (g.id)}
+              <li>
+                <a
+                  href={`/groups/${g.id}`}
+                  use:hoverEffect={'glow'}
+                  class="flex items-center gap-2 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-3 py-1.5 text-xs cursor-pointer"
+                >
+                  <span
+                    class="h-6 w-6 rounded-full bg-brand-surface border-[2px] border-brand-border-heavy inline-flex items-center justify-center text-[10px] font-bold uppercase"
+                    aria-hidden="true"
+                  >
+                    {g.name.slice(0, 1)}
+                  </span>
+                  <span class="font-bold truncate">{g.name}</span>
+                  <span class="ml-auto shrink-0 text-[0.6rem] font-bold uppercase tracking-[0.15em] rounded-full px-2 py-0.5 border-[2px] border-brand-border-heavy">
+                    {g.classification}
+                  </span>
+                  <span class="shrink-0 text-[0.6rem] font-semibold uppercase tracking-[0.15em] text-brand-text-mid">
+                    {g.member_role === 'admin' ? m.home_circles_admin_role() : m.home_circles_member_role()}
+                  </span>
+                </a>
+              </li>
+            {/each}
+          </ul>
+          <a
+            href="/groups/new"
+            use:hoverEffect={'swap'}
+            class="self-start mt-1 inline-flex items-center gap-1.5 h-9 px-3 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-xs font-bold cursor-pointer"
+          >
+            <Plus size={12} strokeWidth={2.5} />
+            {m.home_circles_new()}
+          </a>
+        {/if}
       </div>
     </section>
 

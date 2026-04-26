@@ -1,5 +1,6 @@
 import { redirect, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
+import type { GroupListItem } from '$lib/api/groups';
 import { API_BASE, apiFetch } from '$lib/server/backend';
 
 // Matches the shape returned by GET /api/users/me/history
@@ -34,16 +35,19 @@ type ActiveRoomResponse = {
 };
 
 export const load: PageServerLoad = async ({ fetch }) => {
-  // Parallel loads: history for "recent activity + derived stats" and the
-  // single-room-enforcement check. Both require auth and are served by the
-  // (app) layout's session gate, so anon visitors never reach this load.
-  const [historyRes, activeRoomRes] = await Promise.all([
+  // Parallel loads: history for "recent activity + derived stats", the
+  // single-room-enforcement check, and the user's groups for the dashboard
+  // groups card. Groups fetch is best-effort — a failure just shows the
+  // empty state without breaking the rest of the page.
+  const [historyRes, activeRoomRes, groups] = await Promise.all([
     apiFetch<HistoryResponse>(fetch, '/api/users/me/history?limit=10'),
     apiFetch<ActiveRoomResponse>(fetch, '/api/users/me/active-room'),
+    apiFetch<GroupListItem[]>(fetch, '/api/groups').catch(() => [] as GroupListItem[]),
   ]);
   return {
     history: historyRes.rooms,
     activeRoom: activeRoomRes.room,
+    groups,
   };
 };
 
