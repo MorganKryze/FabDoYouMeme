@@ -39,16 +39,16 @@
   <title>{m.groups_new_page_title()}</title>
 </svelte:head>
 
-<div class="w-full max-w-lg mx-auto p-6 flex flex-col gap-6" use:reveal>
+<div class="w-full max-w-lg mx-auto p-4 sm:p-6 flex flex-col gap-4 sm:gap-6" use:reveal>
   <h1 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted m-0">
     {m.groups_new_heading()}
   </h1>
 
   <section
-    class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-5"
+    class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-3 sm:p-5"
     style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
   >
-    <form class="flex flex-col gap-5" onsubmit={onSubmit}>
+    <form class="flex flex-col gap-3 sm:gap-5" onsubmit={onSubmit}>
       <div class="flex flex-col gap-2">
         <p class="text-[0.6rem] font-bold uppercase tracking-[0.15em] text-brand-text-muted">
           {m.groups_field_name()}
@@ -75,31 +75,33 @@
         <p class="text-xs font-semibold text-brand-text-muted">{description.length} / 500</p>
       </div>
 
-      <div class="flex flex-col gap-2">
-        <p class="text-[0.6rem] font-bold uppercase tracking-[0.15em] text-brand-text-muted">
-          {m.groups_field_language()}
-        </p>
-        <select
-          bind:value={language}
-          class="h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
-        >
-          <option value="en">{m.groups_language_en()}</option>
-          <option value="fr">{m.groups_language_fr()}</option>
-          <option value="multi">{m.groups_language_multi()}</option>
-        </select>
-      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div class="flex flex-col gap-2">
+          <p class="text-[0.6rem] font-bold uppercase tracking-[0.15em] text-brand-text-muted">
+            {m.groups_field_language()}
+          </p>
+          <select
+            bind:value={language}
+            class="h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
+          >
+            <option value="en">{m.groups_language_en()}</option>
+            <option value="fr">{m.groups_language_fr()}</option>
+            <option value="multi">{m.groups_language_multi()}</option>
+          </select>
+        </div>
 
-      <div class="flex flex-col gap-2">
-        <p class="text-[0.6rem] font-bold uppercase tracking-[0.15em] text-brand-text-muted">
-          {m.groups_field_classification()}
-        </p>
-        <select
-          bind:value={classification}
-          class="h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
-        >
-          <option value="sfw">{m.groups_classification_sfw()}</option>
-          <option value="nsfw">{m.groups_classification_nsfw()}</option>
-        </select>
+        <div class="flex flex-col gap-2">
+          <p class="text-[0.6rem] font-bold uppercase tracking-[0.15em] text-brand-text-muted">
+            {m.groups_field_classification()}
+          </p>
+          <select
+            bind:value={classification}
+            class="h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
+          >
+            <option value="sfw">{m.groups_classification_sfw()}</option>
+            <option value="nsfw">{m.groups_classification_nsfw()}</option>
+          </select>
+        </div>
       </div>
 
       {#if error}

@@ -250,6 +250,16 @@
   let kickPending = $state(false);
   let kickError = $state<string | null>(null);
 
+  // Settings panel: collapsed by default on phones (it's ~640 px tall),
+  // open by default at md+ where vertical room is plentiful. Hosts can
+  // still tap to expand on mobile when they need to tune the config.
+  let settingsExpanded = $state(false);
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const mql = window.matchMedia('(min-width: 768px)');
+    settingsExpanded = mql.matches;
+  });
+
   function openKick(player: Player) {
     kickTarget = { id: player.user_id, name: player.username, isGuest: !!player.is_guest };
     kickError = null;
@@ -296,8 +306,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: space-between;
-    height: 2.5rem;
-    padding: 0 0.25rem;
+    height: 2.75rem;
+    padding: 0 0.375rem;
     border-radius: 9999px;
     border: 2.5px solid var(--brand-border-heavy);
     background: var(--brand-white);
@@ -305,8 +315,8 @@
   }
   .stepper button {
     flex-shrink: 0;
-    height: 1.75rem;
-    width: 1.75rem;
+    height: 2.25rem;
+    width: 2.25rem;
     border-radius: 9999px;
     background: var(--brand-surface);
     color: var(--brand-text);
@@ -332,12 +342,14 @@
     opacity: 0.3;
     cursor: not-allowed;
   }
+  /* font-size 1rem (16px) prevents iOS Safari from auto-zooming into the
+     stepper input on focus. Anything smaller triggers the zoom. */
   .stepper input {
     flex: 1;
     min-width: 0;
     background: transparent;
     text-align: center;
-    font-size: 0.9rem;
+    font-size: 1rem;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
     color: var(--brand-text);
@@ -398,53 +410,22 @@
     background: var(--brand-white);
   }
 
-  .status-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.25rem 0.6rem 0.25rem 0.5rem;
-    border-radius: 9999px;
-    border: 2px solid var(--brand-border-heavy);
-    font-size: 0.625rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    line-height: 1;
-    white-space: nowrap;
-    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.08);
-  }
-  .status-chip .status-dot {
-    width: 0.45rem;
-    height: 0.45rem;
-    border-radius: 9999px;
-    flex-shrink: 0;
-  }
-  .status-chip.is-online {
-    background: var(--brand-success-soft);
-    border-color: var(--brand-success);
-    color: var(--brand-success);
-  }
-  .status-chip.is-online .status-dot {
-    background: var(--brand-success);
-    box-shadow: 0 0 0 3px rgba(47, 133, 102, 0.18);
-    animation: status-pulse 1.8s ease-in-out infinite;
-  }
-  .status-chip.is-away {
-    background: var(--brand-grad-1);
-    border-color: var(--brand-accent);
-    color: var(--brand-text);
-  }
-  .status-chip.is-away .status-dot {
-    background: var(--brand-accent);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-accent) 22%, transparent);
-  }
-
   @keyframes status-pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.65; transform: scale(0.85); }
   }
   @media (prefers-reduced-motion: reduce) {
-    .status-chip.is-online .status-dot { animation: none; }
+    .hero-pulse { animation: none; }
+  }
+
+  /* In-game LIVE indicator echo, sized down for the waiting hero. */
+  .hero-pulse {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.18);
+    animation: status-pulse 1.6s ease-in-out infinite;
   }
 
   .readiness-chip {
@@ -500,7 +481,7 @@
 </style>
 
 <div
-  class="w-full max-w-6xl mx-auto px-6 py-6 flex flex-col gap-6"
+  class="w-full max-w-6xl mx-auto px-4 sm:px-6 py-4 sm:py-6 flex flex-col gap-4 sm:gap-6"
   use:reveal
 >
   <!-- ═══════════════════════════════════════════════════════════════
@@ -520,38 +501,43 @@
       </p>
     {/if}
 
-    <div class="flex flex-wrap items-center justify-center gap-2">
-      <span
-        class="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-xs font-bold tabular-nums"
-        style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
-      >
+    <!-- Meta segmented pill: rounds · timing · player range as a single
+         row with internal dividers, so the metadata reads as one unit
+         and stops monopolizing vertical space when the labels are long
+         enough to wrap. Phone shows just the icon + numeric value;
+         tablet+ expands to the full sentence. -->
+    <div
+      class="inline-flex items-stretch self-center rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white"
+      style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
+    >
+      <span class="inline-flex items-center gap-1.5 h-9 px-3 sm:px-4 text-[0.7rem] sm:text-xs font-bold tabular-nums border-r-[2px] border-brand-border">
         <ListChecks size={14} strokeWidth={2.5} />
-        {m.room_rounds_count({ count: roundCount })}
+        <span class="hidden sm:inline">{m.room_rounds_count({ count: roundCount })}</span>
+        <span class="sm:hidden">{roundCount}</span>
       </span>
-      <span
-        class="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-xs font-bold tabular-nums"
-        style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
-      >
+      <span class="inline-flex items-center gap-1.5 h-9 px-3 sm:px-4 text-[0.7rem] sm:text-xs font-bold tabular-nums border-r-[2px] border-brand-border">
         <Clock size={14} strokeWidth={2.5} />
-        {m.room_timing_info({ submit: submitDuration, vote: voteDuration })}
+        <span class="hidden sm:inline">{m.room_timing_info({ submit: submitDuration, vote: voteDuration })}</span>
+        <span class="sm:hidden">{submitDuration}/{voteDuration}s</span>
       </span>
-      <span
-        class="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-xs font-bold tabular-nums"
-        style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
-      >
+      <span class="inline-flex items-center gap-1.5 h-9 px-3 sm:px-4 text-[0.7rem] sm:text-xs font-bold tabular-nums">
         <Users size={14} strokeWidth={2.5} />
-        {m.room_players_range({ min: minPlayers, max: maxPlayers })}
+        <span class="hidden sm:inline">{m.room_players_range({ min: minPlayers, max: maxPlayers })}</span>
+        <span class="sm:hidden">{minPlayers}–{maxPlayers}</span>
       </span>
     </div>
   </div>
 
   <!-- ═══════════════════════════════════════════════════════════════
-       START CTA — Cancel sits directly next to Start as a grouped pair.
+       PRIMARY MOMENT — host gets the Start CTA grouped with End-room;
+       invited players get a dark hero card that mirrors the in-game
+       phase cards (eyebrow + heading + caption on bg-brand-text), so
+       the visual language continues into the round.
        ═══════════════════════════════════════════════════════════════ -->
-  <div class="flex flex-col items-center gap-2">
-    <div class="flex items-center gap-3">
-      <EndRoomButton />
-      {#if isHost}
+  {#if isHost}
+    <div class="flex flex-col items-center gap-2">
+      <div class="flex items-center gap-3">
+        <EndRoomButton />
         <button
           use:pressPhysics={'dark'}
           type="button"
@@ -563,16 +549,28 @@
           <Play size={20} strokeWidth={2.5} />
           {m.room_start_game()}
         </button>
-      {:else}
-        <div
-          class="h-14 px-8 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-surface font-bold text-sm text-brand-text-mid inline-flex items-center justify-center gap-2"
-          style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
-        >
-          {m.room_waiting_for_host({ name: hostName })}
-        </div>
-      {/if}
+      </div>
     </div>
-  </div>
+  {:else}
+    <section
+      class="relative overflow-hidden rounded-3xl border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white px-6 py-6 sm:px-7 sm:py-7 flex flex-col gap-3"
+      style="box-shadow: 0 6px 0 rgba(0,0,0,0.22);"
+      aria-live="polite"
+    >
+      <div class="flex items-center justify-between gap-3">
+        <span class="text-[0.65rem] font-bold uppercase tracking-[0.25em] opacity-70">
+          {m.room_waiting_hero_eyebrow()}
+        </span>
+        <span class="hero-pulse" aria-hidden="true"></span>
+      </div>
+      <p class="m-0 font-bold leading-tight tracking-tight text-2xl sm:text-3xl">
+        {m.room_waiting_hero_title()}
+      </p>
+      <p class="m-0 text-sm sm:text-base font-semibold opacity-80">
+        {m.room_waiting_for_host({ name: hostName })}
+      </p>
+    </section>
+  {/if}
 
   <!-- ═══════════════════════════════════════════════════════════════
        ROOM SETTINGS — host-only. Edits apply via PATCH /rooms/{code}/config
@@ -580,22 +578,32 @@
        ═══════════════════════════════════════════════════════════════ -->
   {#if isHost}
     <section
-      class="rounded-3xl border-[2.5px] border-brand-border-heavy bg-brand-surface px-5 py-5 flex flex-col gap-4"
+      class="rounded-3xl border-[2.5px] border-brand-border-heavy bg-brand-surface px-5 py-4 sm:py-5 flex flex-col gap-4"
       style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
     >
-      <div class="flex items-center justify-between gap-3">
+      <button
+        type="button"
+        onclick={() => (settingsExpanded = !settingsExpanded)}
+        aria-expanded={settingsExpanded}
+        class="flex items-center justify-between gap-3 cursor-pointer md:cursor-default"
+      >
         <div class="inline-flex items-center gap-2">
           <Settings size={16} strokeWidth={2.5} />
           <h2 class="text-[0.7rem] font-bold uppercase tracking-[0.2em] text-brand-text-mid">
             {m.room_settings_title()}
           </h2>
+          <span class="md:hidden text-[0.6rem] font-bold uppercase tracking-[0.18em] text-brand-text-muted tabular-nums">
+            · {settingsRoundCount}r · {settingsSubmitDuration}s/{settingsVoteDuration}s
+          </span>
         </div>
         {#if settingsSaving}
           <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
             {m.room_settings_saving()}
           </span>
         {/if}
-      </div>
+      </button>
+
+      {#if settingsExpanded}
 
       <div
         class={handSizeMax > 0
@@ -796,63 +804,72 @@
           </span>
         </span>
       </label>
+      {/if}
     </section>
   {/if}
 
   <!-- ═══════════════════════════════════════════════════════════════
-       MAIN BODY — two columns on lg+: left = code share, right = players.
+       MAIN BODY — host sees a two-column layout (code share + players);
+       invited players only see the players grid (the code/invite belongs
+       to the host).
        ═══════════════════════════════════════════════════════════════ -->
-  <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] gap-5 items-start">
+  <div
+    class={isHost
+      ? 'grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] gap-5 items-start'
+      : 'grid grid-cols-1 gap-5 items-start'}
+  >
 
-    <!-- LEFT: Room-code share card -->
-    <section
-      class="rounded-3xl border-[2.5px] border-brand-border-heavy bg-brand-surface px-6 py-6 flex flex-col items-center gap-5"
-      style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
-    >
-      <p class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
-        {m.room_code_label()}
-      </p>
+    {#if isHost}
+      <!-- LEFT: Room-code share card (host only) -->
+      <section
+        class="rounded-3xl border-[2.5px] border-brand-border-heavy bg-brand-surface px-5 sm:px-6 py-4 sm:py-6 flex flex-col items-center gap-3 sm:gap-5"
+        style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
+      >
+        <p class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+          {m.room_code_label()}
+        </p>
 
-      <div class="font-mono font-bold tracking-[0.15em] text-brand-text select-all leading-none text-4xl">
-        {room.code ?? '----'}
-      </div>
+        <div class="font-mono font-bold tracking-[0.15em] text-brand-text select-all leading-none text-3xl sm:text-4xl">
+          {room.code ?? '----'}
+        </div>
 
-      <p class="text-xs font-semibold text-brand-text-muted text-center max-w-xs">
-        {m.room_code_share_hint()}
-      </p>
+        <p class="hidden sm:block text-xs font-semibold text-brand-text-muted text-center max-w-xs">
+          {m.room_code_share_hint()}
+        </p>
 
-      <div class="flex flex-wrap items-center justify-center gap-3 w-full">
-        <button
-          use:pressPhysics={'ghost'}
-          type="button"
-          onclick={copyCode}
-          class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text text-sm font-bold inline-flex items-center justify-center gap-2 cursor-pointer"
-        >
-          {#if codeCopied}
-            <CheckCircle size={16} strokeWidth={2.5} />
-            {m.room_copy_code_done()}
-          {:else}
-            <Copy size={16} strokeWidth={2.5} />
-            {m.room_copy_code()}
-          {/if}
-        </button>
-        <button
-          use:pressPhysics={'dark'}
-          type="button"
-          onclick={copyInviteLink}
-          class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold inline-flex items-center justify-center gap-2 cursor-pointer"
-          style="box-shadow: 0 4px 0 rgba(0,0,0,0.18);"
-        >
-          {#if linkCopied}
-            <CheckCircle size={16} strokeWidth={2.5} />
-            {m.room_copy_invite_done()}
-          {:else}
-            <Link2 size={16} strokeWidth={2.5} />
-            {m.room_copy_invite()}
-          {/if}
-        </button>
-      </div>
-    </section>
+        <div class="flex flex-wrap items-center justify-center gap-3 w-full">
+          <button
+            use:pressPhysics={'ghost'}
+            type="button"
+            onclick={copyCode}
+            class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text text-sm font-bold inline-flex items-center justify-center gap-2 cursor-pointer"
+          >
+            {#if codeCopied}
+              <CheckCircle size={16} strokeWidth={2.5} />
+              {m.room_copy_code_done()}
+            {:else}
+              <Copy size={16} strokeWidth={2.5} />
+              {m.room_copy_code()}
+            {/if}
+          </button>
+          <button
+            use:pressPhysics={'dark'}
+            type="button"
+            onclick={copyInviteLink}
+            class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold inline-flex items-center justify-center gap-2 cursor-pointer"
+            style="box-shadow: 0 4px 0 rgba(0,0,0,0.18);"
+          >
+            {#if linkCopied}
+              <CheckCircle size={16} strokeWidth={2.5} />
+              {m.room_copy_invite_done()}
+            {:else}
+              <Link2 size={16} strokeWidth={2.5} />
+              {m.room_copy_invite()}
+            {/if}
+          </button>
+        </div>
+      </section>
+    {/if}
 
     <!-- RIGHT: Players grid -->
     <section
@@ -882,7 +899,7 @@
         </span>
       </div>
 
-      <ul class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <ul class="grid grid-cols-2 gap-2 sm:gap-3">
         {#each room.players as player, i (player.user_id)}
           {@const isOnline = player.connected ?? true}
           <li
@@ -890,10 +907,19 @@
             style="box-shadow: 0 4px 0 rgba(0,0,0,0.1);"
           >
             <span
-              class="h-11 w-11 shrink-0 rounded-full border-[2.5px] border-brand-border-heavy flex items-center justify-center text-xs font-bold text-white"
+              class="relative h-11 w-11 shrink-0 rounded-full border-[2.5px] border-brand-border-heavy flex items-center justify-center text-xs font-bold text-white"
               style="background: {AVATAR_COLORS[i % AVATAR_COLORS.length]};"
             >
               {player.username.slice(0, 2).toUpperCase()}
+              <!-- Mobile-only presence badge — anchored to the avatar so it
+                   never competes with the truncated name/role for inline
+                   space. Desktop keeps the verbose chip on the right. -->
+              <span
+                class="sm:hidden absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-[2px] border-brand-white"
+                style="background: {isOnline ? 'var(--brand-success)' : 'var(--brand-text-muted)'};"
+                aria-label={isOnline ? m.room_status_online() : m.room_status_away()}
+                role="status"
+              ></span>
             </span>
             <div class="flex-1 min-w-0 flex flex-col gap-0.5 text-left">
               <span class="truncate text-sm font-bold text-brand-text">
@@ -912,15 +938,6 @@
                 {/if}
               </div>
             </div>
-            <span
-              class="status-chip shrink-0"
-              class:is-online={isOnline}
-              class:is-away={!isOnline}
-              aria-label={isOnline ? m.room_status_online() : m.room_status_away()}
-            >
-              <span class="status-dot"></span>
-              {isOnline ? m.room_status_online() : m.room_status_away()}
-            </span>
             {#if isHost && !player.is_host}
               <button
                 type="button"
@@ -986,7 +1003,7 @@
         {#if kickError}
           <p class="text-sm font-semibold text-red-600">{kickError}</p>
         {/if}
-        <div class="flex gap-3 justify-end mt-2">
+        <div class="flex flex-col-reverse sm:flex-row gap-2 sm:gap-3 sm:justify-end mt-2">
           <button
             use:pressPhysics={'ghost'}
             type="button"

@@ -364,11 +364,33 @@ func (h *Hub) handleRegister(ctx context.Context, p *connectedPlayer) {
 	}
 
 	if h.state == HubPlaying {
-		writeWS(p.conn, buildMessage("error", map[string]string{
-			"code": "game_already_started", "message": "Game is already in progress",
-		}))
-		p.conn.Close()
-		return
+		// Mid-game re-entry: a player whose grace window expired (and was
+		// therefore deleted from h.players) returns. Without this branch they
+		// hit the "game_already_started" rejection below and are locked out
+		// for the rest of the game — typical on mobile when the OS suspends
+		// the tab long enough for the close event to land past grace.
+		// Guests are authorized for this exact room by api/ws.go's token-room
+		// scoping check, so reaching here is sufficient proof. Registered
+		// users are admitted iff a room_players row exists; bans are caught
+		// earlier at the ws handshake gate.
+		isReturning := p.isGuest
+		if !isReturning && h.db != nil {
+			if uid, err := uuid.Parse(p.userID); err == nil {
+				if _, gerr := h.db.GetRoomPlayer(ctx, db.GetRoomPlayerParams{
+					RoomID: h.roomID,
+					UserID: pgtype.UUID{Bytes: uid, Valid: true},
+				}); gerr == nil {
+					isReturning = true
+				}
+			}
+		}
+		if !isReturning {
+			writeWS(p.conn, buildMessage("error", map[string]string{
+				"code": "game_already_started", "message": "Game is already in progress",
+			}))
+			p.conn.Close()
+			return
+		}
 	}
 	// HubFinished: new connections are accepted as read-only viewers; they get a room_state snapshot so the client shows the end screen.
 

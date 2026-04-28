@@ -6,10 +6,12 @@
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { dealCard } from '$lib/actions/dealCard';
-  import { Send } from '$lib/icons';
+  import { Send, ChevronLeft, ChevronRight } from '$lib/icons';
   import { mediaSrc } from '$lib/api/media';
   import type { Round } from '$lib/api/types';
   import { handStore } from './handStore.svelte';
+  import { fly } from 'svelte/transition';
+  import { backOut } from 'svelte/easing';
   import * as m from '$lib/paraglide/messages';
   import { localizeGameType } from '$lib/i18n/gameType';
 
@@ -80,9 +82,30 @@
   }
 
   const cards = $derived(handStore.cards);
+
+  // ── Mobile hand pager ─────────────────────────────────────────────
+  // Phone shows ONE card at a time (no scroll carousel, no flex with
+  // inflexible children — those propagate intrinsic widths up the tree
+  // and made the page render at 2-3x the viewport width). Prev / next
+  // buttons + dots drive the index. Desktop keeps the fan layout.
+  let currentCard = $state(0);
+  // Direction of the last move (+1 forward, -1 back, 0 first render) —
+  // drives the slide-in transition so the new card flies in from the
+  // matching side.
+  let cardDirection = $state(0);
+
+  function gotoCard(i: number) {
+    if (i < 0 || i >= cards.length || i === currentCard) return;
+    cardDirection = i > currentCard ? 1 : -1;
+    currentCard = i;
+  }
+  // Auto-clamp when the hand shrinks (e.g. server re-deals or removes a card).
+  $effect(() => {
+    if (currentCard >= cards.length && cards.length > 0) currentCard = cards.length - 1;
+  });
 </script>
 
-<div class="flex flex-col gap-6">
+<div class="flex flex-col gap-3 md:gap-6 pb-28 md:pb-0 min-w-0">
   {#if mountedExpired}
     <div
       class="inline-flex items-center gap-2 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 py-1.5 text-xs font-bold text-brand-text-mid w-fit mx-auto"
@@ -99,29 +122,73 @@
     </div>
   {/if}
 
-  <!-- Image + prompt split (matches meme-freestyle visual grammar) -->
-  <div class="grid gap-4 md:grid-cols-[1fr_1.2fr] items-stretch">
+  <!-- Prompt split: dark instructions card first (so the player reads the
+       brief before scrolling past the meme), tilted image card second.
+       `grid-cols-1` + `minmax(0, …fr)` on desktop are load-bearing — without
+       them the implicit grid track sizes to the image's *natural* pixel
+       width and inflates the whole page. -->
+  <div class="grid grid-cols-1 gap-3 md:gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] items-stretch">
+    <div
+      use:dealCard={{ delay: 80, rotate: 0.8 }}
+      class="prompt-tilt-right relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white p-4 sm:p-6 flex flex-col gap-2.5 sm:gap-3 overflow-hidden"
+      style="box-shadow: 0 6px 0 rgba(0,0,0,0.25);"
+    >
+      <span
+        class="absolute -top-2 -right-3 text-[90px] font-bold opacity-[0.08] pointer-events-none select-none leading-none"
+        aria-hidden="true"
+      >♠</span>
+      <div class="relative flex items-center justify-between gap-2">
+        <span class="text-[10px] font-bold uppercase tracking-[0.25em] opacity-70">
+          {m.game_meme_showdown_round_play({ number: round.round_number })}
+        </span>
+        <span
+          class="inline-flex items-center gap-1.5 rounded-full border-[2px] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em]"
+          style="border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.08);"
+        >
+          <span class="h-1.5 w-1.5 rounded-full" style="background: var(--brand-accent); animation: pulse-dot 1.2s ease-in-out infinite;"></span>
+          {m.game_meme_showdown_live()}
+        </span>
+      </div>
+      <p
+        class="relative m-0 font-bold leading-tight tracking-tight"
+        style="font-size: clamp(1.125rem, 2.4vw, 2rem);"
+      >
+        {promptText ?? m.game_meme_showdown_prompt_fallback()}
+      </p>
+      <span class="relative text-[11px] font-bold uppercase tracking-[0.2em] opacity-70 mt-auto">
+        {m.game_meme_showdown_plays_anonymous()}
+      </span>
+    </div>
+
     <!-- Wrapped so the joker-drop overlay can position over the image
-         without being subject to the dealCard rotation. -->
-    <div class="relative">
+         without being subject to the dealCard rotation. min-w-0 on the
+         grid item + the inner card stops the image from forcing the
+         whole row wider than its grid track. -->
+    <div class="relative min-w-0">
       <div
-        use:dealCard={{ delay: 80, rotate: -1.2 }}
-        class="relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-white p-3 flex flex-col gap-2"
-        style="box-shadow: 0 6px 0 rgba(0,0,0,0.12); transform: rotate(-1.2deg);"
+        use:dealCard={{ delay: 160, rotate: -1.2 }}
+        class="prompt-tilt-left relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-white p-3 flex flex-col gap-2 min-w-0"
+        style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
       >
         {#if round.item?.media_url}
           <div
-            class="relative w-full rounded-[14px] overflow-hidden border-[2.5px] border-brand-border-heavy bg-brand-surface"
+            class="relative w-full min-w-0 rounded-[14px] overflow-hidden border-[2.5px] border-brand-border-heavy bg-brand-surface"
             style="box-shadow: inset 0 2px 0 rgba(0,0,0,0.04);"
           >
+            <!-- min-w-0 on the img stops its intrinsic natural pixel
+                 width from propagating up as the min-content of every
+                 ancestor (the actual root cause of "page is 2× the
+                 viewport" — w-full only caps display, not min-content). -->
             <img
               src={mediaSrc(round.item.media_url, room.code)}
               alt={m.game_round_meme_alt()}
-              class="block w-full h-auto max-h-[60vh] object-cover"
+              class="block w-full h-auto max-h-[26dvh] md:max-h-[60dvh] object-cover min-w-0"
             />
           </div>
         {/if}
-        <div class="flex justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-brand-text-muted px-1">
+        <!-- Round/pack labels: hidden on phone (round + game name already
+             live in the sticky RoomHeader). -->
+        <div class="hidden md:flex justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-brand-text-muted px-1">
           <span>{m.game_meme_showdown_round_number({ number: round.round_number })}</span>
           {#if room.gameType}
             <span class="truncate max-w-[60%]">{localizeGameType(room.gameType).name}</span>
@@ -148,43 +215,13 @@
         </div>
       {/if}
     </div>
-
-    <div
-      use:dealCard={{ delay: 160, rotate: 0.8 }}
-      class="relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white p-6 flex flex-col gap-3 overflow-hidden"
-      style="box-shadow: 0 6px 0 rgba(0,0,0,0.25); transform: rotate(0.8deg);"
-    >
-      <span
-        class="absolute -top-2 -right-3 text-[90px] font-bold opacity-[0.08] pointer-events-none select-none leading-none"
-        aria-hidden="true"
-      >♠</span>
-      <div class="relative flex items-center justify-between gap-2">
-        <span class="text-[10px] font-bold uppercase tracking-[0.25em] opacity-70">
-          {m.game_meme_showdown_round_play({ number: round.round_number })}
-        </span>
-        <span
-          class="inline-flex items-center gap-1.5 rounded-full border-[2px] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em]"
-          style="border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.08);"
-        >
-          <span class="h-1.5 w-1.5 rounded-full" style="background: var(--brand-accent); animation: pulse-dot 1.2s ease-in-out infinite;"></span>
-          {m.game_meme_showdown_live()}
-        </span>
-      </div>
-      <p
-        class="relative m-0 font-bold leading-tight tracking-tight"
-        style="font-size: clamp(1.5rem, 2.4vw, 2rem);"
-      >
-        {promptText ?? m.game_meme_showdown_prompt_fallback()}
-      </p>
-      <span class="relative text-[11px] font-bold uppercase tracking-[0.2em] opacity-70 mt-auto">
-        {m.game_meme_showdown_plays_anonymous()}
-      </span>
-    </div>
   </div>
 
-  <!-- Hand of text cards -->
+  <!-- Hand of text cards — same shell as meme-freestyle's composer card,
+       just with a swipe pager replacing the textarea. min-w-0 stops the
+       internal scroll content from inflating the card's allocated width. -->
   <div
-    class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-white p-5 flex flex-col gap-3.5 w-full"
+    class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-white p-5 flex flex-col gap-3.5 w-full min-w-0"
     style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
   >
     <div class="flex items-center justify-between gap-2">
@@ -219,10 +256,88 @@
         {m.game_meme_showdown_dealing()}
       </p>
     {:else}
+      <!-- ─── Phone hand: one card at a time, prev/next + dots ────────
+           Critical: no flex container with inflexible 200-px children
+           on mobile — that pattern propagates intrinsic min-content up
+           the tree and forces the entire page wider than viewport, no
+           matter how many `min-width: 0` you stack. Rendering exactly
+           one card means there's nothing wider than its parent. -->
+      {@const active = cards[currentCard] ?? cards[0]}
+      <div
+        class="md:hidden flex flex-col items-center gap-3"
+        role="radiogroup"
+        aria-label={m.game_meme_showdown_hand_aria()}
+      >
+        <!-- Wrapper has fixed dimensions matching the card so the in/out
+             transitions don't make sibling elements jump around. -->
+        <div class="relative w-[200px] max-w-full h-[280px]">
+          {#if active}
+            {@const isSelected = selectedCardId === active.card_id}
+            {#key active.card_id}
+              <button
+                in:fly={{ x: cardDirection * 60, duration: 240, easing: backOut, opacity: 0 }}
+                type="button"
+                role="radio"
+                aria-checked={isSelected}
+                onclick={() => { if (!isExpired) selectedCardId = active.card_id; }}
+                disabled={isExpired}
+                class="hand-card hand-card-mobile absolute inset-0"
+                class:is-selected={isSelected}
+                class:is-disabled={isExpired}
+              >
+                <span class="hand-card-pip top" aria-hidden="true">♠</span>
+                <span class="hand-card-text">{active.text}</span>
+                <span class="hand-card-pip bottom" aria-hidden="true">♠</span>
+              </button>
+            {/key}
+          {/if}
+        </div>
+
+        {#if cards.length > 1}
+          <div class="flex items-center justify-center gap-4">
+            <button
+              use:pressPhysics={'ghost'}
+              type="button"
+              onclick={() => gotoCard(currentCard - 1)}
+              disabled={currentCard === 0}
+              aria-label={m.game_meme_showdown_pager_prev_aria()}
+              class="h-12 w-12 shrink-0 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text-mid disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center justify-center cursor-pointer"
+              style="box-shadow: 0 3px 0 rgba(0,0,0,0.08);"
+            >
+              <ChevronLeft size={22} strokeWidth={2.5} />
+            </button>
+            <div class="flex items-center gap-2">
+              {#each cards as _, i (i)}
+                <button
+                  type="button"
+                  onclick={() => gotoCard(i)}
+                  aria-label={m.game_meme_showdown_pager_jump_aria({ index: i + 1, total: cards.length })}
+                  aria-current={currentCard === i ? 'true' : 'false'}
+                  class="hand-pager-dot"
+                  class:is-active={currentCard === i}
+                ></button>
+              {/each}
+            </div>
+            <button
+              use:pressPhysics={'ghost'}
+              type="button"
+              onclick={() => gotoCard(currentCard + 1)}
+              disabled={currentCard === cards.length - 1}
+              aria-label={m.game_meme_showdown_pager_next_aria()}
+              class="h-12 w-12 shrink-0 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text-mid disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center justify-center cursor-pointer"
+              style="box-shadow: 0 3px 0 rgba(0,0,0,0.08);"
+            >
+              <ChevronRight size={22} strokeWidth={2.5} />
+            </button>
+          </div>
+        {/if}
+      </div>
+
+      <!-- ─── Desktop hand: original fan ─────────────────────────────── -->
       <div
         role="radiogroup"
         aria-label={m.game_meme_showdown_hand_aria()}
-        class="hand-fan"
+        class="hand-fan hidden md:flex"
         style="--card-count: {cards.length};"
       >
         {#each cards as card, i (card.card_id)}
@@ -249,7 +364,10 @@
         {/each}
       </div>
 
-      <div class="flex items-center justify-between gap-2 flex-wrap">
+      <!-- Desktop action row — joker + submit live inside the hand card.
+           Mirrored on phone by a sticky bottom pill outside this card so
+           the buttons never wrap into the hand's horizontal scroll area. -->
+      <div class="hidden md:flex items-center justify-between gap-2 flex-wrap">
         <span class="font-mono text-xs font-bold text-brand-text-muted tabular-nums">
           {selectedCardId ? m.game_meme_showdown_card_selected() : m.game_meme_showdown_pick_card()}
         </span>
@@ -280,7 +398,7 @@
             type="button"
             onclick={submit}
             disabled={submitted || isExpired || !selectedCardId}
-            class="h-12 px-7 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold disabled:opacity-50 cursor-pointer inline-flex items-center gap-2 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+            class="h-12 px-7 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold disabled:opacity-50 cursor-pointer inline-flex items-center gap-2 whitespace-nowrap focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
             style="box-shadow: 0 4px 0 rgba(0,0,0,0.28);"
           >
             <Send size={16} strokeWidth={2.5} />
@@ -288,33 +406,120 @@
           </button>
         </div>
       </div>
+
+      <!-- Mobile pick-state caption — kept inline above the (sticky) action
+           pill so the player still sees "pick a card" feedback. -->
+      <span class="md:hidden font-mono text-xs font-bold text-brand-text-muted tabular-nums self-end">
+        {selectedCardId ? m.game_meme_showdown_card_selected() : m.game_meme_showdown_pick_card()}
+      </span>
     {/if}
   </div>
+
+  <!-- Mobile sticky action pill — joker + play pinned to the bottom edge,
+       same pattern as meme-freestyle. Compact joker (icon + count) so the
+       primary submit button keeps its full width on phones. -->
+  {#if !submitted && !room.ownSkippedSubmit && cards.length > 0}
+    <div
+      class="md:hidden fixed inset-x-0 bottom-0 z-40 px-3 pt-0 pointer-events-none"
+      style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom));"
+    >
+      <div
+        class="pointer-events-auto rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-2 py-2 flex items-center gap-2"
+        style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
+      >
+        {#if jokerEnabled && jokerRemaining > 0}
+          <button
+            use:pressPhysics={'ghost'}
+            type="button"
+            onclick={onJokerClick}
+            disabled={submitted || isExpired}
+            class="joker-btn shrink-0"
+            class:is-armed={jokerArmed}
+            aria-pressed={jokerArmed}
+            aria-label={jokerArmed
+              ? m.game_meme_showdown_joker_armed()
+              : m.game_meme_showdown_joker_use({ n: jokerRemaining })}
+          >
+            <span class="joker-btn-pip" aria-hidden="true">♠</span>
+            <span class="font-mono tabular-nums text-xs">
+              {jokerArmed ? '?' : jokerRemaining}
+            </span>
+          </button>
+        {/if}
+        <button
+          use:pressPhysics={'dark'}
+          type="button"
+          onclick={submit}
+          disabled={submitted || isExpired || !selectedCardId}
+          class="flex-1 h-11 px-4 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold disabled:opacity-50 cursor-pointer inline-flex items-center justify-center gap-2 whitespace-nowrap"
+        >
+          <Send size={16} strokeWidth={2.5} />
+          {m.game_meme_showdown_play_caption()}
+        </button>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
+  /* Decorative card rotations only kick in on tablet+ — on phones the
+     ~1.2° tilt makes corners poke past the viewport edge and forces a
+     horizontal scrollbar (visible as "image sets the page width"). */
+  .prompt-tilt-left { transform: rotate(-1.2deg); }
+  .prompt-tilt-right { transform: rotate(0.8deg); }
+  @media (max-width: 767.98px) {
+    .prompt-tilt-left,
+    .prompt-tilt-right { transform: none; }
+  }
+
   /* ------- Hand of cards ------- */
+  /* Mobile renders one card at a time (see the `md:hidden` block in the
+     markup) — no flex container with inflexible children that could
+     propagate intrinsic widths up the tree. The `.hand-fan` rules below
+     only apply on tablet+ (gated by `hidden md:flex` in the markup). */
   .hand-fan {
     position: relative;
-    display: flex;
     flex-wrap: nowrap;
-    align-items: flex-end;
-    justify-content: flex-start;
-    gap: 0.6rem;
-    width: 100%;
-    padding: 0.75rem 0.25rem 1.5rem;
-    overflow-x: auto;
-    overflow-y: visible;
-    scroll-snap-type: x mandatory;
-    scrollbar-width: none;
+    align-items: stretch;
+    justify-content: center;
+    gap: 0;
+    padding: 1.25rem 1rem 2.5rem;
+    min-height: 340px;
+    perspective: 1200px;
   }
-  .hand-fan::-webkit-scrollbar { display: none; }
+
+  /* Mobile single-card sizing: the same TCG portrait visual but as a
+     standalone block, not a flex item. Spring-style transition on
+     transform/box-shadow gives the selection a small "yes!" hop
+     instead of a snap, and the active state lifts the card slightly. */
+  .hand-card-mobile {
+    width: 200px;
+    max-width: 100%;
+    height: 280px;
+    transition:
+      transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      box-shadow 220ms ease,
+      border-color 220ms ease,
+      background 220ms ease;
+    will-change: transform;
+  }
+  .hand-card-mobile.is-selected {
+    transform: translateY(-6px) scale(1.02);
+    animation: hand-card-pick 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  @keyframes hand-card-pick {
+    0%   { transform: translateY(0) scale(1); }
+    45%  { transform: translateY(-10px) scale(1.06); }
+    100% { transform: translateY(-6px) scale(1.02); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hand-card-mobile { transition: box-shadow 200ms ease, border-color 200ms ease; }
+    .hand-card-mobile.is-selected { animation: none; transform: none; }
+  }
 
   .hand-card {
     position: relative;
-    flex: 0 0 158px;
-    height: 228px;
-    scroll-snap-align: center;
+    height: 280px;
     border-radius: 16px;
     border: 2.5px solid var(--brand-border-heavy);
     background: var(--brand-white);
@@ -378,15 +583,25 @@
     opacity: 0.55;
   }
 
+  /* Pager dots — small chip-like indicators below the hand on phone. */
+  .hand-pager-dot {
+    height: 0.5rem;
+    width: 0.5rem;
+    border-radius: 9999px;
+    background: var(--brand-border);
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: background-color 200ms ease, transform 200ms ease;
+  }
+  .hand-pager-dot.is-active {
+    background: var(--brand-accent);
+    transform: scale(1.35);
+  }
+
+  /* Desktop fan layout — `.hand-fan` is gated `hidden md:flex` in the
+     markup so these rules only apply when it actually renders. */
   @media (min-width: 720px) {
-    .hand-fan {
-      overflow: visible;
-      justify-content: center;
-      gap: 0;
-      padding: 1.25rem 1rem 2.5rem;
-      min-height: 340px;
-      perspective: 1200px;
-    }
     .hand-card {
       flex: 0 0 200px;
       height: 286px;
@@ -431,6 +646,7 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
+    white-space: nowrap;
     cursor: pointer;
     transition: background 220ms ease, border-color 220ms ease, color 220ms ease;
   }

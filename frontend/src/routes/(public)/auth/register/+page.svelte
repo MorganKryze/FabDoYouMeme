@@ -56,11 +56,11 @@
   <title>{m.auth_register_page_title()}</title>
 </svelte:head>
 
-<div class="flex flex-col gap-6" use:reveal>
+<div class="flex flex-col gap-4 sm:gap-6" use:reveal>
   {#if !success}
     <div class="text-center">
       <h1 class="text-2xl font-bold">{m.auth_register_title()}</h1>
-      <p class="text-sm font-semibold text-brand-text-muted mt-1">{m.auth_register_subtitle()}</p>
+      <p class="hidden sm:block text-sm font-semibold text-brand-text-muted mt-1">{m.auth_register_subtitle()}</p>
     </div>
   {/if}
 
@@ -142,7 +142,7 @@
           await update();
         };
       }}
-      class="flex flex-col gap-4"
+      class="flex flex-col gap-3 sm:gap-4"
     >
       {#if displayError}
         <div
@@ -216,31 +216,31 @@
         />
       </div>
 
-      <label class="flex items-start gap-3 cursor-pointer">
+      <label class="flex items-start gap-2 cursor-pointer">
         <input
           type="checkbox"
           name="consent"
           bind:checked={consent}
           onchange={clearError}
-          class="mt-0.5 h-4 w-4 rounded border-brand-border-heavy"
+          class="h-4 w-4 rounded border-brand-border-heavy"
           required
         />
-        <span class="text-sm font-semibold leading-snug">
+        <span class="text-sm font-semibold leading-tight">
           {m.auth_register_consent_prefix()}
           <a href="/privacy" class="underline hover:text-brand-text" target="_blank">{m.common_privacy_policy()}</a>{m.auth_register_consent_suffix()}
         </span>
       </label>
 
-      <label class="flex items-start gap-3 cursor-pointer">
+      <label class="flex items-start gap-2 cursor-pointer">
         <input
           type="checkbox"
           name="age_affirmation"
           bind:checked={ageAffirmation}
           onchange={clearError}
-          class="mt-0.5 h-4 w-4 rounded border-brand-border-heavy"
+          class="h-4 w-4 rounded border-brand-border-heavy"
           required
         />
-        <span class="text-sm font-semibold leading-snug">{m.auth_register_age_affirmation()}</span>
+        <span class="text-sm font-semibold leading-tight">{m.auth_register_age_affirmation()}</span>
       </label>
 
       {#if groupIsNSFW}

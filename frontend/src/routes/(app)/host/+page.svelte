@@ -193,8 +193,8 @@
   <title>{m.host_page_title()}</title>
 </svelte:head>
 
-<div class="flex-1 flex items-start justify-center p-6 pt-8">
-  <div class="w-full max-w-3xl flex flex-col gap-6">
+<div class="flex-1 flex items-start justify-center p-4 sm:p-6 pt-6 sm:pt-8 pb-24 md:pb-10">
+  <div class="w-full max-w-3xl flex flex-col gap-4 sm:gap-6">
 
     <header use:reveal class="flex items-center gap-3">
       <a
@@ -222,7 +222,7 @@
     {#if step === 'game'}
       <section class="flex flex-col gap-4">
         <p use:reveal={{ delay: 1 }} class="text-sm font-semibold text-brand-text-muted uppercase tracking-[0.2em]">{m.host_step_game()}</p>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-5">
           {#each data.gameTypes as gt, i}
             {@const variant = `a${(i % 6) + 1}`}
             {@const localized = localizeGameType(gt)}
@@ -232,17 +232,17 @@
               use:physCard
               use:hoverEffect={'gradient'}
               onclick={() => pickGame(gt.id)}
-              class="group text-left rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-3 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+              class="group text-left rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-3 sm:p-4 flex flex-col gap-2 sm:gap-3 cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60 sm:min-h-[16rem]"
               style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
             >
               <div class="deck-art {variant}" aria-hidden="true">
                 {m.host_game_card_aria()}
               </div>
-              <h3 class="text-lg font-bold m-0 leading-tight">
+              <h3 class="text-base sm:text-lg font-bold m-0 leading-tight">
                 {localized.name}
               </h3>
               {#if localized.description}
-                <p class="text-sm font-semibold text-brand-text-muted line-clamp-3 m-0">{localized.description}</p>
+                <p class="hidden sm:block text-sm font-semibold text-brand-text-muted line-clamp-3 m-0">{localized.description}</p>
               {/if}
               <div class="mt-auto flex items-center gap-2">
                 {#if gt.supports_solo}
@@ -351,7 +351,7 @@
             use:physCard
             onclick={() => (selectedPacks[role] = selectedPacks[role] === p.id ? '' : p.id)}
             aria-pressed={selected}
-            class="relative text-left rounded-[22px] border-[2.5px] p-5 flex flex-col gap-2 cursor-pointer transition-all
+            class="relative text-left rounded-[22px] border-[2.5px] p-3 sm:p-5 flex flex-col gap-2 cursor-pointer transition-all
                    {selected
                      ? 'border-brand-text bg-brand-surface ring-4 ring-brand-text/15'
                      : 'border-brand-border-heavy bg-brand-white'}"
@@ -370,14 +370,14 @@
             {/if}
             <div class="inline-flex items-center gap-2 pr-8">
               <Package size={16} strokeWidth={2.5} />
-              <span class="font-bold">{p.name}</span>
+              <span class="font-bold text-sm sm:text-base">{p.name}</span>
             </div>
             {#if p.description}
-              <p class="text-xs font-semibold text-brand-text-muted line-clamp-2">{p.description}</p>
+              <p class="hidden sm:block text-xs font-semibold text-brand-text-muted line-clamp-2">{p.description}</p>
             {/if}
             <div class="mt-auto flex items-center justify-between gap-2">
               {#if typeof p.item_count === 'number'}
-                <span class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted">
+                <span class="text-[0.6rem] sm:text-[0.65rem] font-bold uppercase tracking-[0.18em] sm:tracking-[0.2em] text-brand-text-muted">
                   {m.host_pack_items({ count: p.item_count })}
                 </span>
               {:else}
@@ -437,7 +437,7 @@
                 {#if sameOfficial.length > 0}
                   <div class="flex flex-col gap-3">
                     <p class="text-[0.7rem] font-bold text-brand-text-muted uppercase tracking-[0.2em]">{m.host_section_official()}</p>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                       {#each sameOfficial as p, i (p.id)}
                         {@render packCard(p, req.role, i)}
                       {/each}
@@ -447,7 +447,7 @@
                 {#if samePersonal.length > 0}
                   <div class="flex flex-col gap-3">
                     <p class="text-[0.7rem] font-bold text-brand-text-muted uppercase tracking-[0.2em]">{m.host_section_personal()}</p>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                       {#each samePersonal as p, i (p.id)}
                         {@render packCard(p, req.role, i + sameOfficial.length)}
                       {/each}
@@ -469,7 +469,7 @@
                       {#if otherOfficial.length > 0}
                         <div class="flex flex-col gap-3">
                           <p class="text-[0.7rem] font-bold text-brand-text-muted uppercase tracking-[0.2em]">{m.host_section_official()}</p>
-                          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                          <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                             {#each otherOfficial as p, i (p.id)}
                               {@render packCard(p, req.role, i)}
                             {/each}
@@ -479,7 +479,7 @@
                       {#if otherPersonal.length > 0}
                         <div class="flex flex-col gap-3">
                           <p class="text-[0.7rem] font-bold text-brand-text-muted uppercase tracking-[0.2em]">{m.host_section_personal()}</p>
-                          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                          <div class="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                             {#each otherPersonal as p, i (p.id)}
                               {@render packCard(p, req.role, i + otherOfficial.length)}
                             {/each}
@@ -501,16 +501,36 @@
           </label>
         {/if}
 
+        <!-- Desktop in-flow submit -->
         <button
           use:pressPhysics={'dark'}
           use:hoverEffect={'gradient'}
           type="submit"
           disabled={!allPacksPicked}
-          class="h-14 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-50 cursor-pointer inline-flex items-center justify-center gap-2"
+          class="hidden md:inline-flex h-14 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-50 cursor-pointer items-center justify-center gap-2"
         >
           <Plus size={18} strokeWidth={2.5} />
           {m.host_submit()}
         </button>
+
+        <!-- Mobile sticky CTA bar — keeps "Create room" reachable without
+             scrolling past every pack tile. Sits inside the form so the
+             button submits the same payload as the desktop counterpart. -->
+        <div
+          class="md:hidden fixed inset-x-0 bottom-0 z-40 px-4 py-3 bg-brand-white border-t-[2.5px] border-brand-border-heavy"
+          style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom));"
+        >
+          <button
+            use:pressPhysics={'dark'}
+            use:hoverEffect={'gradient'}
+            type="submit"
+            disabled={!allPacksPicked}
+            class="w-full h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white font-bold disabled:opacity-50 cursor-pointer inline-flex items-center justify-center gap-2"
+          >
+            <Plus size={18} strokeWidth={2.5} />
+            {m.host_submit()}
+          </button>
+        </div>
       </form>
     {/if}
   </div>

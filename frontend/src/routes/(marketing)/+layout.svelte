@@ -10,7 +10,7 @@
   let { children, data }: { children: any; data: LayoutData } = $props();
 </script>
 
-<div class="relative z-[2] min-h-screen flex flex-col text-brand-text">
+<div class="relative z-[2] min-h-dvh flex flex-col text-brand-text">
   <!-- Skip link: first tab stop, visually hidden until focused -->
   <a
     href="#main"
@@ -20,10 +20,10 @@
   </a>
 
   <!-- Marketing nav: wordmark left, join + auth right — fixed so it stays on scroll -->
-  <header class="fixed top-0 inset-x-0 z-50 flex items-center justify-between gap-4 px-6 py-3">
+  <header class="fixed top-0 inset-x-0 z-50 flex items-center justify-between gap-2 sm:gap-4 px-3 sm:px-6 py-3">
     <Wordmark href="/" />
 
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-2 sm:gap-3">
       <JoinCodePopover />
 
       {#if data.user}
@@ -32,7 +32,7 @@
           href="/home"
           use:pressPhysics={'dark'}
           use:hoverEffect={'gradient'}
-          class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-bold bg-brand-text text-brand-white border-[2.5px] border-brand-border-heavy no-underline transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+          class="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold bg-brand-text text-brand-white border-[2.5px] border-brand-border-heavy no-underline whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
           style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
         >
           {m.marketing_nav_dashboard()}
@@ -42,7 +42,7 @@
           href="/auth/magic-link"
           use:pressPhysics={'dark'}
           use:hoverEffect={'gradient'}
-          class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-bold bg-brand-text text-brand-white border-[2.5px] border-brand-border-heavy no-underline transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+          class="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold bg-brand-text text-brand-white border-[2.5px] border-brand-border-heavy no-underline whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
           style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
         >
           {m.marketing_nav_signin()}
@@ -51,12 +51,12 @@
     </div>
   </header>
 
-  <main id="main" class="flex-1 flex flex-col pt-[3.5rem]">
+  <main id="main" class="flex-1 flex flex-col pt-20 md:pt-24">
     {@render children()}
   </main>
 
   <footer class="mt-24 border-t-[2.5px] border-brand-border-heavy">
-    <div class="max-w-5xl mx-auto px-6 pt-12 pb-8 grid grid-cols-1 sm:grid-cols-[2fr_1fr_1fr] gap-10">
+    <div class="max-w-5xl mx-auto px-6 pt-12 pb-8 grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr] gap-6 md:gap-10">
       <!-- Brand block -->
       <div class="flex flex-col gap-2">
         <span class="text-xl font-bold tracking-tight">FabDoYouMeme</span>

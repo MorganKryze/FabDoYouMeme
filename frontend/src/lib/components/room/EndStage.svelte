@@ -38,6 +38,16 @@
   // completely removed so the stage calms down.
   let confettiPhase = $state<'full' | 'reduced' | 'none'>('full');
 
+  // "Show all" leaderboard expansion: collapsed by default on phones (the
+  // podium alone fills a phone viewport); expanded by default at md+ so
+  // desktop gets the full standings without an extra click.
+  let restExpanded = $state(false);
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const mql = window.matchMedia('(min-width: 768px)');
+    restExpanded = mql.matches;
+  });
+
   $effect(() => {
     const reduceAt = setTimeout(() => { confettiPhase = 'reduced'; }, 30_000);
     const stopAt = setTimeout(() => { confettiPhase = 'none'; }, 60_000);
@@ -115,7 +125,7 @@
   </div>
 {/if}
 
-<div class="relative w-full max-w-5xl mx-auto px-6 py-4 flex flex-col gap-8" use:reveal>
+<div class="relative w-full max-w-5xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex flex-col gap-4 sm:gap-8" use:reveal>
 
   <!-- ═══════════════════════════════════════════════════════════════
        HEADER — reason chip + winner hero.
@@ -135,7 +145,7 @@
 
     {#if winner}
       <h1
-        class="inline-flex flex-wrap items-baseline justify-center gap-x-3 text-brand-text text-6xl sm:text-7xl md:text-8xl font-extrabold leading-none tracking-tight"
+        class="inline-flex flex-wrap items-baseline justify-center gap-x-3 text-brand-text text-3xl sm:text-7xl md:text-8xl font-extrabold leading-none tracking-tight"
       >
         <span>{winner.display_name}</span>
         <span class="wins-gradient">{m.room_wins_suffix()}</span>
@@ -144,7 +154,7 @@
         {m.room_wins_score({ score: winner.score })}
       </p>
     {:else}
-      <h1 class="text-6xl sm:text-7xl md:text-8xl font-extrabold leading-none tracking-tight">
+      <h1 class="text-3xl sm:text-7xl md:text-8xl font-extrabold leading-none tracking-tight">
         {m.room_final_scores()}
       </h1>
     {/if}
@@ -193,6 +203,8 @@
 
   <!-- ═══════════════════════════════════════════════════════════════
        REST OF LEADERBOARD — only shown when 4+ players.
+       Collapsed by default on mobile so the podium fits one viewport;
+       open by default at md+ where vertical room is plentiful.
        ═══════════════════════════════════════════════════════════════ -->
   {#if rest.length > 0}
     <div
@@ -200,11 +212,20 @@
       style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
       use:reveal={{ delay: 3 }}
     >
-      <h2 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted mb-3 inline-flex items-center gap-2">
-        <Trophy size={12} strokeWidth={2.5} />
-        {m.room_final_standings()}
-      </h2>
-      <ol class="flex flex-col gap-2">
+      <button
+        type="button"
+        onclick={() => (restExpanded = !restExpanded)}
+        aria-expanded={restExpanded}
+        class="w-full flex items-center justify-between gap-2 text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted cursor-pointer"
+      >
+        <span class="inline-flex items-center gap-2">
+          <Trophy size={12} strokeWidth={2.5} />
+          {m.room_final_standings()}
+        </span>
+        <span class="font-mono tabular-nums">{rest.length}</span>
+      </button>
+      {#if restExpanded}
+      <ol class="flex flex-col gap-2 mt-3">
         {#each rest as entry, i (entry.player_id)}
           <li class="flex items-center gap-3 rounded-full border-[2.5px] border-brand-border bg-brand-white px-3 py-2 text-sm">
             <span class="w-6 text-right font-bold text-brand-text-muted tabular-nums">
@@ -223,6 +244,7 @@
           </li>
         {/each}
       </ol>
+      {/if}
     </div>
   {/if}
 

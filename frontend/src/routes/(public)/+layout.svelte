@@ -6,10 +6,12 @@
   let { children } = $props();
 </script>
 
-<div class="relative z-[2] min-h-screen flex flex-col text-brand-text px-4">
+<div class="relative z-[2] min-h-dvh flex flex-col text-brand-text px-4">
   <!-- Persistent wordmark → back to the marketing landing. Shared across
        all public pages (magic-link, register, verify, /join, /join/[code])
-       so every anonymous visitor has a visible exit. -->
+       so every anonymous visitor has a visible exit. /privacy resets
+       layout inheritance via its own +layout@.svelte and renders without
+       the auth-card chrome. -->
   <header class="flex items-center py-5">
     <Wordmark href="/" />
   </header>

@@ -3,16 +3,26 @@
   import { page } from '$app/stores';
   import { Volume2, VolumeX, XCircle } from '$lib/icons';
   import { pressPhysics } from '$lib/actions/pressPhysics';
+  import { music } from '$lib/state/music.svelte';
   import * as m from '$lib/paraglide/messages';
+
+  // On `/rooms/*` the music button is rendered inline inside RoomHeader
+  // (top sticky card) — keep the audio element mounted globally but
+  // suppress this component's floating UI so we don't render two buttons.
+  const inRoom = $derived($page.url.pathname.startsWith('/rooms/'));
 
   const TRACK_AMBIENT = '/audio/monument_music-pure-159612.mp3';
   const TRACK_GAMEPLAY = '/audio/moodmode-for-fashion-luxury-223930.mp3';
 
   const STORAGE_KEY = 'bg-music:v3';
   const LEVELS = 5;
-  const DEFAULT_LEVEL = 1;
-  // Level → volume. Keeps background quiet even at max — 1 ≈ 7%, 5 ≈ 35%.
-  const volumeFor = (level: number) => level * 0.07;
+  const DEFAULT_LEVEL = 2;
+  // Level → element volume. Curve picked so steps are clearly audible
+  // (perceived loudness is roughly logarithmic, so a power curve gives
+  // even-feeling jumps across the range): 1 ≈ 9%, 2 ≈ 25%, 3 ≈ 41%,
+  // 4 ≈ 59%, 5 ≈ 80%. Capped under 1.0 so it stays "background".
+  const volumeFor = (level: number) =>
+    Math.max(0.05, Math.min(0.85, Math.pow(level / LEVELS, 1.4) * 0.85));
   const FADE_MS = 350;
   const CROSSFADE_OUT_MS = 450;
   const CROSSFADE_IN_MS = 450;
@@ -24,6 +34,18 @@
   let muted = $state(false);
   let level = $state(DEFAULT_LEVEL);
   let showSlider = $state(false);
+  let floatingWrap: HTMLDivElement | undefined = $state();
+
+  $effect(() => {
+    if (!showSlider) return;
+    function onDocClick(e: MouseEvent) {
+      if (floatingWrap && !floatingWrap.contains(e.target as Node)) {
+        showSlider = false;
+      }
+    }
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
+  });
   let error = $state<string | null>(null);
   let audioEl: HTMLAudioElement | undefined = $state();
   let currentSrc = $state('');
@@ -132,6 +154,13 @@
       });
   }
 
+  // Mirror reactive state into the music singleton so consumers (the
+  // inline RoomHeader button) read the same flags without their own
+  // wiring. Effects run after every change, so this stays in lockstep.
+  $effect(() => { music.playing = playing; });
+  $effect(() => { music.muted = muted; });
+  $effect(() => { music.level = level; });
+
   onMount(() => {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -145,6 +174,13 @@
     } catch {
       // ignore malformed state
     }
+
+    // Bind command handlers + advertise availability. RoomHeader gates
+    // its rendering on `music.available` so it can never call a stale
+    // closure if this component happens to remount.
+    music.toggleHandler = toggle;
+    music.setLevelHandler = setLevel;
+    music.available = true;
 
     // The track-change effect handles initial src load + first play. Nothing
     // else needed here besides visibility wiring.
@@ -165,6 +201,9 @@
     return () => {
       document.removeEventListener('visibilitychange', onVis);
       gestureCleanup?.();
+      music.toggleHandler = null;
+      music.setLevelHandler = null;
+      music.available = false;
     };
   });
 
@@ -215,13 +254,24 @@
 
   function setLevel(n: number) {
     level = Math.min(LEVELS, Math.max(1, n));
-    if (audioEl && playing) {
-      audioEl.muted = false;
-      muted = false;
-      if (audioEl.paused) {
-        startPlayback(FADE_MS);
-      }
+    if (!audioEl || !playing) return;
+    // Treat a level click as an explicit "I want to hear this" gesture
+    // — even if the browser had us in muted-autoplay fallback.
+    audioEl.muted = false;
+    muted = false;
+    if (audioEl.paused) {
+      startPlayback(FADE_MS);
+      return;
     }
+    // Cancel any in-flight fade and apply the new volume *immediately*.
+    // Relying on the $effect alone is fragile: it skips while
+    // `fadeRaf !== null`, which means level clicks landing during a
+    // crossfade or initial fade-in were silently dropped.
+    if (fadeRaf !== null) {
+      cancelAnimationFrame(fadeRaf);
+      fadeRaf = null;
+    }
+    audioEl.volume = volumeFor(level);
   }
 
   function onAudioError(e: Event) {
@@ -243,10 +293,10 @@
 ></audio>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="fixed bottom-24 right-6 z-40 flex flex-col items-end gap-2">
+<div class="fixed bottom-24 right-6 z-40 flex flex-col items-end gap-2 pointer-events-none">
   {#if error}
     <div
-      class="bg-brand-white border-[2.5px] border-red-400 rounded-2xl pl-3 pr-2 py-2 text-xs font-semibold text-red-600 max-w-xs inline-flex items-start gap-2"
+      class="pointer-events-auto bg-brand-white border-[2.5px] border-red-400 rounded-2xl pl-3 pr-2 py-2 text-xs font-semibold text-red-600 max-w-xs inline-flex items-start gap-2"
       style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
     >
       <span class="leading-snug">{error}</span>
@@ -262,57 +312,73 @@
   {/if}
 
   <!--
-    w-11 locks the hover column to button width so the slider (which is
-    naturally wider thanks to its padding) overflows symmetrically on both
-    sides instead of shoving the button leftward when it appears.
+    Floating button only shows off-room. On `/rooms/*` the same controls
+    are rendered inline inside RoomHeader. Error banner stays visible in
+    either context so a play() failure can't be missed.
   -->
-  <div
-    class="w-11 flex flex-col items-center gap-2"
-    onmouseenter={() => (showSlider = true)}
-    onmouseleave={() => (showSlider = false)}
-    onfocusin={() => (showSlider = true)}
-    onfocusout={() => (showSlider = false)}
-  >
-    {#if showSlider && playing}
-      <div
-        class="bg-brand-white border-[2.5px] border-brand-border-heavy rounded-2xl p-2 flex flex-col-reverse"
-        style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
-        role="group"
-        aria-label={m.room_music_volume_aria()}
-      >
-        {#each Array(LEVELS) as _, i (i)}
-          {@const n = i + 1}
-          {@const active = level >= n}
+  {#if !inRoom}
+    <!-- Floating slot: same click-only behaviour as the inline RoomHeader
+         control (hover-toggle proved fragile — pointer crossing the gap
+         to the slider closed the popover before the user could click a
+         level). Click toggles the slider; click-outside dismisses. The
+         mute/play pill lives inside the slider so play/pause is always
+         reachable without having to first re-discover the main button. -->
+    <div bind:this={floatingWrap} class="pointer-events-auto relative">
+      {#if showSlider}
+        <div
+          class="absolute right-0 bottom-full mb-2 z-30 bg-brand-white border-[2.5px] border-brand-border-heavy rounded-2xl p-2 flex items-center gap-1 whitespace-nowrap"
+          style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
+          role="group"
+          aria-label={m.room_music_volume_aria()}
+        >
           <button
             type="button"
-            onclick={() => setLevel(n)}
-            class="w-8 h-6 flex items-end justify-center cursor-pointer"
-            aria-label={m.room_music_volume_level_aria({ level: n })}
-            aria-pressed={level === n}
+            onclick={toggle}
+            class="h-8 w-8 mr-1 shrink-0 rounded-full border-[2px] border-brand-border-heavy {playing ? 'bg-brand-surface text-brand-text-mid' : 'bg-brand-text text-brand-white'} inline-flex items-center justify-center cursor-pointer"
+            aria-label={playing ? m.room_music_mute_aria() : m.room_music_play_aria()}
+            aria-pressed={!playing}
           >
-            <span
-              class="block w-full rounded-sm transition-colors {active ? 'bg-brand-accent' : 'bg-brand-border'}"
-              style="height: {6 + i * 3}px;"
-            ></span>
+            {#if playing}
+              <VolumeX size={14} strokeWidth={2.5} />
+            {:else}
+              <Volume2 size={14} strokeWidth={2.5} />
+            {/if}
           </button>
-        {/each}
-      </div>
-    {/if}
-
-    <button
-      use:pressPhysics={'ghost'}
-      type="button"
-      onclick={toggle}
-      class="h-11 w-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text-mid hover:text-brand-accent inline-flex items-center justify-center cursor-pointer transition-colors"
-      title={playing ? m.room_music_mute_title() : m.room_music_play_title()}
-      aria-label={playing ? m.room_music_mute_aria() : m.room_music_play_aria()}
-      aria-pressed={playing}
-    >
-      {#if playing && !muted}
-        <Volume2 size={18} strokeWidth={2.5} />
-      {:else}
-        <VolumeX size={18} strokeWidth={2.5} />
+          {#each Array(LEVELS) as _, i (i)}
+            {@const n = i + 1}
+            {@const active = playing && level >= n}
+            <button
+              type="button"
+              onclick={() => setLevel(n)}
+              disabled={!playing}
+              class="w-7 h-8 shrink-0 flex items-end justify-center cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              aria-label={m.room_music_volume_level_aria({ level: n })}
+              aria-pressed={level === n}
+            >
+              <span
+                class="block w-full rounded-sm transition-colors {active ? 'bg-brand-accent' : 'bg-brand-border'}"
+                style="height: {6 + i * 3}px;"
+              ></span>
+            </button>
+          {/each}
+        </div>
       {/if}
-    </button>
-  </div>
+
+      <button
+        use:pressPhysics={'ghost'}
+        type="button"
+        onclick={() => (showSlider = !showSlider)}
+        class="h-11 w-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text-mid hover:text-brand-accent inline-flex items-center justify-center cursor-pointer transition-colors"
+        title={playing ? m.room_music_mute_title() : m.room_music_play_title()}
+        aria-label={m.room_music_volume_aria()}
+        aria-expanded={showSlider}
+      >
+        {#if playing && !muted}
+          <Volume2 size={18} strokeWidth={2.5} />
+        {:else}
+          <VolumeX size={18} strokeWidth={2.5} />
+        {/if}
+      </button>
+    </div>
+  {/if}
 </div>

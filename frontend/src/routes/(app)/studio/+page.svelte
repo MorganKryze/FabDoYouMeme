@@ -44,7 +44,29 @@
   <title>{m.studio_page_title()}</title>
 </svelte:head>
 
-<div class="flex-1 flex overflow-hidden h-[calc(100vh-3.5rem)]" use:reveal>
+<!-- Below lg the 3-column layout (208 + flex + 320 = 528 px of fixed chrome)
+     does not fit. Pack creation is bulk-edit heavy enough that a true mobile
+     flow would feel worse than a polite redirect — show a placeholder with
+     a back link instead. Telemetry can promote this to a real mobile flow
+     if demand emerges. -->
+<div class="lg:hidden flex-1 flex flex-col items-center justify-center text-center p-6 gap-4">
+  <div
+    class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-6 max-w-md flex flex-col gap-3"
+    style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
+  >
+    <h1 class="text-xl font-bold m-0">{m.studio_desktop_only_title()}</h1>
+    <p class="text-sm font-semibold text-brand-text-muted m-0">{m.studio_desktop_only_body()}</p>
+    <a
+      href="/home"
+      class="self-center mt-2 h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold inline-flex items-center justify-center gap-2 no-underline"
+      style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
+    >
+      {m.studio_desktop_only_back()}
+    </a>
+  </div>
+</div>
+
+<div class="hidden lg:flex flex-1 overflow-hidden h-[calc(100dvh-3.5rem)]" use:reveal>
   <!-- Left: Pack Navigator (fixed width) -->
   <div class="w-52 shrink-0 border-r border-brand-border overflow-y-auto">
     <PackNavigator />

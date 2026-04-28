@@ -19,7 +19,8 @@
 -->
 <div
   id="toast-root"
-  class="fixed bottom-4 right-4 z-[100] flex flex-col-reverse gap-3 pointer-events-none"
+  class="fixed right-4 z-[100] flex flex-col-reverse gap-3 pointer-events-none"
+  style="bottom: max(1rem, env(safe-area-inset-bottom));"
   aria-live="polite"
   aria-atomic="false"
 >

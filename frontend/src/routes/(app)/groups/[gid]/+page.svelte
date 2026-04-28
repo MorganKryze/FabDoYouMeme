@@ -57,7 +57,10 @@
       </span>
     </header>
 
-    <nav class="flex gap-2 border-b-[2.5px] border-brand-border-heavy">
+    <nav
+      class="flex gap-2 border-b-[2.5px] border-brand-border-heavy overflow-x-auto -mx-6 px-6"
+      style="scrollbar-width: thin;"
+    >
       <button
         type="button"
         class="px-4 py-3 -mb-[2.5px] border-b-[2.5px] text-sm font-bold cursor-pointer transition-colors"

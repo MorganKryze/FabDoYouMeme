@@ -68,7 +68,7 @@
   });
 </script>
 
-<div class="relative z-[2] min-h-screen flex flex-col text-brand-text">
+<div class="relative z-[2] min-h-dvh flex flex-col text-brand-text">
   {#if data.isGuest || !data.user}
     <!-- Guest room visit: minimal chrome — the room page's own header
          already shows the room code and connection status. Anonymous users
@@ -80,53 +80,56 @@
   {:else}
   <!-- Top bar: wordmark on the left; Admin (admins only) / Lab / Settings
        on the right. Admin sits immediately left of Lab so the two
-       "operator" tools cluster together. -->
-  <header class="flex items-center justify-between gap-4 px-6 pt-5 pb-4">
+       "operator" tools cluster together. Below md the labels collapse
+       to icon-only pills (with aria-label) to fit phone widths. -->
+  <header class="flex items-center justify-between gap-4 px-4 sm:px-6 pt-4 sm:pt-5 pb-3 sm:pb-4">
     <Wordmark href="/home" />
 
-    <div class="flex items-center gap-3">
+    <div class="flex items-center gap-2 md:gap-3">
       {#if data.user.role === 'admin'}
         <a
           href="/admin"
           use:hoverEffect={'swap'}
-          class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-bold bg-brand-white border-[2.5px] border-brand-border-heavy no-underline"
+          class="inline-flex items-center gap-1.5 px-3 md:px-4 py-2.5 rounded-full text-sm font-bold bg-brand-white border-[2.5px] border-brand-border-heavy no-underline"
           style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
           aria-label={m.nav_admin_aria()}
         >
           <Shield size={16} strokeWidth={2.5} />
-          {m.nav_admin()}
+          <span class="hidden md:inline">{m.nav_admin()}</span>
         </a>
       {/if}
 
       <a
         href="/groups"
         use:hoverEffect={'swap'}
-        class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-bold bg-brand-white border-[2.5px] border-brand-border-heavy no-underline"
+        class="inline-flex items-center gap-1.5 px-3 md:px-4 py-2.5 rounded-full text-sm font-bold bg-brand-white border-[2.5px] border-brand-border-heavy no-underline"
         style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
+        aria-label={m.nav_groups()}
       >
         <Users size={16} strokeWidth={2.5} />
-        {m.nav_groups()}
+        <span class="hidden md:inline">{m.nav_groups()}</span>
       </a>
 
       <a
         href="/studio"
         use:hoverEffect={'swap'}
-        class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-bold bg-brand-white border-[2.5px] border-brand-border-heavy no-underline"
+        class="inline-flex items-center gap-1.5 px-3 md:px-4 py-2.5 rounded-full text-sm font-bold bg-brand-white border-[2.5px] border-brand-border-heavy no-underline"
         style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
+        aria-label={m.nav_lab()}
       >
         <Wrench size={16} strokeWidth={2.5} />
-        {m.nav_lab()}
+        <span class="hidden md:inline">{m.nav_lab()}</span>
       </a>
 
       <a
         href="/profile"
         use:hoverEffect={'swap'}
-        class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-bold bg-brand-white border-[2.5px] border-brand-border-heavy no-underline"
+        class="inline-flex items-center gap-1.5 px-3 md:px-4 py-2.5 rounded-full text-sm font-bold bg-brand-white border-[2.5px] border-brand-border-heavy no-underline"
         style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
         aria-label={m.nav_settings_aria()}
       >
         <Settings size={16} strokeWidth={2.5} />
-        {m.nav_settings()}
+        <span class="hidden md:inline">{m.nav_settings()}</span>
       </a>
     </div>
   </header>
@@ -141,7 +144,8 @@
        matching the conventional dismissable-tooltip pattern so it
        never reads as a detached button. -->
   {#if isLab && !labHelpDismissed}
-    <div class="fixed bottom-6 left-6 z-40">
+    <!-- Studio is desktop-only (lg+); the help drawer trigger should match. -->
+    <div class="hidden lg:block fixed bottom-6 left-6 z-40">
       <div class="relative inline-block">
         <button
           type="button"

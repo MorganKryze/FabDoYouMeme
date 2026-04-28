@@ -31,6 +31,22 @@
   let code = $state('');
   let joinForm = $state<HTMLFormElement | null>(null);
   let showMakerCard = $state(false);
+  // Mobile-only collapsibles. Expanded by default at md+ via `md:grid` /
+  // `md:flex` rules so desktop sees the full layout regardless.
+  let statsExpanded = $state(false);
+  let activityExpanded = $state(false);
+  let circlesExpanded = $state(false);
+  // Default-expand at md+ so desktop sees the full layout. The matchMedia
+  // listener fires once per mount; toggling on mobile remains user-driven.
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const mql = window.matchMedia('(min-width: 768px)');
+    if (mql.matches) {
+      statsExpanded = true;
+      activityExpanded = true;
+      circlesExpanded = true;
+    }
+  });
 
   // Greeting rotates per visit — we deliberately capture `tone.level` once
   // on mount rather than binding reactively. Changes on /profile take effect
@@ -139,11 +155,15 @@
   <title>{m.home_page_title()}</title>
 </svelte:head>
 
-<div class="flex-1 flex justify-center p-6 pt-4 pb-10">
-  <div class="w-full max-w-5xl flex flex-col gap-10">
+<div class="flex-1 flex justify-center p-4 pt-3 pb-8 sm:p-6 sm:pt-4 sm:pb-10">
+  <div class="w-full max-w-5xl flex flex-col gap-4 md:gap-10">
 
-    <!-- ─── Hero row: greeting (full-width) ──────────────────── -->
-    <section use:reveal class="flex flex-col justify-center gap-3" aria-live="polite">
+    <!-- ─── Hero row: greeting (full-width) ──────────────────────
+         Mobile drops the marquee greeting to a single eyebrow line
+         (option B from the fit-check plan); the rotated tone copy
+         (`greetingSub`) relocates into the quick-actions / active-room
+         block as a one-line subtitle so the playful voice survives. -->
+    <section use:reveal class="hidden md:flex flex-col justify-center gap-3" aria-live="polite">
       <p class="text-sm font-bold uppercase tracking-[0.3em] text-brand-text-mid">
         {m.home_welcome_back()}
       </p>
@@ -188,6 +208,15 @@
       {/if}
     </section>
 
+    <!-- Mobile-only compact eyebrow: one-line greeting in place of the
+         hero. Username gradient kept for brand. -->
+    <section class="md:hidden flex items-baseline gap-2" aria-live="polite">
+      <p class="text-[0.65rem] font-bold uppercase tracking-[0.25em] text-brand-text-mid m-0">
+        {m.home_welcome_back()}
+      </p>
+      <span class="text-base font-extrabold username-gradient">{usernameStr}</span>
+    </section>
+
     <!-- ─── Quick actions: either "return to room" OR create/join ───
          A user can be in at most one lobby/playing room at a time. When
          data.activeRoom is set, the create + join affordances are hidden
@@ -201,12 +230,12 @@
           use:pressPhysics={'dark'}
           use:hoverEffect={'gradient'}
           use:physCard
-          class="active-room group relative block rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white p-6 overflow-hidden no-underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+          class="active-room group relative block rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white p-4 sm:p-6 overflow-hidden no-underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
           style="box-shadow: 0 5px 0 rgba(0,0,0,0.2);"
         >
           <div class="relative flex items-center justify-between gap-4">
             <div class="flex flex-col gap-1 min-w-0">
-              <span class="text-xs font-bold uppercase tracking-[0.2em] opacity-70">
+              <span class="text-xs font-bold uppercase tracking-[0.2em] opacity-70 truncate">
                 {data.activeRoom.is_host ? m.home_active_room_your() : m.home_active_room_guest()} · {data.activeRoom.state === 'playing' ? m.home_active_room_playing() : m.home_active_room_lobby()}
               </span>
               <div class="text-xl font-bold leading-tight">
@@ -222,24 +251,37 @@
               </span>
             </div>
           </div>
-          <p class="relative text-xs font-semibold opacity-70 mt-3">
+          <p class="relative text-xs font-semibold opacity-70 mt-3 hidden sm:block">
             {m.home_active_room_hint()}
           </p>
+          {#if greetingSub}
+            <!-- Mobile-only: rotated brand-voice subtitle relocated from the
+                 hero. Keeps the playful tone without the marquee height. -->
+            <p class="relative text-xs font-semibold opacity-70 mt-3 sm:hidden truncate" in:fade={{ duration: 150 }}>
+              {greetingSub}
+            </p>
+          {/if}
         </a>
       </section>
     {:else}
-      <section use:reveal={{ delay: 1 }} class="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-4 items-stretch">
+      <section use:reveal={{ delay: 1 }} class="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-3 sm:gap-4 items-stretch">
         <!-- Join by code -->
         <div
-          class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-5 flex flex-col gap-3"
+          class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 sm:p-5 flex flex-col gap-2 sm:gap-3"
           style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
         >
           <div class="flex items-center justify-between">
             <h2 class="text-lg font-bold">{m.home_join_title()}</h2>
-            <span class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid">
+            <span class="text-xs font-bold uppercase tracking-[0.2em] text-brand-text-mid hidden sm:inline">
               {m.home_join_subtitle()}
             </span>
           </div>
+          {#if greetingSub}
+            <!-- Mobile-only: brand-voice subtitle relocated from the hero. -->
+            <p class="md:hidden text-xs font-semibold text-brand-text-mid m-0 truncate" in:fade={{ duration: 150 }}>
+              {greetingSub}
+            </p>
+          {/if}
 
           {#if form?.joinError}
             <div
@@ -257,7 +299,7 @@
             method="POST"
             action="?/joinRoom"
             use:enhance
-            class="grid grid-cols-[1fr_auto] gap-3 items-end"
+            class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end"
           >
             <RoomCodeInput bind:value={code} onenter={submitJoin} />
             <button
@@ -279,7 +321,7 @@
           use:pressPhysics={'dark'}
           use:hoverEffect={'gradient'}
           use:physCard
-          class="group rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white p-5 flex flex-col justify-between gap-2 min-w-[200px] no-underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
+          class="group rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white p-5 flex flex-col justify-between gap-2 no-underline focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60"
           style="box-shadow: 0 5px 0 rgba(0,0,0,0.2);"
         >
           <div class="text-xs font-bold uppercase tracking-[0.2em] opacity-70">
@@ -293,8 +335,34 @@
       </section>
     {/if}
 
-    <!-- ─── Stats row ────────────────────────────────────────── -->
-    <section class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+    <!-- ─── Stats row ──────────────────────────────────────────
+         Mobile collapses the four-tile grid into a single horizontal
+         chip (saves ~200 px). Tap to toggle the full grid. -->
+    <section
+      class="md:hidden"
+      aria-label={m.home_stats_played()}
+    >
+      <button
+        type="button"
+        onclick={() => (statsExpanded = !statsExpanded)}
+        aria-expanded={statsExpanded}
+        class="w-full inline-flex flex-wrap items-center justify-between gap-2 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-surface px-4 py-2 text-xs font-bold cursor-pointer"
+        style="box-shadow: 0 3px 0 rgba(0,0,0,0.08);"
+      >
+        <span class="inline-flex items-center gap-2 text-brand-text">
+          <span class="font-mono tabular-nums">♠ {gamesPlayed}</span>
+          <span class="opacity-30">·</span>
+          <span class="font-mono tabular-nums" style="color: var(--brand-accent);">♥ {wins}</span>
+          <span class="opacity-30">·</span>
+          <span class="font-mono tabular-nums">♦ {winRate}%</span>
+        </span>
+        <span class="text-[0.6rem] font-bold uppercase tracking-[0.18em] text-brand-text-muted">
+          {statsExpanded ? '−' : '+'}
+        </span>
+      </button>
+    </section>
+
+    <section class="{statsExpanded ? 'grid' : 'hidden'} md:grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
       <div
         use:reveal={{ delay: 2 }}
         class="relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-1 overflow-hidden"
@@ -344,18 +412,18 @@
           <span class="font-mono" style="color: var(--brand-text);">♣</span>
           {m.home_stats_favourite()}
         </div>
-        <div class="relative text-lg font-bold leading-tight mt-1 line-clamp-1">
+        <div class="relative text-lg font-bold leading-tight mt-1 truncate" title={favoriteGameType ? prettyGameSlug(favoriteGameType) : ''}>
           {favoriteGameType ? prettyGameSlug(favoriteGameType) : m.home_stats_empty()}
         </div>
       </div>
     </section>
 
     <!-- ─── Recent activity + circles placeholder ────────────── -->
-    <section class="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-5">
+    <section class="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 md:gap-5">
       <!-- Recent activity -->
       <div
         use:reveal={{ delay: 2 }}
-        class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-5 flex flex-col gap-4"
+        class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 sm:p-5 flex flex-col gap-3 sm:gap-4"
         style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
       >
         <div class="flex items-center justify-between">
@@ -390,7 +458,7 @@
           </div>
         {:else}
           <ul class="flex flex-col gap-2 list-none p-0 m-0">
-            {#each history.slice(0, 5) as room (room.code)}
+            {#each history.slice(0, activityExpanded ? 5 : 1) as room (room.code)}
               <li>
                 <a
                   href={`/games/${room.code}`}
@@ -524,7 +592,7 @@
   </div>
 </div>
 
-<footer class="border-t border-brand-border px-6 py-6 flex items-center justify-between text-xs font-semibold text-brand-text-mid">
+<footer class="hidden md:flex border-t border-brand-border px-6 py-6 items-center justify-between text-xs font-semibold text-brand-text-mid">
   <p>© {new Date().getFullYear()} FabDoYouMeme</p>
   <a href="/privacy" class="hover:underline rounded-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-accent/60">{m.common_privacy_policy()}</a>
 </footer>
@@ -546,7 +614,7 @@
 {#if data.user}
   {#if showMakerCard}
     <div
-      class="fixed bottom-20 left-6 z-40 w-75"
+      class="fixed bottom-20 left-6 right-6 sm:right-auto sm:w-[19rem] z-40"
       in:fly={{ x: -380, duration: 420, delay: 100, easing: cubicOut }}
       out:fly={{ x: -380, duration: 260, easing: cubicIn }}
     >

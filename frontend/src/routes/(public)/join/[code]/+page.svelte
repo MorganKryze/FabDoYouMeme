@@ -91,7 +91,7 @@
       type="text"
       maxlength={32}
       placeholder={m.common_pick_nickname()}
-      class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-5 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
+      class="h-12 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-5 text-base font-semibold focus:outline-none focus:border-brand-text transition-colors"
       style="box-shadow: 0 4px 0 rgba(0,0,0,0.06);"
     />
   </div>

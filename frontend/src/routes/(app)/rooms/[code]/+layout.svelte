@@ -34,10 +34,12 @@
   {@render children()}
 </div>
 
-<!-- Floating reconnect indicator — appears only while WS is cycling. -->
+<!-- Floating reconnect indicator — appears only while WS is cycling.
+     Lives in the top-right so it doesn't collide with the bottom-right
+     toast container or the bottom mobile rail drawer. -->
 {#if ws.status === 'reconnecting'}
   <div
-    class="fixed bottom-5 right-5 z-40 inline-flex items-center gap-2 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 py-2 text-xs font-bold animate-pulse"
+    class="fixed top-4 right-4 z-40 inline-flex items-center gap-2 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 py-2 text-xs font-bold animate-pulse"
     style="color: var(--brand-accent); box-shadow: 0 4px 0 rgba(0,0,0,0.12);"
     role="status"
     aria-live="polite"

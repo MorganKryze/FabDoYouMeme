@@ -38,7 +38,7 @@
   }
 </script>
 
-<div class="flex flex-col gap-6">
+<div class="flex flex-col gap-3 md:gap-6 pb-28 md:pb-0">
   {#if room.roundPaused}
     <div
       class="inline-flex items-center gap-2 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 py-1.5 text-xs font-bold text-brand-text-muted w-fit mx-auto"
@@ -48,63 +48,38 @@
     </div>
   {/if}
 
-  <!-- Image + vote header -->
-  <div class="grid gap-4 md:grid-cols-[1fr_1.2fr] items-stretch">
-    <div
-      use:dealCard={{ delay: 80, rotate: -1.2 }}
-      class="relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-white p-3 flex flex-col gap-2"
-      style="box-shadow: 0 6px 0 rgba(0,0,0,0.12); transform: rotate(-1.2deg);"
-    >
-      {#if round?.item?.media_url}
-        <div
-          class="relative w-full rounded-[14px] overflow-hidden border-[2.5px] border-brand-border-heavy bg-brand-surface"
-          style="box-shadow: inset 0 2px 0 rgba(0,0,0,0.04);"
-        >
-          <img
-            src={mediaSrc(round.item.media_url, room.code)}
-            alt={m.game_round_meme_alt()}
-            class="block w-full h-auto max-h-[55vh] object-cover"
-          />
-        </div>
-      {/if}
-      <div class="flex justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-brand-text-muted px-1">
-        {#if round}
-          <span>{m.game_meme_showdown_round_number({ number: round.round_number })}</span>
-        {/if}
-        <span>{m.game_meme_showdown_plays_count({ count: submissions.length })}</span>
-      </div>
-    </div>
-
-    <div
-      use:dealCard={{ delay: 160, rotate: 0.8 }}
-      class="relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white p-6 flex flex-col gap-3 overflow-hidden"
-      style="box-shadow: 0 6px 0 rgba(0,0,0,0.25); transform: rotate(0.8deg);"
-    >
+  <!-- Voting rules card — full-width dark hero (the meme thumbnail repeats
+       inside every submission card below, so no left prompt image). Tilt
+       only on tablet+ so it can't push corners past the phone edge. -->
+  <div
+    use:dealCard={{ delay: 160, rotate: 0.8 }}
+    class="prompt-tilt-right relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white p-6 flex flex-col gap-3 overflow-hidden"
+    style="box-shadow: 0 6px 0 rgba(0,0,0,0.25);"
+  >
+    <span
+      class="absolute -top-2 -right-3 text-[90px] font-bold opacity-[0.08] pointer-events-none select-none leading-none"
+      aria-hidden="true"
+    >♥</span>
+    <div class="relative flex items-center justify-between gap-2">
+      <span class="text-[10px] font-bold uppercase tracking-[0.25em] opacity-70">
+        {m.game_meme_showdown_vote_title()}
+      </span>
       <span
-        class="absolute -top-2 -right-3 text-[90px] font-bold opacity-[0.08] pointer-events-none select-none leading-none"
-        aria-hidden="true"
-      >♥</span>
-      <div class="relative flex items-center justify-between gap-2">
-        <span class="text-[10px] font-bold uppercase tracking-[0.25em] opacity-70">
-          {m.game_meme_showdown_vote_title()}
-        </span>
-        <span
-          class="inline-flex items-center gap-1.5 rounded-full border-[2px] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em]"
-          style="border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.08);"
-        >
-          {m.game_meme_showdown_submissions_in({ count: submissions.length })}
-        </span>
-      </div>
-      <p
-        class="relative m-0 font-bold leading-tight tracking-tight"
-        style="font-size: clamp(1.5rem, 2.4vw, 2rem);"
+        class="inline-flex items-center gap-1.5 rounded-full border-[2px] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em]"
+        style="border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.08);"
       >
-        {m.game_meme_showdown_cards_in()}
-      </p>
-      <span class="relative text-[11px] font-bold uppercase tracking-[0.2em] opacity-70 mt-auto">
-        {m.game_meme_showdown_one_vote()}
+        {m.game_meme_showdown_submissions_in({ count: submissions.length })}
       </span>
     </div>
+    <p
+      class="relative m-0 font-bold leading-tight tracking-tight"
+      style="font-size: clamp(1.5rem, 2.4vw, 2rem);"
+    >
+      {m.game_meme_showdown_cards_in()}
+    </p>
+    <span class="relative text-[11px] font-bold uppercase tracking-[0.2em] opacity-70 mt-auto">
+      {m.game_meme_showdown_one_vote()}
+    </span>
   </div>
 
   <!-- Submissions grid -->
@@ -190,7 +165,8 @@
       {m.game_meme_showdown_skipped_waiting()}
     </p>
   {:else if !voted}
-    <div class="flex flex-row items-center justify-center gap-3">
+    <!-- Desktop in-flow vote actions -->
+    <div class="hidden md:flex flex-row items-center justify-center gap-3">
       <button
         use:pressPhysics={'dark'}
         use:hoverEffect={'bounce'}
@@ -214,9 +190,50 @@
         </button>
       {/if}
     </div>
+
+    <!-- Mobile sticky vote bar — see meme-freestyle/VoteForm for rationale. -->
+    <div
+      class="md:hidden fixed inset-x-0 bottom-0 z-40 px-3 pt-0 pointer-events-none"
+      style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom));"
+    >
+      <div
+        class="pointer-events-auto rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-3 py-2 flex items-center gap-2"
+        style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
+      >
+        <button
+          use:pressPhysics={'dark'}
+          type="button"
+          onclick={vote}
+          disabled={!selectedId}
+          class="flex-1 h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold disabled:opacity-50 cursor-pointer inline-flex items-center justify-center gap-2"
+        >
+          <Heart size={16} strokeWidth={2.5} />
+          {m.game_meme_showdown_lock_vote()}
+        </button>
+        {#if allowSkipVote && hasVoteable}
+          <button
+            use:pressPhysics={'ghost'}
+            type="button"
+            onclick={abstain}
+            class="h-11 px-4 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-surface text-brand-text-mid text-xs font-bold cursor-pointer inline-flex items-center justify-center"
+          >
+            {m.game_meme_showdown_skip()}
+          </button>
+        {/if}
+      </div>
+    </div>
   {:else}
     <p class="text-center text-sm font-bold text-brand-text-mid m-0">
       {m.game_meme_showdown_voted_waiting()}
     </p>
   {/if}
 </div>
+
+<style>
+  /* Decorative tilt only on tablet+ — on phones it caused horizontal
+     overflow as the card's rounded corners poked past the viewport. */
+  .prompt-tilt-right { transform: rotate(0.8deg); }
+  @media (max-width: 767.98px) {
+    .prompt-tilt-right { transform: none; }
+  }
+</style>

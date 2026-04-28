@@ -48,7 +48,7 @@
     use:pressPhysics={'ghost'}
     use:hoverEffect={'swap'}
     aria-expanded={open}
-    class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-bold bg-brand-white border-[2.5px] border-brand-border-heavy transition-colors"
+    class="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold bg-brand-white border-[2.5px] border-brand-border-heavy whitespace-nowrap transition-colors"
     style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
   >
     {m.marketing_popover_trigger()}
@@ -61,7 +61,7 @@
 
   {#if open}
     <div
-      class="absolute right-0 mt-3 w-[min(22rem,calc(100vw-2rem))] rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-3 z-50"
+      class="fixed left-3 right-3 top-[72px] w-auto md:absolute md:left-auto md:right-0 md:top-auto md:mt-3 md:w-[min(22rem,calc(100vw-2rem))] rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-3 z-50"
       style="box-shadow: 0 8px 0 rgba(0,0,0,0.08);"
       role="dialog"
       aria-label={m.marketing_popover_aria()}

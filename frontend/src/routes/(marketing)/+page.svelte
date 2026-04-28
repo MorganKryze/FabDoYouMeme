@@ -131,7 +131,7 @@
 </svelte:head>
 
 <!-- ─── HERO ─────────────────────────────────────────────────── -->
-<section class="hero-grid mx-auto w-full max-w-[1180px] px-6 pt-14 pb-24 md:pb-32">
+<section class="hero-grid mx-auto w-full max-w-[1180px] px-6 pt-14 pb-24 md:pb-32 overflow-x-clip">
   <div class="hero-text" use:reveal>
     <span class="hero-mark">
       <span class="hero-mark-suit">♠</span>
@@ -433,8 +433,8 @@
   @media (max-width: 960px) {
     .hero-grid {
       grid-template-columns: 1fr;
-      gap: 24px;
-      padding-bottom: 20px;
+      gap: 16px;
+      padding-bottom: 0;
     }
   }
 
@@ -573,6 +573,21 @@
   @media (max-width: 960px) {
     .fan { --fan-shift: 0px; }
   }
+  /* Below 720px the absolute-positioned fan-cards (translate ±185px each)
+     would punch out of the viewport and force horizontal scroll. Scale the
+     whole fan down to fit, anchored to the top. Decorative floats removed
+     entirely on phones — they overlap content and add no signal. */
+  @media (max-width: 720px) {
+    .fan {
+      transform: scale(0.55);
+      transform-origin: 50% 0;
+    }
+    .fan-wrap {
+      padding-top: 0;
+      height: 280px;
+    }
+    .float { display: none; }
+  }
   .fan .fan-card[data-pos='1'] { transform: translate(-170px, 20px) rotate(-14deg); }
   .fan .fan-card[data-pos='2'] { transform: translate(-55px, -8px) rotate(-4deg); z-index: 2; }
   .fan .fan-card[data-pos='3'] { transform: translate(70px, 6px) rotate(6deg); z-index: 3; box-shadow: 0 8px 0 rgba(0, 0, 0, 0.14); }
@@ -707,7 +722,10 @@
   }
   .hand-card { position: relative; min-height: 320px; }
   @media (max-width: 1060px) { .hand { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 560px) { .hand { grid-template-columns: 1fr; } }
+  @media (max-width: 560px) {
+    .hand { grid-template-columns: 1fr; }
+    .hand-card { min-height: 240px; }
+  }
 
   /* ─── Steps ────────────────────────────────────────────────── */
   .steps {
@@ -833,7 +851,11 @@
   }
   @media (max-width: 760px) {
     .final-lanes { grid-template-columns: 1fr; }
-    .lane-divider { display: none; }
+    /* Stacked layout — flip the divider from vertical bars to a single
+       horizontal rule with the OR pill centered. The vertical version
+       just produced a long empty gap between the two lanes. */
+    .lane-divider { flex-direction: row; width: 100%; gap: 12px; }
+    .lane-bar { width: auto; height: 2.5px; flex: 1; }
   }
   .lane {
     display: flex; flex-direction: column; align-items: center;

@@ -4,6 +4,18 @@
   import { guest } from '$lib/state/guest.svelte';
   import * as m from '$lib/paraglide/messages';
 
+  // `sidebar` is the desktop right-rail mode (fixed 288px column).
+  // `sheet` is the mobile drawer mode where the parent owns the chrome.
+  // The current rendering is identical between the two — accepting the
+  // prop here keeps the component flexible for future per-mode tweaks
+  // without forcing the call sites to know about the distinction.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface Props {
+    variant?: 'sidebar' | 'sheet';
+  }
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  let { variant: _variant = 'sidebar' }: Props = $props();
+
   // Player identity — same logic as /rooms/[code]/+page.svelte. Used to
   // highlight "you" in the roster.
   const selfId = $derived.by(() => {

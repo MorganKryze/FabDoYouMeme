@@ -85,6 +85,16 @@
 </script>
 
 <style>
+  /* Decorative card rotations only kick in on tablet+ — on phones the
+     ~1.2° tilt makes corners poke past the viewport edge and forces a
+     horizontal scrollbar (visible as "image sets the page width"). */
+  .prompt-tilt-left { transform: rotate(-1.2deg); }
+  .prompt-tilt-right { transform: rotate(0.8deg); }
+  @media (max-width: 767.98px) {
+    .prompt-tilt-left,
+    .prompt-tilt-right { transform: none; }
+  }
+
   .joker-btn {
     height: 2.75rem;
     padding: 0 1rem;
@@ -98,6 +108,7 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
+    white-space: nowrap;
     cursor: pointer;
     transition:
       background 220ms ease,
@@ -235,7 +246,7 @@
   }
 </style>
 
-<div class="flex flex-col gap-6">
+<div class="flex flex-col gap-3 md:gap-6 pb-28 md:pb-0 min-w-0">
   {#if mountedExpired}
     <div
       class="inline-flex items-center gap-2 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 py-1.5 text-xs font-bold text-brand-text-mid w-fit mx-auto"
@@ -252,29 +263,72 @@
     </div>
   {/if}
 
-  <!-- Prompt split: tilted image card + dark prompt card -->
-  <div class="grid gap-4 md:grid-cols-[1fr_1.2fr] items-stretch">
-    <!-- Left: image card (tilted) — wrapped so the joker-drop overlay can
-         position over it without being subject to the dealCard rotation. -->
-    <div class="relative">
+  <!-- Prompt split: dark instructions card first (so the player reads the
+       brief before scrolling past the meme), tilted image card second.
+       `grid-cols-1` + `minmax(0, …fr)` on desktop are load-bearing —
+       without them the implicit grid track sizes to the image's *natural*
+       pixel width and inflates the whole page. -->
+  <div class="grid grid-cols-1 gap-3 md:gap-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] items-stretch">
+    <!-- Left: dark prompt card (tilted) -->
+    <div
+      use:dealCard={{ delay: 80, rotate: 0.8 }}
+      class="prompt-tilt-right relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white p-4 sm:p-6 flex flex-col gap-2.5 sm:gap-3 overflow-hidden"
+      style="box-shadow: 0 6px 0 rgba(0,0,0,0.25);"
+    >
+      <span
+        class="absolute -top-2 -right-3 text-[90px] font-bold opacity-[0.08] pointer-events-none select-none leading-none"
+        aria-hidden="true"
+      >♠</span>
+      <div class="relative flex items-center justify-between gap-2">
+        <span class="text-[10px] font-bold uppercase tracking-[0.25em] opacity-70">
+          {m.game_meme_freestyle_round_prompt({ number: round.round_number })}
+        </span>
+        <span
+          class="inline-flex items-center gap-1.5 rounded-full border-[2px] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em]"
+          style="border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.08);"
+        >
+          <span class="h-1.5 w-1.5 rounded-full" style="background: var(--brand-accent); animation: pulse-dot 1.2s ease-in-out infinite;"></span>
+          {m.game_meme_freestyle_live()}
+        </span>
+      </div>
+      <p
+        class="relative m-0 font-bold leading-tight tracking-tight"
+        style="font-size: clamp(1.125rem, 2.4vw, 2rem);"
+      >
+        {promptText ?? m.game_meme_freestyle_prompt_fallback()}
+      </p>
+      <span class="relative text-[11px] font-bold uppercase tracking-[0.2em] opacity-70 mt-auto">
+        {m.game_meme_freestyle_captions_anonymous()}
+      </span>
+    </div>
+
+    <!-- Right: image card (tilted) — wrapped so the joker-drop overlay can
+         position over it without being subject to the dealCard rotation.
+         min-w-0 on both the grid item and the inner card stops the image
+         from forcing the row wider than its grid track. -->
+    <div class="relative min-w-0">
       <div
-        use:dealCard={{ delay: 80, rotate: -1.2 }}
-        class="relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-white p-3 flex flex-col gap-2"
-        style="box-shadow: 0 6px 0 rgba(0,0,0,0.12); transform: rotate(-1.2deg);"
+        use:dealCard={{ delay: 160, rotate: -1.2 }}
+        class="prompt-tilt-left relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-white p-3 flex flex-col gap-2 min-w-0"
+        style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
       >
         {#if round.item?.media_url}
           <div
-            class="relative w-full rounded-[14px] overflow-hidden border-[2.5px] border-brand-border-heavy bg-brand-surface"
+            class="relative w-full min-w-0 rounded-[14px] overflow-hidden border-[2.5px] border-brand-border-heavy bg-brand-surface"
             style="box-shadow: inset 0 2px 0 rgba(0,0,0,0.04);"
           >
+            <!-- min-w-0 on the img stops its intrinsic natural pixel
+                 width from propagating up as min-content. -->
             <img
               src={mediaSrc(round.item.media_url, room.code)}
               alt={m.game_meme_freestyle_prompt_alt()}
-              class="block w-full h-auto max-h-[60vh] object-cover"
+              class="block w-full h-auto max-h-[26dvh] md:max-h-[60dvh] object-cover min-w-0"
             />
           </div>
         {/if}
-        <div class="flex justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-brand-text-muted px-1">
+        <!-- Round/pack labels hidden on phone (round + game name already
+             live in the sticky RoomHeader). -->
+        <div class="hidden md:flex justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-brand-text-muted px-1">
           <span>{m.game_meme_freestyle_round_number({ number: round.round_number })}</span>
           {#if room.gameType}
             <span class="truncate max-w-[60%]">{localizeGameType(room.gameType).name}</span>
@@ -300,39 +354,6 @@
           </div>
         </div>
       {/if}
-    </div>
-
-    <!-- Right: dark prompt card (tilted other way) -->
-    <div
-      use:dealCard={{ delay: 160, rotate: 0.8 }}
-      class="relative rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white p-6 flex flex-col gap-3 overflow-hidden"
-      style="box-shadow: 0 6px 0 rgba(0,0,0,0.25); transform: rotate(0.8deg);"
-    >
-      <span
-        class="absolute -top-2 -right-3 text-[90px] font-bold opacity-[0.08] pointer-events-none select-none leading-none"
-        aria-hidden="true"
-      >♠</span>
-      <div class="relative flex items-center justify-between gap-2">
-        <span class="text-[10px] font-bold uppercase tracking-[0.25em] opacity-70">
-          {m.game_meme_freestyle_round_prompt({ number: round.round_number })}
-        </span>
-        <span
-          class="inline-flex items-center gap-1.5 rounded-full border-[2px] px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em]"
-          style="border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.08);"
-        >
-          <span class="h-1.5 w-1.5 rounded-full" style="background: var(--brand-accent); animation: pulse-dot 1.2s ease-in-out infinite;"></span>
-          {m.game_meme_freestyle_live()}
-        </span>
-      </div>
-      <p
-        class="relative m-0 font-bold leading-tight tracking-tight"
-        style="font-size: clamp(1.5rem, 2.4vw, 2rem);"
-      >
-        {promptText ?? m.game_meme_freestyle_prompt_fallback()}
-      </p>
-      <span class="relative text-[11px] font-bold uppercase tracking-[0.2em] opacity-70 mt-auto">
-        {m.game_meme_freestyle_captions_anonymous()}
-      </span>
     </div>
   </div>
 
@@ -380,7 +401,7 @@
         bind:value={caption}
         disabled={isExpired}
         maxlength={MAX_CHARS}
-        rows={3}
+        rows={2}
         placeholder={m.game_meme_freestyle_placeholder()}
         onkeydown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey) {
@@ -388,11 +409,26 @@
             submit();
           }
         }}
+        onfocus={(e) => {
+          // iOS Safari opens its keyboard ~300 ms after focus; only then
+          // does the visual viewport shrink. Recenter the textarea once
+          // that's settled so it sits above the keyboard and below the
+          // sticky room header — without this iOS leaves the field's top
+          // edge tucked behind the header bar.
+          const el = e.currentTarget;
+          setTimeout(() => {
+            el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          }, 320);
+        }}
         class="w-full rounded-[14px] border-[2.5px] border-brand-border-heavy bg-brand-surface px-4 py-3 text-lg font-bold text-brand-text resize-none focus:outline-none focus:border-brand-accent focus:bg-brand-white disabled:opacity-50 transition-colors"
-        style="box-shadow: inset 0 2px 0 rgba(0,0,0,0.04); line-height: 1.3;"
+        style="box-shadow: inset 0 2px 0 rgba(0,0,0,0.04); line-height: 1.3; scroll-margin-top: 7rem; scroll-margin-bottom: 6rem;"
       ></textarea>
 
-      <div class="flex items-center justify-between gap-2 flex-wrap">
+      <!-- Desktop action row — char count + joker + submit live inside the
+           composer card. On mobile the same controls render as a sticky
+           bottom pill outside this card so the textarea isn't pushed off
+           screen by the keyboard. -->
+      <div class="hidden md:flex items-center justify-between gap-2 flex-wrap">
         <span class="font-mono text-xs font-bold text-brand-text-muted tabular-nums">
           {m.game_meme_freestyle_char_count({ count: caption.length, max: MAX_CHARS })}
         </span>
@@ -431,6 +467,59 @@
           </button>
         </div>
       </div>
+
+      <!-- Mobile char-count — kept inline below the textarea so the user
+           sees length feedback while typing (the buttons live in a sticky
+           pill below). -->
+      <span class="md:hidden font-mono text-xs font-bold text-brand-text-muted tabular-nums self-end">
+        {m.game_meme_freestyle_char_count({ count: caption.length, max: MAX_CHARS })}
+      </span>
     {/if}
   </div>
+
+  <!-- Mobile sticky action pill — joker + submit pinned to the bottom edge
+       so the textarea stays in view above the iOS keyboard. The joker is
+       icon-only on phone (♠ + remaining count) so the submit button never
+       loses room to a multi-word joker label. -->
+  {#if !submitted && !room.ownSkippedSubmit}
+    <div
+      class="md:hidden fixed inset-x-0 bottom-0 z-40 px-3 pt-0 pointer-events-none"
+      style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom));"
+    >
+      <div
+        class="pointer-events-auto rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-2 py-2 flex items-center gap-2"
+        style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
+      >
+        {#if jokerEnabled && jokerRemaining > 0}
+          <button
+            use:pressPhysics={'ghost'}
+            type="button"
+            onclick={onJokerClick}
+            disabled={submitted || isExpired}
+            class="joker-btn shrink-0"
+            class:is-armed={jokerArmed}
+            aria-pressed={jokerArmed}
+            aria-label={jokerArmed
+              ? m.game_meme_freestyle_joker_armed()
+              : m.game_meme_freestyle_joker_use({ n: jokerRemaining })}
+          >
+            <span class="joker-btn-pip" aria-hidden="true">♠</span>
+            <span class="font-mono tabular-nums text-xs">
+              {jokerArmed ? '?' : jokerRemaining}
+            </span>
+          </button>
+        {/if}
+        <button
+          use:pressPhysics={'dark'}
+          type="button"
+          onclick={submit}
+          disabled={submitted || isExpired || caption.trim().length === 0}
+          class="flex-1 h-11 px-4 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold disabled:opacity-50 cursor-pointer inline-flex items-center justify-center gap-2 whitespace-nowrap"
+        >
+          <Send size={16} strokeWidth={2.5} />
+          {m.game_meme_freestyle_submit_caption()}
+        </button>
+      </div>
+    </div>
+  {/if}
 </div>

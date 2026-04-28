@@ -17,6 +17,11 @@
 
   let editingUsername = $state(false);
   let editingEmail = $state(false);
+  // Mobile-only tab navigation: below md the four cards stack to ~1000 px.
+  // Switching one card at a time keeps the page within a single viewport
+  // while preserving the desktop "everything visible" layout via md+ flag.
+  type ProfileTab = 'identity' | 'appearance' | 'data' | 'session';
+  let activeTab = $state<ProfileTab>('identity');
   // Imperative focus for the inline edit inputs — replaces the raw
   // `autofocus` attribute so screen readers announce the focus change
   // when a user switches into an edit mode (a11y_autofocus).
@@ -92,14 +97,39 @@
   <title>{m.profile_page_title()}</title>
 </svelte:head>
 
-<div class="w-full max-w-lg mx-auto p-6 flex flex-col gap-6" use:reveal>
+<div class="w-full max-w-lg mx-auto p-4 sm:p-6 flex flex-col gap-4 sm:gap-6" use:reveal>
   <h1 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted m-0">
     {m.profile_title()}
   </h1>
 
+  <!-- Mobile tab nav: shown below md only. Desktop keeps the stacked cards. -->
+  <nav
+    class="md:hidden flex gap-2 border-b-[2.5px] border-brand-border-heavy overflow-x-auto -mx-4 px-4"
+    style="scrollbar-width: thin;"
+    aria-label={m.profile_title()}
+  >
+    {#each [
+      { id: 'identity' as const, label: m.profile_identity() },
+      { id: 'appearance' as const, label: m.profile_appearance() },
+      { id: 'data' as const, label: m.profile_data_privacy() },
+      { id: 'session' as const, label: m.profile_session() },
+    ] as t}
+      <button
+        type="button"
+        class="px-3 py-2.5 -mb-[2.5px] border-b-[2.5px] text-xs font-bold uppercase tracking-[0.15em] cursor-pointer transition-colors whitespace-nowrap"
+        class:border-brand-text={activeTab === t.id}
+        class:border-transparent={activeTab !== t.id}
+        class:text-brand-text-muted={activeTab !== t.id}
+        onclick={() => (activeTab = t.id)}
+      >
+        {t.label}
+      </button>
+    {/each}
+  </nav>
+
   <!-- ─── Identity card ─────────────────────────────────── -->
   <section
-    class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-5 flex flex-col gap-5"
+    class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-5 flex flex-col gap-5 {activeTab === 'identity' ? '' : 'hidden md:flex'}"
     style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
   >
     <h2 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted m-0">
@@ -114,7 +144,7 @@
           {#if form?.usernameError}
             <p class="text-sm font-bold text-red-600">{form.usernameError}</p>
           {/if}
-          <div class="flex gap-2">
+          <div class="flex flex-col sm:flex-row gap-2">
             <input
               bind:this={usernameInput}
               name="username"
@@ -124,25 +154,27 @@
               maxlength={30}
               class="flex-1 h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
             />
-            <button
-              use:pressPhysics={'dark'}
-              use:hoverEffect={'swap'}
-              type="submit"
-              class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold cursor-pointer inline-flex items-center gap-2"
-            >
-              <SaveIcon size={16} strokeWidth={2.5} />
-              {m.profile_save()}
-            </button>
-            <button
-              use:pressPhysics={'ghost'}
-              use:hoverEffect={'swap'}
-              type="button"
-              onclick={() => editingUsername = false}
-              class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-transparent text-sm font-bold cursor-pointer inline-flex items-center gap-2"
-            >
-              <XCircle size={16} strokeWidth={2.5} />
-              {m.profile_cancel()}
-            </button>
+            <div class="flex gap-2">
+              <button
+                use:pressPhysics={'dark'}
+                use:hoverEffect={'swap'}
+                type="submit"
+                class="flex-1 sm:flex-none h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold cursor-pointer inline-flex items-center justify-center gap-2"
+              >
+                <SaveIcon size={16} strokeWidth={2.5} />
+                {m.profile_save()}
+              </button>
+              <button
+                use:pressPhysics={'ghost'}
+                use:hoverEffect={'swap'}
+                type="button"
+                onclick={() => editingUsername = false}
+                class="flex-1 sm:flex-none h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-transparent text-sm font-bold cursor-pointer inline-flex items-center justify-center gap-2"
+              >
+                <XCircle size={16} strokeWidth={2.5} />
+                {m.profile_cancel()}
+              </button>
+            </div>
           </div>
         </form>
       {:else}
@@ -168,7 +200,7 @@
           {#if form?.emailError}
             <p class="text-sm font-bold text-red-600">{form.emailError}</p>
           {/if}
-          <div class="flex gap-2">
+          <div class="flex flex-col sm:flex-row gap-2">
             <input
               bind:this={emailInput}
               name="email"
@@ -176,25 +208,27 @@
               class="flex-1 h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
               placeholder={m.profile_email_new_placeholder()}
             />
-            <button
-              use:pressPhysics={'dark'}
-              use:hoverEffect={'swap'}
-              type="submit"
-              class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold cursor-pointer inline-flex items-center gap-2"
-            >
-              <Mail size={16} strokeWidth={2.5} />
-              {m.profile_email_verify()}
-            </button>
-            <button
-              use:pressPhysics={'ghost'}
-              use:hoverEffect={'swap'}
-              type="button"
-              onclick={() => editingEmail = false}
-              class="h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-transparent text-sm font-bold cursor-pointer inline-flex items-center gap-2"
-            >
-              <XCircle size={16} strokeWidth={2.5} />
-              {m.profile_cancel()}
-            </button>
+            <div class="flex gap-2">
+              <button
+                use:pressPhysics={'dark'}
+                use:hoverEffect={'swap'}
+                type="submit"
+                class="flex-1 sm:flex-none h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-text text-brand-white text-sm font-bold cursor-pointer inline-flex items-center justify-center gap-2"
+              >
+                <Mail size={16} strokeWidth={2.5} />
+                {m.profile_email_verify()}
+              </button>
+              <button
+                use:pressPhysics={'ghost'}
+                use:hoverEffect={'swap'}
+                type="button"
+                onclick={() => editingEmail = false}
+                class="flex-1 sm:flex-none h-11 px-5 rounded-full border-[2.5px] border-brand-border-heavy bg-transparent text-sm font-bold cursor-pointer inline-flex items-center justify-center gap-2"
+              >
+                <XCircle size={16} strokeWidth={2.5} />
+                {m.profile_cancel()}
+              </button>
+            </div>
           </div>
           <p class="text-xs font-semibold text-brand-text-muted">{m.profile_email_change_pending_hint()}</p>
         </form>
@@ -216,7 +250,7 @@
 
   <!-- ─── Appearance card ───────────────────────────────── -->
   <section
-    class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-5 flex flex-col gap-5"
+    class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-5 flex flex-col gap-5 {activeTab === 'appearance' ? '' : 'hidden md:flex'}"
     style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
   >
     <h2 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted m-0">
@@ -236,7 +270,7 @@
             class="peer sr-only"
           />
           <span
-            class="flex items-center justify-center h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-sm font-bold cursor-pointer peer-checked:bg-brand-text peer-checked:text-brand-white transition-colors"
+            class="flex items-center justify-center h-11 px-3 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-xs sm:text-sm font-bold cursor-pointer peer-checked:bg-brand-text peer-checked:text-brand-white transition-colors whitespace-nowrap"
           >
             {m.profile_language_en()}
           </span>
@@ -251,7 +285,7 @@
             class="peer sr-only"
           />
           <span
-            class="flex items-center justify-center h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-sm font-bold cursor-pointer peer-checked:bg-brand-text peer-checked:text-brand-white transition-colors"
+            class="flex items-center justify-center h-11 px-3 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-xs sm:text-sm font-bold cursor-pointer peer-checked:bg-brand-text peer-checked:text-brand-white transition-colors whitespace-nowrap"
           >
             {m.profile_language_fr()}
           </span>
@@ -283,7 +317,7 @@
 
   <!-- ─── Data & Privacy card ───────────────────────────── -->
   <section
-    class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-5 flex flex-col gap-5"
+    class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-5 flex flex-col gap-5 {activeTab === 'data' ? '' : 'hidden md:flex'}"
     style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
   >
     <h2 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted m-0">
@@ -318,7 +352,7 @@
 
   <!-- ─── Session card ──────────────────────────────────── -->
   <section
-    class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-5 flex flex-col gap-3"
+    class="rounded-[22px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-5 flex flex-col gap-3 {activeTab === 'session' ? '' : 'hidden md:flex'}"
     style="box-shadow: 0 5px 0 rgba(0,0,0,0.08);"
   >
     <h2 class="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-brand-text-muted m-0">

@@ -11,6 +11,47 @@
    3. Keyframes for gradient, pulse, reveal animations
    ============================================================ */
 
+/* ============================================================
+   Responsive contract
+   ============================================================
+   Breakpoints (Tailwind defaults):
+     sm 640  → small phone landscape / large phone portrait
+     md 768  → tablet portrait / small laptop
+     lg 1024 → tablet landscape / desktop
+     xl 1280 → wide desktop
+   Mobile-first: target 375 px first, then add sm/md/lg overrides.
+   Always prefer dvh over vh for full-height layouts (iOS Safari
+   dynamic toolbar otherwise causes rubber-banding on 100vh).
+   ============================================================ */
+
+/* === iOS Safari auto-zoom guard ===
+   Mobile Safari zooms any focused field whose computed font-size is
+   below 16px and the resulting scale persists across same-tab
+   navigations (the user lands on /join/[code] still zoomed in from
+   the previous page). Floor every text-input control at 16px on
+   touch devices — desktop styles remain free to use whatever sizing
+   they prefer. */
+@media (hover: none) and (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not([type='file']),
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* === Sticky-header scroll buffer ===
+   The room header is `sticky top-4` and ~95px tall when collapsed on
+   phone. iOS Safari's auto-scroll-into-view for focused inputs ignores
+   sticky elements, so without this padding the keyboard pushes the
+   textarea up such that its top edge ends up *behind* the header.
+   Reserving the buffer on the scroll root applies to both browser
+   auto-scroll and any explicit `scrollIntoView()` call. */
+html {
+  scroll-padding-top: 7rem;
+  scroll-padding-bottom: 6rem;
+}
+
+
 /* === Brand CSS Custom Properties (light defaults) === */
 :root {
   --brand-text: #1A1A1A;
@@ -43,7 +84,7 @@
 /* We render the gradient on <body> instead of a fixed child div so it sits
    below everything in the canvas painting order — no z-index ambiguity. */
 html, body {
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 body {
   background:
@@ -406,7 +447,8 @@ body {
 
 /* Deck-art header band — decorative gradient slab above game tile titles.
    Gradients lean on time-aware --brand-grad-* so the palette shifts with
-   the time-of-day theme. */
+   the time-of-day theme. Compact variant (.deck-art-compact) trims the
+   band to 56 px on phones so two tiles fit per row without towering. */
 .deck-art {
   height: 96px;
   border-radius: 14px;
@@ -421,6 +463,9 @@ body {
   color: var(--brand-text-mid);
   background: linear-gradient(140deg, var(--brand-grad-1), var(--brand-accent));
   box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.25);
+}
+@media (max-width: 639px) {
+  .deck-art { height: 56px; }
 }
 .deck-art.a1 { background: linear-gradient(140deg, var(--brand-grad-1), var(--brand-accent)); }
 .deck-art.a2 { background: linear-gradient(140deg, var(--brand-grad-3), var(--brand-accent-3)); }

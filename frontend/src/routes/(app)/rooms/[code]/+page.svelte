@@ -98,7 +98,7 @@
        `backdrop-filter` on the overlay (Firefox drops the latter when
        any ancestor has a `transform`, which `.stage-wrap` always does). -->
   <div
-    class="max-w-[1280px] mx-auto px-4 md:px-6 pt-4 pb-10 flex flex-col gap-5"
+    class="max-w-[1280px] mx-auto px-4 md:px-6 pt-4 pb-24 lg:pb-10 flex flex-col gap-5 overflow-x-clip"
     class:content-blur={room.countdown !== null}
   >
     <RoomHeader {totalRounds} />
