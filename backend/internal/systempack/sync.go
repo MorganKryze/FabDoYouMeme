@@ -330,7 +330,7 @@ func createNewItem(
 		_ = q.SoftDeleteItem(ctx, item.ID)
 		return fmt.Errorf("upload: %w", err)
 	}
-	payload, _ := json.Marshal(map[string]string{"sha256": hashHex})
+	payload, _ := json.Marshal(buildImagePayload(hashHex, data))
 	ver, err := q.CreateItemVersion(ctx, db.CreateItemVersionParams{
 		ItemID:   item.ID,
 		MediaKey: strPtr(key),
@@ -366,7 +366,7 @@ func applyNewVersion(
 	if err := store.Upload(ctx, key, bytes.NewReader(data), contentType, int64(len(data))); err != nil {
 		return fmt.Errorf("upload: %w", err)
 	}
-	payload, _ := json.Marshal(map[string]string{"sha256": hashHex})
+	payload, _ := json.Marshal(buildImagePayload(hashHex, data))
 	ver, err := q.CreateItemVersion(ctx, db.CreateItemVersionParams{
 		ItemID:   itemID,
 		MediaKey: strPtr(key),
@@ -387,6 +387,19 @@ func applyNewVersion(
 func sha256Hex(b []byte) string {
 	s := sha256.Sum256(b)
 	return hex.EncodeToString(s[:])
+}
+
+// buildImagePayload returns the JSON payload for an image item version. The
+// orientation field is dropped (rather than left blank) when detection fails
+// — the frontend treats a missing field as "use the default bucket", which
+// keeps the sync resilient to a corrupt or unsupported file slipping past
+// MIME validation.
+func buildImagePayload(hashHex string, data []byte) map[string]string {
+	out := map[string]string{"sha256": hashHex}
+	if orient, err := storage.DetectOrientation(data); err == nil {
+		out["orientation"] = orient
+	}
+	return out
 }
 
 func strPtr(s string) *string {

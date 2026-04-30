@@ -534,6 +534,20 @@ body {
 }
 
 /* ==========================================================================
+   Image orientation buckets
+   --------------------------------------------------------------------------
+   Set on the wrapper around an <img> for a game item; the img inside uses
+   `object-cover` to fill. Uploads are snapped server-side to one of these
+   five aspect ratios (storage.DetectOrientation), so the bucket matches the
+   image and cropping stays minimal. Picked via lib/api/orientation.ts.
+   ========================================================================== */
+.is-landscape-4-3  { aspect-ratio: 4 / 3; }
+.is-landscape-16-9 { aspect-ratio: 16 / 9; }
+.is-square         { aspect-ratio: 1 / 1; }
+.is-portrait-3-4   { aspect-ratio: 3 / 4; }
+.is-portrait-9-16  { aspect-ratio: 9 / 16; }
+
+/* ==========================================================================
    Vote-card state chips (picked / voted)
    --------------------------------------------------------------------------
    `!important` is defensive — inline styles were occasionally failing to

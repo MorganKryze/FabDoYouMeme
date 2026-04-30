@@ -131,6 +131,14 @@ func main() {
 		logger.Error("startup: system prompt pack sync (fr)", "error", err)
 	}
 
+	// Backfill the orientation key on any image-version row uploaded before
+	// detection landed. Self-healing on every boot — once every row carries
+	// the field, the query short-circuits with zero rows and the pass is a
+	// no-op.
+	if err := systempack.BackfillOrientation(context.Background(), queries, store, logger); err != nil {
+		logger.Error("startup: orientation backfill", "error", err)
+	}
+
 	// ── Game registry ─────────────────────────────────────────────────────────
 	// Handlers carry their own manifest (see each handler's manifest.yaml).
 	// SyncGameTypes reconciles the game_types DB rows from those manifests

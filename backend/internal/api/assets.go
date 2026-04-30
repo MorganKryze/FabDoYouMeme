@@ -236,7 +236,15 @@ func (h *AssetHandler) UploadDirect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"media_key": key})
+	// Snap the file's aspect ratio to one of five fixed buckets so the
+	// frontend can pick a matching aspect-ratio container at render time.
+	// Detection failure is non-fatal — the upload succeeded and the version
+	// can still be created without it (frontend falls back to the default).
+	resp := map[string]string{"media_key": key}
+	if orient, err := storage.DetectOrientation(buf.Bytes()); err == nil {
+		resp["orientation"] = orient
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // GetMedia handles GET /api/assets/media?key=...[&guest_token=...]

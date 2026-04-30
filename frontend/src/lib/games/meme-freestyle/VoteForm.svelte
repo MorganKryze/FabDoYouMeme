@@ -155,13 +155,15 @@
         {/if}
 
         {#if round?.item?.media_url}
+          <!-- Vote thumbnails: object-contain preserves portrait images
+               with light side letterboxing rather than centre-cropping. -->
           <div
             class="w-full rounded-[10px] overflow-hidden border-[2px] border-brand-border bg-brand-white flex items-center justify-center"
           >
             <img
               src={mediaSrc(round.item.media_url, room.code)}
               alt=""
-              class="block w-full max-h-28 object-cover opacity-90"
+              class="block w-full max-h-28 object-contain opacity-90"
             />
           </div>
         {/if}

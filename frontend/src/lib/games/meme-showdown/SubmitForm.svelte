@@ -8,6 +8,7 @@
   import { dealCard } from '$lib/actions/dealCard';
   import { Send, ChevronLeft, ChevronRight } from '$lib/icons';
   import { mediaSrc } from '$lib/api/media';
+  import { orientationClass } from '$lib/api/orientation';
   import type { Round } from '$lib/api/types';
   import { handStore } from './handStore.svelte';
   import { fly } from 'svelte/transition';
@@ -171,18 +172,19 @@
         style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
       >
         {#if round.item?.media_url}
+          <!-- Wrapper carries the orientation bucket (one of five fixed
+               aspect ratios, set server-side at upload). max-h caps the
+               wrapper so a portrait_9_16 doesn't take the full viewport on
+               phone; in that clamped case the aspect-ratio is overridden
+               and object-contain prevents cropping. -->
           <div
-            class="relative w-full min-w-0 rounded-[14px] overflow-hidden border-[2.5px] border-brand-border-heavy bg-brand-surface"
+            class={`relative w-full min-w-0 rounded-[14px] overflow-hidden border-[2.5px] border-brand-border-heavy bg-brand-surface max-h-[26dvh] md:max-h-[60dvh] ${orientationClass(round.item.payload)}`}
             style="box-shadow: inset 0 2px 0 rgba(0,0,0,0.04);"
           >
-            <!-- min-w-0 on the img stops its intrinsic natural pixel
-                 width from propagating up as the min-content of every
-                 ancestor (the actual root cause of "page is 2× the
-                 viewport" — w-full only caps display, not min-content). -->
             <img
               src={mediaSrc(round.item.media_url, room.code)}
               alt={m.game_round_meme_alt()}
-              class="block w-full h-auto max-h-[26dvh] md:max-h-[60dvh] object-cover min-w-0"
+              class="block w-full h-full object-contain min-w-0"
             />
           </div>
         {/if}

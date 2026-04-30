@@ -139,13 +139,17 @@
         {/if}
 
         {#if round?.item?.media_url}
+          <!-- Vote thumbnails are tiny (max-h-28 ≈ 112px) so the orientation
+               bucket isn't worth a wrapper aspect-ratio here — max-h would
+               override it anyway. object-contain preserves the full image
+               regardless of aspect, with light letterboxing on portraits. -->
           <div
             class="w-full rounded-[10px] overflow-hidden border-[2px] border-brand-border bg-brand-white flex items-center justify-center"
           >
             <img
               src={mediaSrc(round.item.media_url, room.code)}
               alt=""
-              class="block w-full max-h-28 object-cover opacity-90"
+              class="block w-full max-h-28 object-contain opacity-90"
             />
           </div>
         {/if}

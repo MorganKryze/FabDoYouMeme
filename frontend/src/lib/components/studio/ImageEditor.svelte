@@ -10,23 +10,61 @@
     readOnly?: boolean;
   } = $props();
 
-  type Orientation = 'landscape' | 'portrait' | 'square';
+  // Bucket names match the five values produced by the backend's
+  // storage.DetectOrientation so the user-picked crop and the auto-detected
+  // orientation share the same vocabulary end-to-end.
+  type Orientation =
+    | 'landscape_4_3'
+    | 'landscape_16_9'
+    | 'square'
+    | 'portrait_3_4'
+    | 'portrait_9_16';
   const DIMENSIONS: Record<Orientation, { w: number; h: number }> = {
-    landscape: { w: 1200, h: 900 },
-    portrait: { w: 900, h: 1200 },
-    square: { w: 1200, h: 1200 },
+    landscape_4_3:  { w: 1200, h: 900 },
+    landscape_16_9: { w: 1280, h: 720 },
+    square:         { w: 1200, h: 1200 },
+    portrait_3_4:   { w: 900, h: 1200 },
+    portrait_9_16:  { w: 720, h: 1280 },
   };
   const FRAME_WIDTH_PX: Record<Orientation, number> = {
-    landscape: 600,
-    portrait: 450,
-    square: 520,
+    landscape_4_3:  600,
+    landscape_16_9: 640,
+    square:         520,
+    portrait_3_4:   450,
+    portrait_9_16:  405,
   };
 
   let canvas: HTMLCanvasElement;
   let ctx: CanvasRenderingContext2D | null = null;
   let img: HTMLImageElement | null = null;
 
-  let orientation = $state<Orientation>('landscape');
+  let orientation = $state<Orientation>('landscape_4_3');
+
+  // Same nearest-neighbour rule as backend storage.DetectOrientation, so the
+  // editor pre-selects the same bucket the server would have picked from the
+  // raw upload. The user can still override by clicking another pill.
+  const ORIENTATION_TARGETS: { value: Orientation; ratio: number }[] = [
+    { value: 'landscape_16_9', ratio: 16 / 9 },
+    { value: 'landscape_4_3', ratio: 4 / 3 },
+    { value: 'square', ratio: 1 },
+    { value: 'portrait_3_4', ratio: 3 / 4 },
+    { value: 'portrait_9_16', ratio: 9 / 16 },
+  ];
+
+  function bucketForRatio(w: number, h: number): Orientation {
+    if (w <= 0 || h <= 0) return 'landscape_4_3';
+    const r = w / h;
+    let best = ORIENTATION_TARGETS[0];
+    let bestDist = Math.abs(r - best.ratio);
+    for (const t of ORIENTATION_TARGETS.slice(1)) {
+      const d = Math.abs(r - t.ratio);
+      if (d < bestDist) {
+        best = t;
+        bestDist = d;
+      }
+    }
+    return best.value;
+  }
   let x = $state(0);
   let y = $state(0);
   let fitScale = $state(1);
@@ -55,6 +93,10 @@
     el.crossOrigin = 'anonymous';
     el.onload = () => {
       img = el;
+      // Pre-select the bucket whose aspect ratio is closest to the source.
+      // Mirrors backend storage.DetectOrientation so what the user sees
+      // selected matches what the backend would have picked unattended.
+      orientation = bucketForRatio(el.naturalWidth, el.naturalHeight);
       fitToFrame();
       // Force a paint even if fitToFrame left every reactive value at its
       // previous number (happens when a new version of the same image is
@@ -149,10 +191,16 @@
     );
   }
 
-  const orientationOptions = $derived<{ value: Orientation; label: string }[]>([
-    { value: 'landscape', label: m.studio_image_orientation_landscape() },
-    { value: 'square', label: m.studio_image_orientation_square() },
-    { value: 'portrait', label: m.studio_image_orientation_portrait() },
+  // Buttons sit in a tight pill row; long localised labels wrap to two lines
+  // and overflow the column on narrow studio panels. The compact ratio
+  // (`16:9`, `4:3`, …) carries the orientation visually, with the full
+  // localised name behind a tooltip for screen readers and pointer hover.
+  const orientationOptions = $derived<{ value: Orientation; label: string; ratio: string }[]>([
+    { value: 'landscape_16_9', label: m.studio_image_orientation_landscape_16_9(), ratio: '16:9' },
+    { value: 'landscape_4_3', label: m.studio_image_orientation_landscape_4_3(), ratio: '4:3' },
+    { value: 'square', label: m.studio_image_orientation_square(), ratio: '1:1' },
+    { value: 'portrait_3_4', label: m.studio_image_orientation_portrait_3_4(), ratio: '3:4' },
+    { value: 'portrait_9_16', label: m.studio_image_orientation_portrait_9_16(), ratio: '9:16' },
   ]);
 </script>
 
@@ -164,9 +212,11 @@
         <button
           type="button"
           onclick={() => setOrientation(opt.value)}
-          class="px-3 py-1.5 text-xs font-semibold rounded-md transition-colors {orientation === opt.value ? 'bg-primary text-primary-foreground shadow' : 'text-brand-text-muted hover:text-foreground hover:bg-muted'}"
+          title={opt.label}
+          aria-label={opt.label}
+          class="px-2 py-1.5 text-xs font-semibold rounded-md transition-colors whitespace-nowrap tabular-nums {orientation === opt.value ? 'bg-primary text-primary-foreground shadow' : 'text-brand-text-muted hover:text-foreground hover:bg-muted'}"
         >
-          {opt.label}
+          {opt.ratio}
         </button>
       {/each}
     </div>

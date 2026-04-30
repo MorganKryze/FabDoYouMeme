@@ -90,7 +90,6 @@
       deadline > 0
   );
   const isWarn = $derived(showCountdown && !room.roundPaused && secondsLeft <= 10);
-  const isLarge = $derived(room.phase === 'submitting');
 
   const roundNumber = $derived(room.currentRound?.round_number ?? null);
   const showRoundPills = $derived(roundNumber !== null && totalRounds !== null && totalRounds > 0);
@@ -103,12 +102,6 @@
         : room.phase === 'results'
           ? m.room_phase_results()
           : ''
-  );
-  // During results with a live deadline, prefix the countdown so players see
-  // "Next round 00:08" instead of a bare 00:08 that could be mistaken for the
-  // current phase's remaining time.
-  const countdownPrefix = $derived(
-    room.phase === 'results' && deadline > 0 ? m.room_countdown_next_round() : ''
   );
 </script>
 
@@ -243,7 +236,6 @@
       {/if}
       <div
         class="timer inline-flex items-center gap-3 rounded-full border-[2.5px] border-brand-border-heavy px-5 py-2.5 transition-colors"
-        class:large={isLarge && showCountdown}
         class:warn={isWarn}
         style="background: {isWarn ? 'var(--brand-accent)' : 'var(--brand-text)'}; color: {isWarn ? 'var(--brand-text)' : 'var(--brand-white)'}; box-shadow: 0 5px 0 rgba(0,0,0,{isWarn ? '0.22' : '0.35'});"
         role="timer"
@@ -256,10 +248,7 @@
         {#if room.roundPaused}
           <span class="text-lg font-bold uppercase tracking-[0.2em] tabular-nums">{m.room_timer_paused()}</span>
         {:else if showCountdown}
-          {#if countdownPrefix}
-            <span class="text-[11px] font-bold uppercase tracking-[0.2em] opacity-80">{countdownPrefix}</span>
-          {/if}
-          <span class="font-bold tabular-nums leading-none {isLarge ? 'text-2xl md:text-4xl' : 'text-2xl'}">
+          <span class="text-2xl font-bold tabular-nums leading-none">
             {mm}:{ss}
           </span>
         {:else}

@@ -94,7 +94,7 @@ export async function uploadFileToBackend(
   versionNumber: number,
   file: Blob,
   filename: string
-): Promise<{ media_key: string }> {
+): Promise<{ media_key: string; orientation?: string }> {
   const form = new FormData();
   form.append('pack_id', packId);
   form.append('item_id', itemId);
@@ -173,7 +173,7 @@ export async function uploadImageItem(
     const item = await createItem(packId, { name });
     itemId = item.id;
 
-    const { media_key } = await uploadFileToBackend(
+    const { media_key, orientation } = await uploadFileToBackend(
       packId,
       item.id,
       1,
@@ -181,14 +181,23 @@ export async function uploadImageItem(
       file.name
     );
 
-    const version = await createItemVersion(packId, item.id, { media_key });
+    // Persist orientation in the version payload so every consumer (round
+    // start, replay, studio) reads the bucket from one source instead of
+    // sniffing the file again. A missing orientation (detection failed
+    // server-side) is left out of the payload entirely; renderers fall back
+    // to a default bucket.
+    const payload = orientation ? { orientation } : undefined;
+    const version = await createItemVersion(packId, item.id, { media_key, payload });
     const promoted = await promoteVersion(packId, item.id, version.id);
     // The backend /items list endpoint injects `thumbnail_url` server-side,
     // but the single-item endpoints (createItem / promoteVersion) don't.
     // Construct it client-side so freshly uploaded items render previews
     // without needing a list refetch.
     const thumbnail_url = `/api/assets/media?key=${encodeURIComponent(media_key)}`;
-    return { ok: true, item: { ...promoted, media_key, thumbnail_url } };
+    return {
+      ok: true,
+      item: { ...promoted, media_key, thumbnail_url, payload }
+    };
   } catch (err) {
     if (itemId) {
       try {

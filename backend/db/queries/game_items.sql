@@ -71,6 +71,27 @@ WHERE gi.id = ANY(sqlc.arg(ids)::uuid[])
   AND gi.deleted_at IS NULL
   AND giv.deleted_at IS NULL;
 
+-- name: ListVersionsMissingOrientation :many
+-- Returns every non-deleted version that has a media_key but no `orientation`
+-- key in its payload. Used by the startup backfill to enrich pre-existing
+-- rows uploaded before orientation detection landed. The JSONB `?` operator
+-- is used here because payload->>'orientation' returns NULL both for
+-- "key missing" and "key set to JSON null"; we want to skip only the former.
+SELECT id, media_key, payload
+FROM game_item_versions
+WHERE media_key IS NOT NULL
+  AND media_key <> ''
+  AND deleted_at IS NULL
+  AND NOT (payload ? 'orientation');
+
+-- name: SetVersionOrientation :exec
+-- Merges the orientation key into an existing version payload without
+-- creating a new version row. JSONB `||` right-merges so any prior keys
+-- (e.g. sha256) are preserved.
+UPDATE game_item_versions
+SET payload = payload || jsonb_build_object('orientation', sqlc.arg(orientation)::text)
+WHERE id = $1;
+
 -- name: GetRandomUnplayedItems :many
 -- Picks one random unplayed item for the next round. `gi.deleted_at IS NULL`
 -- and `giv.deleted_at IS NULL` keep tombstoned items out of the deck so

@@ -8,6 +8,7 @@
   import { dealCard } from '$lib/actions/dealCard';
   import { Send } from '$lib/icons';
   import { mediaSrc } from '$lib/api/media';
+  import { orientationClass } from '$lib/api/orientation';
   import type { Round } from '$lib/api/types';
   import * as m from '$lib/paraglide/messages';
   import { localizeGameType } from '$lib/i18n/gameType';
@@ -313,16 +314,15 @@
         style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
       >
         {#if round.item?.media_url}
+          <!-- See meme-showdown/SubmitForm for the bucket+max-h reasoning. -->
           <div
-            class="relative w-full min-w-0 rounded-[14px] overflow-hidden border-[2.5px] border-brand-border-heavy bg-brand-surface"
+            class={`relative w-full min-w-0 rounded-[14px] overflow-hidden border-[2.5px] border-brand-border-heavy bg-brand-surface max-h-[26dvh] md:max-h-[60dvh] ${orientationClass(round.item.payload)}`}
             style="box-shadow: inset 0 2px 0 rgba(0,0,0,0.04);"
           >
-            <!-- min-w-0 on the img stops its intrinsic natural pixel
-                 width from propagating up as min-content. -->
             <img
               src={mediaSrc(round.item.media_url, room.code)}
               alt={m.game_meme_freestyle_prompt_alt()}
-              class="block w-full h-auto max-h-[26dvh] md:max-h-[60dvh] object-cover min-w-0"
+              class="block w-full h-full object-contain min-w-0"
             />
           </div>
         {/if}

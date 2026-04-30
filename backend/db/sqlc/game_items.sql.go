@@ -387,6 +387,46 @@ func (q *Queries) ListVersionsForItem(ctx context.Context, itemID uuid.UUID) ([]
 	return items, nil
 }
 
+const listVersionsMissingOrientation = `-- name: ListVersionsMissingOrientation :many
+SELECT id, media_key, payload
+FROM game_item_versions
+WHERE media_key IS NOT NULL
+  AND media_key <> ''
+  AND deleted_at IS NULL
+  AND NOT (payload ? 'orientation')
+`
+
+type ListVersionsMissingOrientationRow struct {
+	ID       uuid.UUID       `json:"id"`
+	MediaKey *string         `json:"media_key"`
+	Payload  json.RawMessage `json:"payload"`
+}
+
+// Returns every non-deleted version that has a media_key but no `orientation`
+// key in its payload. Used by the startup backfill to enrich pre-existing
+// rows uploaded before orientation detection landed. The JSONB `?` operator
+// is used here because payload->>'orientation' returns NULL both for
+// "key missing" and "key set to JSON null"; we want to skip only the former.
+func (q *Queries) ListVersionsMissingOrientation(ctx context.Context) ([]ListVersionsMissingOrientationRow, error) {
+	rows, err := q.db.Query(ctx, listVersionsMissingOrientation)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListVersionsMissingOrientationRow
+	for rows.Next() {
+		var i ListVersionsMissingOrientationRow
+		if err := rows.Scan(&i.ID, &i.MediaKey, &i.Payload); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const reorderItems = `-- name: ReorderItems :exec
 UPDATE game_items SET position = $2 WHERE id = $1 AND pack_id = $3
 `
@@ -427,6 +467,25 @@ func (q *Queries) SetCurrentVersion(ctx context.Context, arg SetCurrentVersionPa
 		&i.LastEditedAt,
 	)
 	return i, err
+}
+
+const setVersionOrientation = `-- name: SetVersionOrientation :exec
+UPDATE game_item_versions
+SET payload = payload || jsonb_build_object('orientation', $2::text)
+WHERE id = $1
+`
+
+type SetVersionOrientationParams struct {
+	ID          uuid.UUID `json:"id"`
+	Orientation string    `json:"orientation"`
+}
+
+// Merges the orientation key into an existing version payload without
+// creating a new version row. JSONB `||` right-merges so any prior keys
+// (e.g. sha256) are preserved.
+func (q *Queries) SetVersionOrientation(ctx context.Context, arg SetVersionOrientationParams) error {
+	_, err := q.db.Exec(ctx, setVersionOrientation, arg.ID, arg.Orientation)
+	return err
 }
 
 const softDeleteItem = `-- name: SoftDeleteItem :exec

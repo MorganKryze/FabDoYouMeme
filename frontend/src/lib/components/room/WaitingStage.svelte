@@ -578,7 +578,7 @@
        ═══════════════════════════════════════════════════════════════ -->
   {#if isHost}
     <section
-      class="rounded-3xl border-[2.5px] border-brand-border-heavy bg-brand-surface px-5 py-4 sm:py-5 flex flex-col gap-4"
+      class="relative rounded-3xl border-[2.5px] border-brand-border-heavy bg-brand-surface px-5 py-4 sm:py-5 flex flex-col gap-4"
       style="box-shadow: 0 6px 0 rgba(0,0,0,0.12);"
     >
       <button
@@ -804,6 +804,14 @@
           </span>
         </span>
       </label>
+      {/if}
+
+      {#if settingsSaving}
+        <div
+          class="absolute inset-0 rounded-3xl bg-black/15 cursor-wait z-10"
+          transition:fade={{ duration: 120 }}
+          aria-hidden="true"
+        ></div>
       {/if}
     </section>
   {/if}
