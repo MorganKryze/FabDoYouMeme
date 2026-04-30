@@ -1,0 +1,45 @@
+# Prompt Choice — handler manifest.
+#
+# Players see a sentence with a blank and play a filler card from a dealt
+# hand. The hub deals/refills the hand from the filler pack each round.
+# This file is the single source of truth for identity and bounds.
+
+slug: prompt-showdown
+name: Prompt Choice
+description: Pick the funniest filler from your hand to complete the sentence. Others vote for the best.
+version: "1.0.0"
+supports_solo: false
+
+required_packs:
+  - role: prompt
+    payload_versions: [4]
+  - role: filler
+    payload_versions: [3]
+
+config:
+  # Per-round submit phase.
+  min_round_duration_seconds: 15
+  max_round_duration_seconds: 300
+  default_round_duration_seconds: 45
+
+  # Per-round voting phase.
+  min_voting_duration_seconds: 10
+  max_voting_duration_seconds: 120
+  default_voting_duration_seconds: 30
+
+  # Rounds in a single game.
+  min_round_count: 1
+  max_round_count: 30
+  default_round_count: 5
+
+  # Simultaneous players in a room. Capped lower than meme-showdown (12) so
+  # the worst-case filler-pack sizing — hand_size*max_players +
+  # (round_count-1)*max_players — stays in reach for the bundled demo pack
+  # without forcing operators to ship hundreds of filler cards on day one.
+  min_players: 2
+  max_players: 8
+
+  # Filler hand dealt to each player at game start; refilled each round.
+  min_hand_size: 3
+  max_hand_size: 7
+  default_hand_size: 4

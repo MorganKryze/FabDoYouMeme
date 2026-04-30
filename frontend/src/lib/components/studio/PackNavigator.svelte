@@ -303,9 +303,9 @@
           placeholder={m.studio_nav_new_pack_placeholder_desc()}
           class="h-8 rounded border border-brand-border-heavy bg-brand-white px-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
         />
-        <fieldset class="flex gap-1" aria-label={m.studio_nav_new_pack_kind_aria()}>
+        <fieldset class="grid grid-cols-2 gap-1" aria-label={m.studio_nav_new_pack_kind_aria()}>
           <label
-            class="flex-1 h-8 rounded border text-xs cursor-pointer inline-flex items-center justify-center gap-1
+            class="h-8 rounded border text-xs cursor-pointer inline-flex items-center justify-center gap-1
               {newPackKind === 'image'
                 ? 'bg-primary text-primary-foreground border-primary'
                 : 'bg-brand-white border-brand-border text-brand-text-muted hover:text-brand-text'}"
@@ -315,7 +315,7 @@
             {m.studio_nav_new_pack_kind_image()}
           </label>
           <label
-            class="flex-1 h-8 rounded border text-xs cursor-pointer inline-flex items-center justify-center gap-1
+            class="h-8 rounded border text-xs cursor-pointer inline-flex items-center justify-center gap-1
               {newPackKind === 'text'
                 ? 'bg-primary text-primary-foreground border-primary'
                 : 'bg-brand-white border-brand-border text-brand-text-muted hover:text-brand-text'}"
@@ -323,6 +323,26 @@
             <input type="radio" bind:group={newPackKind} value="text" class="sr-only" />
             <Type size={12} strokeWidth={2.5} />
             {m.studio_nav_new_pack_kind_text()}
+          </label>
+          <label
+            class="h-8 rounded border text-xs cursor-pointer inline-flex items-center justify-center gap-1
+              {newPackKind === 'prompt'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-brand-white border-brand-border text-brand-text-muted hover:text-brand-text'}"
+          >
+            <input type="radio" bind:group={newPackKind} value="prompt" class="sr-only" />
+            <Type size={12} strokeWidth={2.5} />
+            {m.studio_nav_new_pack_kind_prompt()}
+          </label>
+          <label
+            class="h-8 rounded border text-xs cursor-pointer inline-flex items-center justify-center gap-1
+              {newPackKind === 'filler'
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-brand-white border-brand-border text-brand-text-muted hover:text-brand-text'}"
+          >
+            <input type="radio" bind:group={newPackKind} value="filler" class="sr-only" />
+            <Type size={12} strokeWidth={2.5} />
+            {m.studio_nav_new_pack_kind_filler()}
           </label>
         </fieldset>
         <div class="flex gap-1">

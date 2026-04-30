@@ -59,20 +59,30 @@ WHERE gi.pack_id = $1
   AND gi.payload_version = $2;
 
 -- name: GetCurrentVersionsForItems :many
--- Batch lookup used by the replay enrichment path for meme-showdown: given a
--- set of card item IDs, return each item's current version payload so the
--- handler can splice the card text into submission payloads before returning.
+-- Batch lookup used by the replay enrichment path for showdown game types:
+-- given a set of card item IDs, return each item's current version payload
+-- so the handler can splice the card text into submission payloads before
+-- returning. Soft-deleted items and versions are excluded so a tombstoned
+-- card can't bleed back into a replay row's text.
 SELECT gi.id AS item_id, giv.payload
 FROM game_items gi
 JOIN game_item_versions giv ON gi.current_version_id = giv.id
-WHERE gi.id = ANY(sqlc.arg(ids)::uuid[]);
+WHERE gi.id = ANY(sqlc.arg(ids)::uuid[])
+  AND gi.deleted_at IS NULL
+  AND giv.deleted_at IS NULL;
 
 -- name: GetRandomUnplayedItems :many
+-- Picks one random unplayed item for the next round. `gi.deleted_at IS NULL`
+-- and `giv.deleted_at IS NULL` keep tombstoned items out of the deck so
+-- mid-game soft-deletes (e.g. an admin pulling a card) can't surface in a
+-- live room.
 SELECT gi.*, giv.media_key, giv.payload, giv.id AS version_id
 FROM game_items gi
 JOIN game_item_versions giv ON gi.current_version_id = giv.id
 WHERE gi.pack_id = $1
   AND gi.payload_version = ANY(sqlc.arg(versions)::int[])
+  AND gi.deleted_at IS NULL
+  AND giv.deleted_at IS NULL
   AND gi.id NOT IN (
     SELECT item_id FROM rounds WHERE room_id = sqlc.arg(room_id)
   )

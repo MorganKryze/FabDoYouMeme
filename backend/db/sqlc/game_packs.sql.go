@@ -95,6 +95,7 @@ SELECT COUNT(*) FROM game_items gi
 JOIN game_packs gp ON gi.pack_id = gp.id
 WHERE gi.pack_id = $1
   AND gi.payload_version = ANY($2::int[])
+  AND gi.deleted_at IS NULL
   AND gp.deleted_at IS NULL
 `
 
@@ -103,6 +104,8 @@ type CountCompatibleItemsParams struct {
 	Versions []int32   `json:"versions"`
 }
 
+// Counts only live items in a live pack — `gi.deleted_at IS NULL` excludes
+// soft-deleted items so room-creation validation can't be inflated by tombstones.
 func (q *Queries) CountCompatibleItems(ctx context.Context, arg CountCompatibleItemsParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countCompatibleItems, arg.PackID, arg.Versions)
 	var count int64

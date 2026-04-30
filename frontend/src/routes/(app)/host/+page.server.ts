@@ -93,6 +93,22 @@ export const actions: Actions = {
         text_pack_required: 'This game type requires a text pack.',
         text_pack_not_applicable:
           'This game type does not use a text pack.',
+        // Prompt and filler roles — fill-in-the-blank game types
+        // (prompt-freestyle, prompt-showdown).
+        prompt_pack_no_supported_items:
+          'The selected prompt pack has no compatible sentences.',
+        prompt_pack_insufficient:
+          'The selected prompt pack does not have enough sentences for the configured round count.',
+        prompt_pack_required: 'This game type requires a prompt pack.',
+        prompt_pack_not_applicable:
+          'This game type does not use a prompt pack.',
+        filler_pack_no_supported_items:
+          'The selected filler pack has no compatible cards.',
+        filler_pack_insufficient:
+          'The selected filler pack does not have enough cards for the configured hand size and round count.',
+        filler_pack_required: 'This game type requires a filler pack.',
+        filler_pack_not_applicable:
+          'This game type does not use a filler pack.',
         invalid_game_type: 'Invalid game type selected.',
         already_in_active_room:
           "You're already in a room — return to it or leave it first.",

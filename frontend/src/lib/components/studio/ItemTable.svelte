@@ -48,9 +48,21 @@
 
   function textSnippet(item: GameItem): string {
     const payload = item.payload;
-    if (payload && typeof payload === 'object' && 'text' in payload) {
+    if (!payload || typeof payload !== 'object') return '';
+    // Text/filler items (payload v2/v3) carry a single `text` field.
+    if ('text' in payload) {
       const t = (payload as { text: unknown }).text;
       if (typeof t === 'string') return t;
+    }
+    // Prompt items (payload v4) carry `prefix` + `suffix`; render them with
+    // an underline placeholder so the table row reads as the live sentence.
+    if ('prefix' in payload || 'suffix' in payload) {
+      const p = (payload as { prefix?: unknown; suffix?: unknown });
+      const prefix = typeof p.prefix === 'string' ? p.prefix : '';
+      const suffix = typeof p.suffix === 'string' ? p.suffix : '';
+      const joiner = '___';
+      const parts = [prefix.trim(), joiner, suffix.trim()].filter((s) => s.length > 0);
+      return parts.join(' ').trim();
     }
     return '';
   }
@@ -270,7 +282,7 @@
             >
               <td class="px-4 py-2">
                 <div class="flex items-center gap-2 min-w-0">
-                  {#if item.payload_version === 2}
+                  {#if item.payload_version === 2 || item.payload_version === 3 || item.payload_version === 4}
                     <div class="h-8 w-8 rounded bg-muted shrink-0 flex items-center justify-center text-brand-text-muted">
                       <FileText size={14} strokeWidth={2.5} />
                     </div>

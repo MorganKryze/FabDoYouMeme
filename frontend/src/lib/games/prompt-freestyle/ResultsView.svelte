@@ -6,14 +6,13 @@
   import RoundReveal from './RoundReveal.svelte';
   import * as m from '$lib/paraglide/messages';
 
-  // `round` is plumbed by the room page so prompt-* ResultsViews can render
-  // the sentence; meme-showdown accepts it for shape-parity but doesn't use it.
   let {
     submissions,
     leaderboard,
     isHost,
     hostPaced,
     onNextRound,
+    round = null,
   }: {
     submissions: Submission[];
     leaderboard: LeaderboardEntry[];
@@ -25,7 +24,7 @@
 </script>
 
 <div class="flex flex-col gap-6">
-  <RoundReveal {submissions} {leaderboard} />
+  <RoundReveal {submissions} {leaderboard} {round} />
 
   {#if hostPaced}
     {#if isHost}

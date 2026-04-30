@@ -491,6 +491,129 @@ func TestSyncText_InvalidJSON_ReturnsError(t *testing.T) {
 	}
 }
 
+// ── Prompt demo pack ─────────────────────────────────────────────────────
+
+func systemPromptPackID(t *testing.T) uuid.UUID {
+	t.Helper()
+	id, err := uuid.Parse("00000000-0000-0000-0000-000000000004")
+	if err != nil {
+		t.Fatalf("parse sentinel: %v", err)
+	}
+	return id
+}
+
+func resetPromptSystemPack(t *testing.T, q *db.Queries) {
+	t.Helper()
+	ctx := context.Background()
+	items, err := q.ListItemsForPack(ctx, db.ListItemsForPackParams{
+		PackID: systemPromptPackID(t), Lim: 10000, Off: 0,
+	})
+	if err != nil {
+		return
+	}
+	for _, it := range items {
+		versions, _ := q.ListVersionsForItem(ctx, it.ID)
+		for _, v := range versions {
+			_ = q.HardDeleteVersion(ctx, v.ID)
+		}
+	}
+}
+
+func promptFS(body string) fstest.MapFS {
+	return fstest.MapFS{
+		"demo-prompt-pack/items.json": &fstest.MapFile{Data: []byte(body)},
+	}
+}
+
+func TestSyncPrompt_NewEntry_CreatesItemV4WithPayload(t *testing.T) {
+	pool := testutil.Pool()
+	q := db.New(pool)
+	resetPromptSystemPack(t, q)
+
+	body := `[{"name":"trust-keys","prefix":"I would never trust ","suffix":" with my keys."}]`
+	if err := systempack.SyncPromptFS(context.Background(), q, promptFS(body), testutil.NewLogger()); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+
+	items, _ := q.ListItemsForPack(context.Background(), db.ListItemsForPackParams{
+		PackID: systemPromptPackID(t), Lim: 100, Off: 0,
+	})
+	if len(items) != 1 {
+		t.Fatalf("want 1 item, got %d", len(items))
+	}
+	if items[0].PayloadVersion != 4 {
+		t.Errorf("want payload_version=4, got %d", items[0].PayloadVersion)
+	}
+	if items[0].MediaKey != nil {
+		t.Errorf("want media_key=nil for prompt item, got %v", items[0].MediaKey)
+	}
+	if !bytes.Contains(items[0].Payload, []byte("I would never trust")) {
+		t.Errorf("payload missing prefix: %s", items[0].Payload)
+	}
+	if !bytes.Contains(items[0].Payload, []byte("with my keys.")) {
+		t.Errorf("payload missing suffix: %s", items[0].Payload)
+	}
+	if !bytes.Contains(items[0].Payload, []byte("sha256")) {
+		t.Errorf("payload missing sha256: %s", items[0].Payload)
+	}
+}
+
+func TestSyncPrompt_BlankOnlyEntry_Skipped(t *testing.T) {
+	pool := testutil.Pool()
+	q := db.New(pool)
+	resetPromptSystemPack(t, q)
+
+	// Both prefix and suffix empty means the "sentence" is just the blank —
+	// the sync logs a warning and skips so the room can never deal a useless
+	// item to a player.
+	body := `[
+	  {"name":"only-blank","prefix":"","suffix":""},
+	  {"name":"valid","prefix":"It begins with ","suffix":""}
+	]`
+	if err := systempack.SyncPromptFS(context.Background(), q, promptFS(body), testutil.NewLogger()); err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+
+	items, _ := q.ListItemsForPack(context.Background(), db.ListItemsForPackParams{
+		PackID: systemPromptPackID(t), Lim: 100, Off: 0,
+	})
+	if len(items) != 1 {
+		t.Fatalf("want 1 item (blank-only entry skipped), got %d", len(items))
+	}
+	if items[0].Name != "valid" {
+		t.Errorf("want only the valid entry to land, got name=%q", items[0].Name)
+	}
+}
+
+func TestSyncPrompt_ModifiedEntry_CreatesNewVersion(t *testing.T) {
+	pool := testutil.Pool()
+	q := db.New(pool)
+	resetPromptSystemPack(t, q)
+
+	v1 := `[{"name":"line","prefix":"first ","suffix":" take"}]`
+	if err := systempack.SyncPromptFS(context.Background(), q, promptFS(v1), testutil.NewLogger()); err != nil {
+		t.Fatalf("v1 sync: %v", err)
+	}
+	v2 := `[{"name":"line","prefix":"second ","suffix":" take"}]`
+	if err := systempack.SyncPromptFS(context.Background(), q, promptFS(v2), testutil.NewLogger()); err != nil {
+		t.Fatalf("v2 sync: %v", err)
+	}
+
+	items, _ := q.ListItemsForPack(context.Background(), db.ListItemsForPackParams{
+		PackID: systemPromptPackID(t), Lim: 100, Off: 0,
+	})
+	if len(items) != 1 {
+		t.Fatalf("want 1 item (same name), got %d", len(items))
+	}
+	versions, err := q.ListVersionsForItem(context.Background(), items[0].ID)
+	if err != nil {
+		t.Fatalf("list versions: %v", err)
+	}
+	if len(versions) != 2 {
+		t.Errorf("want 2 versions after edit, got %d", len(versions))
+	}
+}
+
 func TestSync_UploadFailure_NoOrphanRow(t *testing.T) {
 	pool := testutil.Pool()
 	q := db.New(pool)

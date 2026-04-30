@@ -109,7 +109,11 @@ func (h *RoomHandler) GetReplay(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to load submissions")
 		return
 	}
-	if room.GameTypeSlug == "meme-showdown" {
+	// Showdown game types store {"card_id": "..."} per submission; the
+	// replay needs the resolved text spliced in so the frontend renders
+	// without a second round-trip. Both meme-showdown and prompt-showdown
+	// use the same payload shape, so the same enrichment fits.
+	if room.GameTypeSlug == "meme-showdown" || room.GameTypeSlug == "prompt-showdown" {
 		if err := enrichShowdownSubmissions(r.Context(), h.db, subs); err != nil {
 			writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to resolve showdown cards")
 			return

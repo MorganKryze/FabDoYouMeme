@@ -31,6 +31,8 @@ import (
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/game"
 	memefreestyle "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_freestyle"
 	memeshowdown "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/meme_showdown"
+	promptfreestyle "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/prompt_freestyle"
+	promptshowdown "github.com/MorganKryze/FabDoYouMeme/backend/internal/game/types/prompt_showdown"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/groupjobs"
 	mw "github.com/MorganKryze/FabDoYouMeme/backend/internal/middleware"
 	"github.com/MorganKryze/FabDoYouMeme/backend/internal/storage"
@@ -116,6 +118,18 @@ func main() {
 	if err := systempack.SyncTextFR(context.Background(), queries, logger); err != nil {
 		logger.Error("startup: system text pack sync (fr)", "error", err)
 	}
+	if err := systempack.SyncFiller(context.Background(), queries, logger); err != nil {
+		logger.Error("startup: system filler pack sync", "error", err)
+	}
+	if err := systempack.SyncFillerFR(context.Background(), queries, logger); err != nil {
+		logger.Error("startup: system filler pack sync (fr)", "error", err)
+	}
+	if err := systempack.SyncPrompt(context.Background(), queries, logger); err != nil {
+		logger.Error("startup: system prompt pack sync", "error", err)
+	}
+	if err := systempack.SyncPromptFR(context.Background(), queries, logger); err != nil {
+		logger.Error("startup: system prompt pack sync (fr)", "error", err)
+	}
 
 	// ── Game registry ─────────────────────────────────────────────────────────
 	// Handlers carry their own manifest (see each handler's manifest.yaml).
@@ -125,6 +139,8 @@ func main() {
 	registry := game.NewRegistry()
 	registry.Register(memefreestyle.New())
 	registry.Register(memeshowdown.New())
+	registry.Register(promptfreestyle.New())
+	registry.Register(promptshowdown.New())
 
 	if err := game.SyncGameTypes(context.Background(), queries, registry, logger); err != nil {
 		logger.Error("game type sync failed", "error", err)

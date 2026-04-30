@@ -7,8 +7,10 @@ package game
 type PackRole string
 
 const (
-	PackRoleImage PackRole = "image"
-	PackRoleText  PackRole = "text"
+	PackRoleImage  PackRole = "image"
+	PackRoleText   PackRole = "text"
+	PackRolePrompt PackRole = "prompt"
+	PackRoleFiller PackRole = "filler"
 )
 
 // PackRequirement describes one pack a game type needs to run a room.

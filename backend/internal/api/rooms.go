@@ -121,19 +121,33 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Role-aware pack validation. The handler declares what packs it needs
-	// (image, text, …) and ValidatePackRequirements enforces presence + item
-	// counts across every declared role. Error codes are scoped per role so
-	// the client can map them to the right picker.
+	// (image, text, prompt, filler…) and ValidatePackRequirements enforces
+	// presence + item counts across every declared role. Error codes are
+	// scoped per role so the client can map them to the right picker.
+	//
+	// The pack_id column holds the primary pack (whatever role is declared
+	// first in RequiredPacks()), and text_pack_id holds the secondary if any.
+	// Both are positional — the role each one fills is decided per game type.
 	var normalized game.RoomConfig
 	if err := json.Unmarshal(roomConfig, &normalized); err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to parse normalized config")
 		return
 	}
-	packRefs := map[game.PackRole][16]byte{
-		game.PackRoleImage: packID,
+	required := handler.RequiredPacks()
+	packRefs := map[game.PackRole][16]byte{}
+	if len(required) >= 1 {
+		packRefs[required[0].Role] = packID
 	}
 	if req.TextPackID != "" {
-		packRefs[game.PackRoleText] = textPackID
+		// A secondary pack was supplied. Assign it to whichever role the
+		// handler declares second; if the handler only needs one pack, fall
+		// back to the legacy "text" role so the validator surfaces a stable
+		// text_pack_not_applicable error code.
+		secondaryRole := game.PackRoleText
+		if len(required) >= 2 {
+			secondaryRole = required[1].Role
+		}
+		packRefs[secondaryRole] = textPackID
 	}
 	maxPlayers := handler.MaxPlayers()
 	if maxPlayers == 0 {

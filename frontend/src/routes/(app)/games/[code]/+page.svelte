@@ -6,6 +6,8 @@
   import { ArrowLeft, ArrowRight } from '$lib/icons';
   import MemeFreestyleReplay from '$lib/games/meme-freestyle/ReplayRoundView.svelte';
   import MemeShowdownReplay from '$lib/games/meme-showdown/ReplayRoundView.svelte';
+  import PromptFreestyleReplay from '$lib/games/prompt-freestyle/ReplayRoundView.svelte';
+  import PromptShowdownReplay from '$lib/games/prompt-showdown/ReplayRoundView.svelte';
   import type { PageData } from './$types';
   import * as m from '$lib/paraglide/messages';
 
@@ -124,6 +126,10 @@
             <MemeFreestyleReplay round={current} leaderboard={replay.leaderboard} />
           {:else if replay.room.game_type_slug === 'meme-showdown' && current}
             <MemeShowdownReplay round={current} leaderboard={replay.leaderboard} />
+          {:else if replay.room.game_type_slug === 'prompt-freestyle' && current}
+            <PromptFreestyleReplay round={current} leaderboard={replay.leaderboard} />
+          {:else if replay.room.game_type_slug === 'prompt-showdown' && current}
+            <PromptShowdownReplay round={current} leaderboard={replay.leaderboard} />
           {/if}
         </div>
       {/key}

@@ -11,6 +11,12 @@
   import MemeVoteSubmitForm from '$lib/games/meme-showdown/SubmitForm.svelte';
   import MemeVoteVoteForm from '$lib/games/meme-showdown/VoteForm.svelte';
   import MemeVoteResultsView from '$lib/games/meme-showdown/ResultsView.svelte';
+  import PromptFreestyleSubmitForm from '$lib/games/prompt-freestyle/SubmitForm.svelte';
+  import PromptFreestyleVoteForm from '$lib/games/prompt-freestyle/VoteForm.svelte';
+  import PromptFreestyleResultsView from '$lib/games/prompt-freestyle/ResultsView.svelte';
+  import PromptShowdownSubmitForm from '$lib/games/prompt-showdown/SubmitForm.svelte';
+  import PromptShowdownVoteForm from '$lib/games/prompt-showdown/VoteForm.svelte';
+  import PromptShowdownResultsView from '$lib/games/prompt-showdown/ResultsView.svelte';
   import WaitingStage from '$lib/components/room/WaitingStage.svelte';
   import EndStage from '$lib/components/room/EndStage.svelte';
   import RoomHeader from '$lib/components/room/RoomHeader.svelte';
@@ -48,6 +54,16 @@
       Submit: MemeVoteSubmitForm,
       Vote: MemeVoteVoteForm,
       Results: MemeVoteResultsView,
+    },
+    'prompt-freestyle': {
+      Submit: PromptFreestyleSubmitForm,
+      Vote: PromptFreestyleVoteForm,
+      Results: PromptFreestyleResultsView,
+    },
+    'prompt-showdown': {
+      Submit: PromptShowdownSubmitForm,
+      Vote: PromptShowdownVoteForm,
+      Results: PromptShowdownResultsView,
     },
   } as const;
 
@@ -117,6 +133,7 @@
             <Results
               submissions={room.submissions}
               leaderboard={room.leaderboard}
+              round={room.currentRound}
               {isHost}
               {hostPaced}
               onNextRound={nextRound}

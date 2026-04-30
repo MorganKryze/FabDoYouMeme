@@ -10,7 +10,30 @@ export interface StudioGroup {
   member_role: 'admin' | 'member';
 }
 
-export type PackKind = 'image' | 'text';
+// PackKind mirrors a pack's expected item-payload version:
+//   image  → payload_version 1
+//   text   → payload_version 2 (meme captions)
+//   filler → payload_version 3 (sentence-blank fillers)
+//   prompt → payload_version 4 (sentence with blank, { prefix, suffix })
+export type PackKind = 'image' | 'text' | 'filler' | 'prompt';
+
+export function payloadVersionForKind(kind: PackKind): number {
+  switch (kind) {
+    case 'image': return 1;
+    case 'text': return 2;
+    case 'filler': return 3;
+    case 'prompt': return 4;
+  }
+}
+
+export function kindFromPayloadVersion(version: number): PackKind {
+  switch (version) {
+    case 4: return 'prompt';
+    case 3: return 'filler';
+    case 2: return 'text';
+    default: return 'image';
+  }
+}
 
 // Persisted in localStorage so the user's choice on the new-pack form survives
 // reloads. Without persistence, refreshing while a freshly-created text pack
@@ -28,7 +51,9 @@ function loadIntendedKind(): Record<string, PackKind> {
     if (!parsed || typeof parsed !== 'object') return {};
     const out: Record<string, PackKind> = {};
     for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
-      if (v === 'image' || v === 'text') out[k] = v;
+      if (v === 'image' || v === 'text' || v === 'filler' || v === 'prompt') {
+        out[k] = v;
+      }
     }
     return out;
   } catch {
@@ -103,7 +128,7 @@ class StudioState {
   kindFor(packId: string | null): PackKind {
     if (!packId) return 'image';
     if (this.selectedPackId === packId && this.items.length > 0) {
-      return this.items[0].payload_version === 2 ? 'text' : 'image';
+      return kindFromPayloadVersion(this.items[0].payload_version);
     }
     return this.intendedKind[packId] ?? 'image';
   }

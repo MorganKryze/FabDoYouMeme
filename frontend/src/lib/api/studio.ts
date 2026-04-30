@@ -223,12 +223,32 @@ export async function uploadTextItem(
   name: string,
   text: string
 ): Promise<UploadOutcome> {
+  return uploadTextlikeItem(packId, name, text, 2);
+}
+
+// Filler items share the `{ text }` payload shape with captions; only the
+// payload_version differs to declare role intent (filler pack vs caption pack).
+// One pack of fillers feeds prompt-showdown rooms.
+export async function uploadFillerItem(
+  packId: string,
+  name: string,
+  text: string
+): Promise<UploadOutcome> {
+  return uploadTextlikeItem(packId, name, text, 3);
+}
+
+async function uploadTextlikeItem(
+  packId: string,
+  name: string,
+  text: string,
+  payloadVersion: number,
+): Promise<UploadOutcome> {
   const invalid = validateItemText(text);
   if (invalid) return { ok: false, error: invalid, filename: name };
 
   let itemId: string | null = null;
   try {
-    const item = await createItem(packId, { name, payload_version: 2 });
+    const item = await createItem(packId, { name, payload_version: payloadVersion });
     itemId = item.id;
 
     const payload = { text: text.trim() };
@@ -254,6 +274,63 @@ export async function uploadTextItem(
       ok: false,
       error: err instanceof Error ? err.message : String(err),
       filename: name
+    };
+  }
+}
+
+// Prompt items are sentences with a blank, payload_version 4. The blank is
+// implicit between prefix and suffix; at least one of the two must be
+// non-empty (otherwise the "sentence" is just a blank slot).
+export interface PromptPayload { prefix: string; suffix: string; }
+
+export function validatePromptPayload({ prefix, suffix }: PromptPayload): string | null {
+  const p = prefix.trim();
+  const s = suffix.trim();
+  if (!p && !s) return 'prefix or suffix is required';
+  if (p.length > MAX_TEXT_LENGTH) return `prefix exceeds ${MAX_TEXT_LENGTH} characters`;
+  if (s.length > MAX_TEXT_LENGTH) return `suffix exceeds ${MAX_TEXT_LENGTH} characters`;
+  return null;
+}
+
+export async function uploadPromptItem(
+  packId: string,
+  name: string,
+  payload: PromptPayload,
+): Promise<UploadOutcome> {
+  const invalid = validatePromptPayload(payload);
+  if (invalid) return { ok: false, error: invalid, filename: name };
+
+  let itemId: string | null = null;
+  try {
+    const item = await createItem(packId, { name, payload_version: 4 });
+    itemId = item.id;
+
+    const versionPayload = {
+      prefix: payload.prefix.trim(),
+      suffix: payload.suffix.trim(),
+    };
+    const version = await createItemVersion(packId, item.id, { payload: versionPayload });
+    const promoted = await promoteVersion(packId, item.id, version.id);
+    return {
+      ok: true,
+      item: {
+        ...promoted,
+        payload: versionPayload,
+        version_number: version.version_number,
+      },
+    };
+  } catch (err) {
+    if (itemId) {
+      try {
+        await deleteItem(packId, itemId);
+      } catch {
+        /* non-fatal */
+      }
+    }
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      filename: name,
     };
   }
 }

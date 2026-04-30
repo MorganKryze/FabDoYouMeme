@@ -5,11 +5,15 @@
   import {
     uploadImageItem,
     uploadTextItem,
+    uploadFillerItem,
+    uploadPromptItem,
     validateImageFile,
-    validateItemText
+    validateItemText,
+    validatePromptPayload,
   } from '$lib/api/studio';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { Upload, Save } from '$lib/icons';
+  import SentenceWithBlank from '$lib/games/_shared/SentenceWithBlank.svelte';
   import * as m from '$lib/paraglide/messages';
 
   const kind = $derived(studio.kindFor(studio.selectedPackId));
@@ -19,16 +23,24 @@
   let imageName = $state('');
   let previewUrl = $state<string | null>(null);
 
-  // ── Text flow ───────────────────────────────────────────────────────────
+  // ── Text / filler flow ─────────────────────────────────────────────────
+  // The single-text composer serves both "text" (caption pack) and "filler"
+  // (fill-in-the-blank cards) — same { text } payload shape, just different
+  // payload_versions selected at upload time.
   const TEXT_MAX = 500;
   let text = $state('');
   let textName = $state('');
+
+  // ── Prompt flow ────────────────────────────────────────────────────────
+  let promptName = $state('');
+  let promptPrefix = $state('');
+  let promptSuffix = $state('');
 
   // ── Shared ──────────────────────────────────────────────────────────────
   let submitting = $state(false);
   let inlineError = $state<string | null>(null);
 
-  // Reset both forms whenever the user switches packs so half-typed input
+  // Reset all forms whenever the user switches packs so half-typed input
   // from one pack doesn't leak into the next.
   $effect(() => {
     studio.selectedPackId;
@@ -38,6 +50,9 @@
     previewUrl = null;
     text = '';
     textName = '';
+    promptName = '';
+    promptPrefix = '';
+    promptSuffix = '';
     inlineError = null;
   });
 
@@ -103,13 +118,41 @@
     }
     submitting = true;
     inlineError = null;
-    const result = await uploadTextItem(studio.selectedPackId!, trimmedName, trimmedText);
+    const upload = kind === 'filler' ? uploadFillerItem : uploadTextItem;
+    const result = await upload(studio.selectedPackId!, trimmedName, trimmedText);
     submitting = false;
     if (result.ok) {
       studio.items = [...studio.items, result.item];
       studio.selectItem(result.item.id);
       text = '';
       textName = '';
+      toast.show(m.studio_toast_item_added(), 'success');
+    } else {
+      inlineError = result.error;
+    }
+  }
+
+  async function submitPrompt() {
+    const trimmedName = promptName.trim();
+    if (!trimmedName) return;
+    const err = validatePromptPayload({ prefix: promptPrefix, suffix: promptSuffix });
+    if (err) {
+      inlineError = err;
+      return;
+    }
+    submitting = true;
+    inlineError = null;
+    const result = await uploadPromptItem(studio.selectedPackId!, trimmedName, {
+      prefix: promptPrefix,
+      suffix: promptSuffix,
+    });
+    submitting = false;
+    if (result.ok) {
+      studio.items = [...studio.items, result.item];
+      studio.selectItem(result.item.id);
+      promptName = '';
+      promptPrefix = '';
+      promptSuffix = '';
       toast.show(m.studio_toast_item_added(), 'success');
     } else {
       inlineError = result.error;
@@ -175,6 +218,72 @@
       class="h-9 px-4 rounded-lg border border-brand-border bg-primary text-primary-foreground text-sm font-medium inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
     >
       <Upload size={14} strokeWidth={2.5} />
+      {submitting ? m.studio_add_submitting() : m.studio_add_submit()}
+    </button>
+  {:else if kind === 'prompt'}
+    <div class="flex flex-col gap-1">
+      <label for="single-add-prompt-name" class="text-xs font-medium">{m.studio_add_label_name()}</label>
+      <input
+        id="single-add-prompt-name"
+        type="text"
+        bind:value={promptName}
+        placeholder={m.studio_add_placeholder_name()}
+        class="h-9 rounded border border-brand-border-heavy bg-brand-white px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+      />
+    </div>
+
+    <div class="flex flex-col gap-1">
+      <label for="single-add-prompt-prefix" class="text-xs font-medium">
+        {m.studio_prompt_prefix_label()}
+      </label>
+      <textarea
+        id="single-add-prompt-prefix"
+        bind:value={promptPrefix}
+        rows={2}
+        maxlength={TEXT_MAX}
+        placeholder={m.studio_prompt_prefix_placeholder()}
+        class="w-full rounded border border-brand-border-heavy bg-brand-white p-3 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+      ></textarea>
+    </div>
+
+    <div class="flex flex-col gap-1">
+      <label for="single-add-prompt-suffix" class="text-xs font-medium">
+        {m.studio_prompt_suffix_label()}
+      </label>
+      <textarea
+        id="single-add-prompt-suffix"
+        bind:value={promptSuffix}
+        rows={2}
+        maxlength={TEXT_MAX}
+        placeholder={m.studio_prompt_suffix_placeholder()}
+        class="w-full rounded border border-brand-border-heavy bg-brand-white p-3 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+      ></textarea>
+    </div>
+
+    <div class="flex flex-col gap-1">
+      <span class="text-xs font-medium">{m.studio_prompt_preview_label()}</span>
+      <div class="rounded border border-brand-border bg-brand-surface px-3 py-2 text-sm text-brand-text leading-snug">
+        <SentenceWithBlank
+          prefix={promptPrefix}
+          suffix={promptSuffix}
+          placeholder={m.studio_prompt_preview_placeholder()}
+          size="sm"
+        />
+      </div>
+    </div>
+
+    {#if inlineError}
+      <p class="text-xs text-red-600">{inlineError}</p>
+    {/if}
+
+    <button
+      type="button"
+      disabled={!promptName.trim() || (!promptPrefix.trim() && !promptSuffix.trim()) || submitting}
+      onclick={submitPrompt}
+      use:pressPhysics={'dark'}
+      class="h-9 px-4 rounded-lg border border-brand-border bg-primary text-primary-foreground text-sm font-medium inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+    >
+      <Save size={14} strokeWidth={2.5} />
       {submitting ? m.studio_add_submitting() : m.studio_add_submit()}
     </button>
   {:else}

@@ -24,6 +24,16 @@ export function localizeGameType(gt: GameTypeLike): { name: string; description:
         name: m.game_meme_showdown_name(),
         description: m.game_meme_showdown_description()
       };
+    case 'prompt-freestyle':
+      return {
+        name: m.game_prompt_freestyle_name(),
+        description: m.game_prompt_freestyle_description()
+      };
+    case 'prompt-showdown':
+      return {
+        name: m.game_prompt_showdown_name(),
+        description: m.game_prompt_showdown_description()
+      };
     default:
       return { name: gt.name, description: gt.description };
   }

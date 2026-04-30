@@ -403,16 +403,59 @@ The hub personalises `round_started` for this game type (`PersonalisesRoundStart
 
 ---
 
+## Prompt-freestyle game type
+
+The fill-in-the-blank counterpart to `meme-freestyle`. Players type their own filler instead of writing a caption for an image. Gameplay per round:
+
+1. All players see the same sentence with a blank — `round_started.data.item.payload = { prefix, suffix }`. No image, no `media_url`.
+2. The frontend renders `prefix [INPUT] suffix` and the player types their filler — sent as `prompt-freestyle:submit { "filler": "<text>" }`.
+3. Submissions close on timer or all-submitted. Fillers are shown anonymously spliced into the prompt; players vote with `prompt-freestyle:vote`.
+4. Authors are revealed; scoring is identical to `meme-freestyle` (1 point per vote, ties both score, no self-vote).
+
+`supports_solo: false`. The room consumes a single `prompt` pack (payload v4).
+
+---
+
+## Prompt-showdown game type
+
+The fill-in-the-blank counterpart to `meme-showdown`. Each player is dealt a hand of fillers from a `filler` pack and plays one card per round to complete the sentence-with-blank from the `prompt` pack. Hand mechanics, anonymity, and scoring mirror `meme-showdown`; the only differences are the prompt is text instead of an image and the cards come from a different role.
+
+The hub's hand-deck mechanic (`backend/internal/game/hub_handdeck.go`) is shared with `meme-showdown` — both game types reach `Hub.handDeck` through the same `initHandDeck` path. The handler's secondary `RequiredPacks()` entry tells the hub which payload version to load (v2 for meme-showdown captions, v3 for prompt-showdown fillers).
+
+Two pack roles are required per room:
+
+- `pack_id` — the prompt pack (`payload_version: 4`)
+- `text_pack_id` — the filler pack (`payload_version: 3`, `{ "text": "..." }`)
+
+`supports_solo: false`. `PersonalisesRoundStart() returns true` so each player receives their own hand on every round.
+
+---
+
 ## Pack compatibility
 
-Packs are game-type-agnostic at the item-payload level — item payloads are versioned JSONB and compatibility is decided per item by `payload_version`. A game type declares one or more **pack roles** it consumes via `GameTypeHandler.RequiredPacks()`. Each requirement names a role (`image`, `text`, …) and the `payload_version` set it accepts. A room references one pack per declared role (`rooms.pack_id` for image; `rooms.text_pack_id` for text). At creation, the API counts compatible items per role and rejects the room if any pack is missing, empty of compatible items, or smaller than the role's `MinItemsFn` sizing.
+Packs are game-type-agnostic at the item-payload level — item payloads are versioned JSONB and compatibility is decided per item by `payload_version`. A game type declares one or more **pack roles** it consumes via `GameTypeHandler.RequiredPacks()`. Each requirement names a role (`image`, `text`, `prompt`, `filler`, …) and the `payload_version` set it accepts.
+
+The room references packs **positionally**: `rooms.pack_id` (NOT NULL) is the *primary* pack — whatever role the handler declares first in `RequiredPacks()` — and `rooms.text_pack_id` (nullable) is the *secondary* pack — whatever role the handler declares second, if any. The columns are role-agnostic; the role each one fills is decided per game type via the handler's declaration order. (The `text_pack_id` name is a historical artefact from when only meme-* games existed; renaming the column would force a wide-blast-radius migration with no behavioural benefit.)
+
+At creation, the API counts compatible items per role and rejects the room if any pack is missing, empty of compatible items, or smaller than the role's `MinItemsFn` sizing.
 
 Example item payloads:
 
-- `payload_version: 1` (image) — `{ "image_url": "...", "prompt": "..." }`
-- `payload_version: 2` (text)  — `{ "text": "..." }`
+- `payload_version: 1` (image)  — `{ "image_url": "...", "prompt": "..." }`
+- `payload_version: 2` (text)   — `{ "text": "..." }`               — meme captions
+- `payload_version: 3` (filler) — `{ "text": "..." }`               — fill-in-the-blank fillers
+- `payload_version: 4` (prompt) — `{ "prefix": "...", "suffix": "..." }` — sentence with a single blank between prefix and suffix; an empty prefix means the blank is at the start, an empty suffix means it's at the end. At least one of the two must be non-empty.
 
-`meme-freestyle` declares `[{image, [1]}]`. `meme-showdown` declares `[{image, [1]}, {text, [2]}]`. Existing image packs are compatible with both game types as-is; a text pack is additionally required to host a `meme-showdown` room.
+Per-game-type pack contracts:
+
+| Game type           | Primary pack (`pack_id`) | Secondary pack (`text_pack_id`) |
+|---------------------|--------------------------|----------------------------------|
+| `meme-freestyle`    | image (v1)               | —                                |
+| `meme-showdown`     | image (v1)               | text (v2) — captions             |
+| `prompt-freestyle`  | prompt (v4)              | —                                |
+| `prompt-showdown`   | prompt (v4)              | filler (v3)                      |
+
+Captions (`text` v2) and fillers (`filler` v3) share the `{ text }` payload shape but are kept in separate packs because *role intent* (caption vs filler) is not expressible in the data alone — a meme caption played as a filler usually breaks the host sentence grammatically.
 
 ---
 

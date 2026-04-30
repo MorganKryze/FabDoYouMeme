@@ -58,10 +58,13 @@ SELECT COUNT(*) FROM game_packs WHERE deleted_at IS NULL;
 SELECT id, name FROM game_packs WHERE id = ANY(sqlc.arg(ids)::uuid[]);
 
 -- name: CountCompatibleItems :one
+-- Counts only live items in a live pack — `gi.deleted_at IS NULL` excludes
+-- soft-deleted items so room-creation validation can't be inflated by tombstones.
 SELECT COUNT(*) FROM game_items gi
 JOIN game_packs gp ON gi.pack_id = gp.id
 WHERE gi.pack_id = $1
   AND gi.payload_version = ANY(sqlc.arg(versions)::int[])
+  AND gi.deleted_at IS NULL
   AND gp.deleted_at IS NULL;
 
 -- name: UpsertSystemPack :one

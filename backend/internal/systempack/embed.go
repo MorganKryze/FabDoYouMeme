@@ -23,3 +23,27 @@ var DemoTextPackFS embed.FS
 //
 //go:embed demo-text-pack-fr/*
 var DemoTextPackFRFS embed.FS
+
+// DemoPromptPackFS is the bundled English fill-in-the-blank prompt pack.
+// Each items.json entry is a `{name, prefix, suffix}` record (payload v4)
+// where prefix/suffix straddle the blank in the rendered sentence.
+//
+//go:embed demo-prompt-pack/*
+var DemoPromptPackFS embed.FS
+
+// DemoPromptPackFRFS is the French-language prompt pack — same shape as
+// DemoPromptPackFS, locale-bound content.
+//
+//go:embed demo-prompt-pack-fr/*
+var DemoPromptPackFRFS embed.FS
+
+// DemoFillerPackFS is the bundled English filler pack — short noun-phrase
+// cards (payload v3, `{text}`) dealt as the showdown hand for prompt-showdown.
+//
+//go:embed demo-filler-pack/*
+var DemoFillerPackFS embed.FS
+
+// DemoFillerPackFRFS is the French-language filler pack.
+//
+//go:embed demo-filler-pack-fr/*
+var DemoFillerPackFRFS embed.FS

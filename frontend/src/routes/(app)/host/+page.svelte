@@ -52,18 +52,24 @@
   function roleLabel(role: string): string {
     if (role === 'image') return m.host_role_image();
     if (role === 'text') return m.host_role_text();
+    if (role === 'prompt') return m.host_role_prompt();
+    if (role === 'filler') return m.host_role_filler();
     return m.host_role_generic({ role: role.charAt(0).toUpperCase() + role.slice(1) });
   }
 
   function roleShort(role: string): string {
     if (role === 'image') return m.host_role_image_short();
     if (role === 'text') return m.host_role_text_short();
+    if (role === 'prompt') return m.host_role_prompt_short();
+    if (role === 'filler') return m.host_role_filler_short();
     return m.host_role_generic_short({ role: role.charAt(0).toUpperCase() + role.slice(1) });
   }
 
   function roleHint(role: string): string {
     if (role === 'image') return m.host_role_image_hint();
     if (role === 'text') return m.host_role_text_hint();
+    if (role === 'prompt') return m.host_role_prompt_hint();
+    if (role === 'filler') return m.host_role_filler_hint();
     return '';
   }
 
@@ -264,8 +270,20 @@
     {:else}
       <form method="POST" action="?/createRoom" use:enhance class="flex flex-col gap-5">
         <input type="hidden" name="game_type_id" value={selectedGameTypeId} />
-        <input type="hidden" name="pack_id" value={selectedPacks.image ?? ''} />
-        <input type="hidden" name="text_pack_id" value={selectedPacks.text ?? ''} />
+        <!-- pack_id is the primary pack (whatever role the handler declares
+             first); text_pack_id is the secondary, if any. The role each one
+             fills is per-game-type — the backend resolves it from the
+             handler's RequiredPacks() so we just send positional ids here. -->
+        <input
+          type="hidden"
+          name="pack_id"
+          value={requiredPacks[0] ? selectedPacks[requiredPacks[0].role] ?? '' : ''}
+        />
+        <input
+          type="hidden"
+          name="text_pack_id"
+          value={requiredPacks[1] ? selectedPacks[requiredPacks[1].role] ?? '' : ''}
+        />
         <input type="hidden" name="is_solo" value={String(isSolo)} />
         <input type="hidden" name="group_id" value={selectedGroupID} />
 

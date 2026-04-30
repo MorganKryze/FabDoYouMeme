@@ -2,10 +2,13 @@
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import { ArrowRight } from '$lib/icons';
-  import type { Submission, LeaderboardEntry } from '$lib/api/types';
+  import type { Submission, LeaderboardEntry, Round } from '$lib/api/types';
   import RoundReveal from './RoundReveal.svelte';
   import * as m from '$lib/paraglide/messages';
 
+  // `round` is plumbed by the room page so prompt-* ResultsViews can render
+  // the sentence; meme-freestyle accepts it for shape-parity but doesn't
+  // need it (RoundReveal here only renders submissions + leaderboard).
   let {
     submissions,
     leaderboard,
@@ -16,9 +19,9 @@
     submissions: Submission[];
     leaderboard: LeaderboardEntry[];
     isHost: boolean;
-    /** When true the host manually advances to the next round; when false the server auto-advances. */
     hostPaced: boolean;
     onNextRound: () => void;
+    round?: Round | null;
   } = $props();
 </script>
 

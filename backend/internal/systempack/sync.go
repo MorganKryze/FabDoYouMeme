@@ -36,6 +36,20 @@ var SystemTextPackID = uuid.MustParse("00000000-0000-0000-0000-000000000002")
 // than a translated copy of the English one.
 var SystemTextPackFRID = uuid.MustParse("00000000-0000-0000-0000-000000000003")
 
+// SystemPromptPackID and SystemPromptPackFRID seed the bundled prompt
+// (sentence-with-blank, payload v4) packs in EN and FR.
+var (
+	SystemPromptPackID   = uuid.MustParse("00000000-0000-0000-0000-000000000004")
+	SystemPromptPackFRID = uuid.MustParse("00000000-0000-0000-0000-000000000005")
+)
+
+// SystemFillerPackID and SystemFillerPackFRID seed the bundled filler
+// (short noun-phrase, payload v3) packs in EN and FR.
+var (
+	SystemFillerPackID   = uuid.MustParse("00000000-0000-0000-0000-000000000006")
+	SystemFillerPackFRID = uuid.MustParse("00000000-0000-0000-0000-000000000007")
+)
+
 const (
 	systemPackName              = "Demo Pack"
 	systemPackDescription       = "Bundled sample images to get you started."
@@ -47,12 +61,76 @@ const (
 	systemTextPackFRDescription = "Prompts texte prêts à l'emploi pour commencer."
 	demoTextPackFRDir           = "demo-text-pack-fr"
 	demoTextPackFile            = "items.json"
+
+	// Prompt packs (sentence-with-blank, payload v4).
+	systemPromptPackName          = "Demo Prompt Pack"
+	systemPromptPackDescription   = "Bundled fill-in-the-blank sentences for prompt games."
+	demoPromptPackDir             = "demo-prompt-pack"
+	systemPromptPackFRName        = "Pack de prompts de démo"
+	systemPromptPackFRDescription = "Phrases à compléter prêtes à l'emploi pour les jeux prompt."
+	demoPromptPackFRDir           = "demo-prompt-pack-fr"
+
+	// Filler packs (short noun-phrase cards, payload v3).
+	systemFillerPackName          = "Demo Filler Pack"
+	systemFillerPackDescription   = "Bundled filler cards to play in prompt-showdown."
+	demoFillerPackDir             = "demo-filler-pack"
+	systemFillerPackFRName        = "Pack de fillers de démo"
+	systemFillerPackFRDescription = "Cartes de fillers prêtes à jouer dans Prompt Choice."
+	demoFillerPackFRDir           = "demo-filler-pack-fr"
 )
 
-// textPackSpec holds the per-language parameters consumed by the shared text
-// sync orchestration. The sync logic itself is language-agnostic — it reads
-// items.json from `dir` and upserts the pack identified by `id`.
+// textPackSpec holds the per-pack parameters consumed by the shared text-style
+// sync orchestration. The sync logic itself is language- and version-agnostic
+// — it reads items.json from `dir` and upserts the pack identified by `id`,
+// writing items at the requested `payloadVersion`.
 type textPackSpec struct {
+	id             uuid.UUID
+	name           string
+	description    string
+	language       string
+	dir            string
+	payloadVersion int32
+}
+
+var (
+	textSpecEN = textPackSpec{
+		id:             SystemTextPackID,
+		name:           systemTextPackName,
+		description:    systemTextPackDescription,
+		language:       "en",
+		dir:            demoTextPackDir,
+		payloadVersion: 2,
+	}
+	textSpecFR = textPackSpec{
+		id:             SystemTextPackFRID,
+		name:           systemTextPackFRName,
+		description:    systemTextPackFRDescription,
+		language:       "fr",
+		dir:            demoTextPackFRDir,
+		payloadVersion: 2,
+	}
+	fillerSpecEN = textPackSpec{
+		id:             SystemFillerPackID,
+		name:           systemFillerPackName,
+		description:    systemFillerPackDescription,
+		language:       "en",
+		dir:            demoFillerPackDir,
+		payloadVersion: 3,
+	}
+	fillerSpecFR = textPackSpec{
+		id:             SystemFillerPackFRID,
+		name:           systemFillerPackFRName,
+		description:    systemFillerPackFRDescription,
+		language:       "fr",
+		dir:            demoFillerPackFRDir,
+		payloadVersion: 3,
+	}
+)
+
+// promptPackSpec is the prompt (payload v4) counterpart of textPackSpec.
+// Prompt items have a different payload shape ({prefix, suffix}), so they
+// reuse the upsert/scan structure but not the create/apply helpers.
+type promptPackSpec struct {
 	id          uuid.UUID
 	name        string
 	description string
@@ -61,19 +139,19 @@ type textPackSpec struct {
 }
 
 var (
-	textSpecEN = textPackSpec{
-		id:          SystemTextPackID,
-		name:        systemTextPackName,
-		description: systemTextPackDescription,
+	promptSpecEN = promptPackSpec{
+		id:          SystemPromptPackID,
+		name:        systemPromptPackName,
+		description: systemPromptPackDescription,
 		language:    "en",
-		dir:         demoTextPackDir,
+		dir:         demoPromptPackDir,
 	}
-	textSpecFR = textPackSpec{
-		id:          SystemTextPackFRID,
-		name:        systemTextPackFRName,
-		description: systemTextPackFRDescription,
+	promptSpecFR = promptPackSpec{
+		id:          SystemPromptPackFRID,
+		name:        systemPromptPackFRName,
+		description: systemPromptPackFRDescription,
 		language:    "fr",
-		dir:         demoTextPackFRDir,
+		dir:         demoPromptPackFRDir,
 	}
 )
 
@@ -332,6 +410,17 @@ func SyncTextFR(ctx context.Context, q *db.Queries, logger *slog.Logger) error {
 	return syncTextPackFS(ctx, q, DemoTextPackFRFS, textSpecFR, logger)
 }
 
+// SyncFiller runs the startup sync for the bundled English filler pack
+// (payload v3). Same orchestration as SyncText with a different spec.
+func SyncFiller(ctx context.Context, q *db.Queries, logger *slog.Logger) error {
+	return syncTextPackFS(ctx, q, DemoFillerPackFS, fillerSpecEN, logger)
+}
+
+// SyncFillerFR runs the startup sync for the bundled French filler pack.
+func SyncFillerFR(ctx context.Context, q *db.Queries, logger *slog.Logger) error {
+	return syncTextPackFS(ctx, q, DemoFillerPackFRFS, fillerSpecFR, logger)
+}
+
 // SyncTextFS is SyncText's testable core (English spec).
 func SyncTextFS(ctx context.Context, q *db.Queries, srcFS fs.FS, logger *slog.Logger) error {
 	return syncTextPackFS(ctx, q, srcFS, textSpecEN, logger)
@@ -394,7 +483,7 @@ func syncTextPackFS(ctx context.Context, q *db.Queries, srcFS fs.FS, spec textPa
 			continue
 		}
 
-		if err := createNewTextItem(ctx, q, pack.ID, stem, e.Text, hashHex); err != nil {
+		if err := createNewTextItem(ctx, q, pack.ID, stem, e.Text, hashHex, spec.payloadVersion); err != nil {
 			logger.Error("systempack sync", "event", "text.create_failed", "name", stem, "error", err)
 			continue
 		}
@@ -452,11 +541,12 @@ func createNewTextItem(
 	q *db.Queries,
 	packID uuid.UUID,
 	stem, text, hashHex string,
+	payloadVersion int32,
 ) error {
 	item, err := q.CreateItem(ctx, db.CreateItemParams{
 		PackID:         packID,
 		Name:           stem,
-		PayloadVersion: 2,
+		PayloadVersion: payloadVersion,
 	})
 	if err != nil {
 		return fmt.Errorf("create text item row: %w", err)
@@ -501,6 +591,202 @@ func applyNewTextVersion(
 		CurrentVersionID: pgtype.UUID{Bytes: ver.ID, Valid: true},
 	}); err != nil {
 		return fmt.Errorf("set current text version: %w", err)
+	}
+	return nil
+}
+
+// ── Prompt demo pack ─────────────────────────────────────────────────────
+//
+// Prompt items have payload_version 4 and a `{prefix, suffix}` shape — at
+// least one of the two is non-empty (the blank can sit at start, middle, or
+// end of the rendered sentence). Same idempotent upsert + hash skip pattern
+// as the text pack sync.
+
+// SyncPrompt runs the startup sync for the bundled English prompt pack.
+func SyncPrompt(ctx context.Context, q *db.Queries, logger *slog.Logger) error {
+	return syncPromptPackFS(ctx, q, DemoPromptPackFS, promptSpecEN, logger)
+}
+
+// SyncPromptFR runs the startup sync for the bundled French prompt pack.
+func SyncPromptFR(ctx context.Context, q *db.Queries, logger *slog.Logger) error {
+	return syncPromptPackFS(ctx, q, DemoPromptPackFRFS, promptSpecFR, logger)
+}
+
+// SyncPromptFS / SyncPromptFRFS expose the testable cores so unit tests can
+// inject an fstest.MapFS without wiring through the embedded FS.
+func SyncPromptFS(ctx context.Context, q *db.Queries, srcFS fs.FS, logger *slog.Logger) error {
+	return syncPromptPackFS(ctx, q, srcFS, promptSpecEN, logger)
+}
+func SyncPromptFRFS(ctx context.Context, q *db.Queries, srcFS fs.FS, logger *slog.Logger) error {
+	return syncPromptPackFS(ctx, q, srcFS, promptSpecFR, logger)
+}
+
+type promptEntry struct {
+	Name   string `json:"name"`
+	Prefix string `json:"prefix"`
+	Suffix string `json:"suffix"`
+}
+
+func syncPromptPackFS(ctx context.Context, q *db.Queries, srcFS fs.FS, spec promptPackSpec, logger *slog.Logger) error {
+	start := time.Now()
+
+	pack, err := q.UpsertSystemPack(ctx, db.UpsertSystemPackParams{
+		ID:          spec.id,
+		Name:        spec.name,
+		Description: strPtr(spec.description),
+		Language:    spec.language,
+	})
+	if err != nil {
+		return fmt.Errorf("upsert system prompt pack: %w", err)
+	}
+
+	entries, err := readPromptEntries(srcFS, spec.dir, logger)
+	if err != nil {
+		return fmt.Errorf("read prompt entries: %w", err)
+	}
+
+	existing, err := loadExisting(ctx, q, pack.ID)
+	if err != nil {
+		return fmt.Errorf("load existing prompt items: %w", err)
+	}
+
+	seen := map[string]bool{}
+	stats := syncStats{}
+
+	for _, e := range entries {
+		stem := strings.ToLower(strings.TrimSpace(e.Name))
+		if stem == "" {
+			logger.Warn("systempack sync", "event", "prompt.entry_skipped_no_name")
+			continue
+		}
+		if strings.TrimSpace(e.Prefix) == "" && strings.TrimSpace(e.Suffix) == "" {
+			logger.Warn("systempack sync", "event", "prompt.entry_skipped_blank_only", "name", stem)
+			continue
+		}
+		seen[stem] = true
+		// Hash the canonical concatenation so a tweak to either side bumps the
+		// hash (and a no-op edit doesn't).
+		hashHex := sha256Hex([]byte(e.Prefix + "" + e.Suffix))
+
+		if cur, ok := existing[stem]; ok {
+			if cur.hash == hashHex {
+				stats.unchanged++
+				continue
+			}
+			if err := applyNewPromptVersion(ctx, q, cur.itemID, e.Prefix, e.Suffix, hashHex); err != nil {
+				logger.Error("systempack sync", "event", "prompt.update_failed", "name", stem, "error", err)
+				continue
+			}
+			stats.updated++
+			logger.Info("systempack sync", "event", "prompt.update", "name", stem, "new_hash", hashHex[:8])
+			continue
+		}
+
+		if err := createNewPromptItem(ctx, q, pack.ID, stem, e.Prefix, e.Suffix, hashHex); err != nil {
+			logger.Error("systempack sync", "event", "prompt.create_failed", "name", stem, "error", err)
+			continue
+		}
+		stats.created++
+		logger.Info("systempack sync", "event", "prompt.create", "name", stem)
+	}
+
+	for stem, cur := range existing {
+		if seen[stem] {
+			continue
+		}
+		if err := q.SoftDeleteItem(ctx, cur.itemID); err != nil {
+			logger.Error("systempack sync", "event", "prompt.retire_failed", "name", stem, "error", err)
+			continue
+		}
+		stats.retired++
+		logger.Info("systempack sync", "event", "prompt.retire", "name", stem)
+	}
+
+	logger.Info("systempack sync",
+		"event", "prompt_summary",
+		"created", stats.created,
+		"updated", stats.updated,
+		"retired", stats.retired,
+		"unchanged", stats.unchanged,
+		"duration", time.Since(start).String())
+
+	return nil
+}
+
+func readPromptEntries(srcFS fs.FS, dir string, logger *slog.Logger) ([]promptEntry, error) {
+	data, err := fs.ReadFile(srcFS, dir+"/"+demoTextPackFile)
+	if err != nil {
+		logger.Warn("systempack sync", "event", "prompt.read_failed", "error", err)
+		return nil, nil
+	}
+	var entries []promptEntry
+	if err := json.Unmarshal(data, &entries); err != nil {
+		return nil, fmt.Errorf("parse items.json: %w", err)
+	}
+	return entries, nil
+}
+
+func createNewPromptItem(
+	ctx context.Context,
+	q *db.Queries,
+	packID uuid.UUID,
+	stem, prefix, suffix, hashHex string,
+) error {
+	item, err := q.CreateItem(ctx, db.CreateItemParams{
+		PackID:         packID,
+		Name:           stem,
+		PayloadVersion: 4,
+	})
+	if err != nil {
+		return fmt.Errorf("create prompt item row: %w", err)
+	}
+	payload, _ := json.Marshal(map[string]string{
+		"prefix": prefix,
+		"suffix": suffix,
+		"sha256": hashHex,
+	})
+	ver, err := q.CreateItemVersion(ctx, db.CreateItemVersionParams{
+		ItemID:   item.ID,
+		MediaKey: nil,
+		Payload:  payload,
+	})
+	if err != nil {
+		_ = q.SoftDeleteItem(ctx, item.ID)
+		return fmt.Errorf("create prompt version: %w", err)
+	}
+	if _, err := q.SetCurrentVersion(ctx, db.SetCurrentVersionParams{
+		ID:               item.ID,
+		CurrentVersionID: pgtype.UUID{Bytes: ver.ID, Valid: true},
+	}); err != nil {
+		return fmt.Errorf("set current prompt version: %w", err)
+	}
+	return nil
+}
+
+func applyNewPromptVersion(
+	ctx context.Context,
+	q *db.Queries,
+	itemID uuid.UUID,
+	prefix, suffix, hashHex string,
+) error {
+	payload, _ := json.Marshal(map[string]string{
+		"prefix": prefix,
+		"suffix": suffix,
+		"sha256": hashHex,
+	})
+	ver, err := q.CreateItemVersion(ctx, db.CreateItemVersionParams{
+		ItemID:   itemID,
+		MediaKey: nil,
+		Payload:  payload,
+	})
+	if err != nil {
+		return fmt.Errorf("create prompt version: %w", err)
+	}
+	if _, err := q.SetCurrentVersion(ctx, db.SetCurrentVersionParams{
+		ID:               itemID,
+		CurrentVersionID: pgtype.UUID{Bytes: ver.ID, Valid: true},
+	}); err != nil {
+		return fmt.Errorf("set current prompt version: %w", err)
 	}
 	return nil
 }

@@ -219,10 +219,11 @@ type Hub struct {
 	// the Run() goroutine, so no mutex is needed despite the function type.
 	roundsCancel context.CancelFunc
 
-	// memeVote owns the text-deck and per-player hands for a meme-showdown
-	// room; nil for any other game type. Populated by startGame and only
-	// ever read/written on the Run goroutine.
-	memeVote *handState
+	// handDeck owns the deck and per-player hands for any showdown-style
+	// room (meme-showdown, prompt-showdown). Nil for game types that don't
+	// deal hands. Populated by startGame and only ever read/written on the
+	// Run goroutine.
+	handDeck *handState
 }
 
 // connectedPlayer is hub-internal player state. userID is really a generic
@@ -660,13 +661,13 @@ func (h *Hub) handleRoundCtrl(ctx context.Context, ctrl roundCtrlMsg) {
 		h.resultsLeaderboard = nil
 		h.roundResultsEndsAt = time.Time{}
 		h.roundPausedFlag = false
-		// Refill meme-showdown hands before emitting round_started. Round 1 is a
+		// Refill showdown hands before emitting round_started. Round 1 is a
 		// no-op because DealInitial already filled every hand in startGame;
 		// subsequent rounds top every player back to hand_size. Exhaustion
 		// here is surfaced as pack_exhausted end-of-game so the client sees a
 		// clean close rather than a stalled submit phase.
-		if h.memeVote != nil {
-			if err := h.memeVote.Refill(h.seatedPlayerIDs()); err != nil {
+		if h.handDeck != nil {
+			if err := h.handDeck.Refill(h.seatedPlayerIDs()); err != nil {
 				h.sendRoundCtrl(ctx, roundCtrlEndGame{reason: "pack_exhausted"})
 				return
 			}
@@ -841,8 +842,11 @@ func (h *Hub) startGame(ctx context.Context) {
 	}); err != nil {
 		h.log.Error("hub: set room state playing", "error", err)
 	}
-	if h.gameTypeSlug == "meme-showdown" {
-		if !h.initMemeVoteHands(ctx) {
+	// Showdown-style game types deal a per-player hand at game start. The
+	// hub gates on PersonalisesRoundStart() so any future hand-dealing
+	// handler is picked up automatically without touching this branch.
+	if handler, ok := h.registry.Get(h.gameTypeSlug); ok && handler.PersonalisesRoundStart() {
+		if !h.initHandDeck(ctx) {
 			return
 		}
 	}
@@ -965,14 +969,16 @@ func (h *Hub) runRounds(ctx context.Context) {
 		cfg.VotingDurationSeconds = 30
 	}
 
+	// The room's primary pack (rooms.pack_id) is whatever role the handler
+	// declares first in RequiredPacks(). For meme-* that's the image pack;
+	// for prompt-* it's the prompt pack. Pull the payload versions from the
+	// primary so GetRandomUnplayedItems filters correctly.
 	handler, hasHandler := h.registry.Get(h.gameTypeSlug)
 	var versions []int32
 	if hasHandler {
-		for _, pr := range handler.RequiredPacks() {
-			if pr.Role != PackRoleImage {
-				continue
-			}
-			for _, v := range pr.PayloadVersions {
+		reqs := handler.RequiredPacks()
+		if len(reqs) > 0 {
+			for _, v := range reqs[0].PayloadVersions {
 				versions = append(versions, int32(v))
 			}
 		}
@@ -1196,10 +1202,11 @@ func (h *Hub) handleGameMessage(ctx context.Context, msg playerMessage) {
 			}))
 			return
 		}
-		// Meme-vote: consume the card from the player's hand and snapshot its
-		// text into the stored payload so later pack edits do not mutate
-		// history. The handler has already validated that card_id is a UUID.
-		if h.memeVote != nil {
+		// Showdown handlers: consume the card from the player's hand and
+		// snapshot its text into the stored payload so later pack edits do
+		// not mutate history. The handler has already validated that
+		// card_id is a UUID.
+		if h.handDeck != nil {
 			var p struct {
 				CardID string `json:"card_id"`
 			}
@@ -1216,13 +1223,13 @@ func (h *Hub) handleGameMessage(ctx context.Context, msg playerMessage) {
 				}))
 				return
 			}
-			if err := h.memeVote.Play(msg.player.userID, cardID); err != nil {
+			if err := h.handDeck.Play(msg.player.userID, cardID); err != nil {
 				h.safeSend(msg.player, buildMessage("error", map[string]string{
 					"code": err.Error(), "message": "card not in your hand",
 				}))
 				return
 			}
-			text := h.memeVote.textFor[cardID]
+			text := h.handDeck.textFor[cardID]
 			snapshot, _ := json.Marshal(map[string]string{
 				"card_id": p.CardID,
 				"text":    text,
@@ -1633,10 +1640,11 @@ func (h *Hub) sendPerPlayer(msgType string, base map[string]any, perPlayer func(
 
 // personalRoundStartData returns the player-specific fields that should be
 // merged into round_started. Only called for handlers whose
-// PersonalisesRoundStart()==true. For meme-showdown it carries the player's
-// hand; other personalised game types would add their own fields here.
+// PersonalisesRoundStart()==true. For showdown game types it carries the
+// player's hand; other personalised game types would add their own fields
+// here.
 func (h *Hub) personalRoundStartData(playerID string) map[string]any {
-	if hand := h.memeVoteHandPayload(playerID); hand != nil {
+	if hand := h.handPayloadFor(playerID); hand != nil {
 		return map[string]any{"hand": hand}
 	}
 	return nil
@@ -1704,11 +1712,11 @@ func (h *Hub) buildRoomState(recipientUserID string) map[string]any {
 		"players": players,
 		"host_id": h.hostUserID,
 	}
-	// meme-showdown hands are per-player state that must survive refresh and
+	// Showdown hands are per-player state that must survive refresh and
 	// reconnect. Emit the recipient's current hand whenever the room is
 	// playing (not just mid-round) so the client can render the tray on the
 	// lobby-to-round transition without waiting for round_started.
-	if hand := h.memeVoteHandPayload(recipientUserID); hand != nil {
+	if hand := h.handPayloadFor(recipientUserID); hand != nil {
 		out["my_hand"] = hand
 	}
 	// Mid-round rehydration: a client that refreshes or joins late needs
