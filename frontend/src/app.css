@@ -86,6 +86,12 @@ html {
 html, body {
   min-height: 100dvh;
 }
+/* Mobile rubber-band exposes <html>, not <body>. Without a background here,
+   iOS/Android paint the default white when the user overscrolls past the
+   top or bottom. Anchoring to a gradient stop keeps the bounce on-brand. */
+html {
+  background-color: var(--brand-grad-1);
+}
 body {
   background:
     linear-gradient(
