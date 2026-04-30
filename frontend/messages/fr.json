@@ -274,6 +274,8 @@
 	"error_fallback_body": "Quelque chose s’est mal passé de notre côté.",
 	"error_fallback_title": "Erreur inattendue",
 	"error_join_with_code": "Rejoindre avec un code",
+	"error_room_not_found_body": "Ce salon n’existe pas ou a fermé. On te ramène à l’accueil…",
+	"error_room_not_found_title": "Salon introuvable",
 	"error_status_prefix": "Erreur {status}",
 	"errors_age_affirmation_required": "Tu dois confirmer avoir 16 ans ou plus pour t’inscrire.",
 	"errors_already_in_active_room": "Tu es déjà dans un salon actif — quitte-le avant d’en créer ou d’en rejoindre un autre.",

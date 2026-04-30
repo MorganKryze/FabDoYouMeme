@@ -274,6 +274,8 @@
 	"error_fallback_body": "Something went wrong on our end.",
 	"error_fallback_title": "Unexpected error",
 	"error_join_with_code": "Join with a code",
+	"error_room_not_found_body": "This room doesn't exist or has closed. Taking you home…",
+	"error_room_not_found_title": "Room not found",
 	"error_status_prefix": "Error {status}",
 	"errors_age_affirmation_required": "You must confirm you are 16 or older to register.",
 	"errors_already_in_active_room": "You are already in an active room — leave it before creating or joining another.",

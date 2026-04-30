@@ -95,19 +95,19 @@
     { glyph: '♦', title: m.marketing_adv3_title(), body: m.marketing_adv3_body(), Icon: Sparkles },
     { glyph: '♣', title: m.marketing_adv4_title(), body: m.marketing_adv4_body(), Icon: Shield },
     { glyph: '★', title: m.marketing_adv5_title(), body: m.marketing_adv5_body(), Icon: Gamepad2 },
-    { glyph: '⚙', title: m.marketing_adv6_title(), body: m.marketing_adv6_body(), Icon: Code2 },
+    { glyph: null, title: m.marketing_adv6_title(), body: m.marketing_adv6_body(), Icon: Code2 },
   ]);
 
   function onFanMove(e: MouseEvent) {
     if (!fan) return;
     if (!matchMedia('(hover: hover) and (pointer: fine)').matches) return;
-    // .fan collapses to 0x0, so use the wrapper for a real hit-rect.
-    const wrap = fan.parentElement ?? fan;
-    const r = wrap.getBoundingClientRect();
+    // Handler is now on .fan-wrap (which has a real hit-rect); .fan itself
+    // is 0×0 and would never receive mousemove on its empty top region.
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const x = (e.clientX - r.left) / r.width - 0.5;
     const y = (e.clientY - r.top) / r.height - 0.5;
     // Preserve the baseline translateX set in CSS.
-    const shift = getComputedStyle(fan).getPropertyValue('--fan-shift') || '-40px';
+    const shift = getComputedStyle(fan).getPropertyValue('--fan-shift') || '0px';
     fan.style.transform = `translateX(${shift}) perspective(900px) rotateX(${y * -4}deg) rotateY(${x * 6}deg)`;
   }
   function onFanLeave() {
@@ -184,15 +184,15 @@
     </div>
   </div>
 
-  <div class="fan-wrap" use:reveal>
+  <div
+    class="fan-wrap"
+    use:reveal
+    onmousemove={onFanMove}
+    onmouseleave={onFanLeave}
+    role="presentation"
+  >
     <div class="float f1" aria-hidden="true"></div>
-    <div
-      bind:this={fan}
-      class="fan"
-      onmousemove={onFanMove}
-      onmouseleave={onFanLeave}
-      role="presentation"
-    >
+    <div bind:this={fan} class="fan">
       {#each heroCards as c, i (i)}
         <article class="card fan-card" class:winner={c.winner} data-pos={i + 1} data-winner-label={m.marketing_hero_winner_badge()}>
           <div class="card-stripe">{m.marketing_hero_stripe_meme()}</div>
@@ -304,7 +304,9 @@
   <div class="why">
     {#each advantages as a, i (i)}
       <div class="why-row" use:reveal>
-        <div class="why-icon" aria-hidden="true">{a.glyph}</div>
+        <div class="why-icon" aria-hidden="true">
+          {#if a.glyph}{a.glyph}{:else}<a.Icon size={22} strokeWidth={2.25} />{/if}
+        </div>
         <div>
           <h4 class="why-title">{a.title}</h4>
           <p class="why-body">{a.body}</p>
@@ -528,9 +530,16 @@
   }
   .fan-card {
     position: absolute;
-    width: 240px; height: 340px;
+    width: 244px; height: 340px;
+    padding: 18px;
+    border-radius: 22px;
+    gap: 10px;
     transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
   }
+  .fan-card .card-stripe { height: 134px; border-radius: 14px; }
+  .fan-card .card-caption { font-size: 15px; }
+  .fan-card .card-foot { font-size: 11px; }
+  .fan-card .vote-pip { width: 10px; height: 10px; }
   .card-stripe {
     height: 130px; border-radius: 14px;
     border: 2.5px solid var(--brand-border-heavy);
@@ -566,37 +575,33 @@
     position: relative;
     width: 0;
     height: 0;
-    --fan-shift: -90px;
+    --fan-shift: 40px;
     transform: translateX(var(--fan-shift));
     transition: transform 0.2s ease;
   }
   @media (max-width: 960px) {
     .fan { --fan-shift: 0px; }
   }
-  /* Below 720px the absolute-positioned fan-cards (translate ±185px each)
-     would punch out of the viewport and force horizontal scroll. Scale the
-     whole fan down to fit, anchored to the top. Decorative floats removed
-     entirely on phones — they overlap content and add no signal. */
-  @media (max-width: 720px) {
-    .fan {
-      transform: scale(0.55);
-      transform-origin: 50% 0;
-    }
-    .fan-wrap {
-      padding-top: 0;
-      height: 280px;
-    }
-    .float { display: none; }
-  }
-  .fan .fan-card[data-pos='1'] { transform: translate(-170px, 20px) rotate(-14deg); }
-  .fan .fan-card[data-pos='2'] { transform: translate(-55px, -8px) rotate(-4deg); z-index: 2; }
-  .fan .fan-card[data-pos='3'] { transform: translate(70px, 6px) rotate(6deg); z-index: 3; box-shadow: 0 8px 0 rgba(0, 0, 0, 0.14); }
-  .fan .fan-card[data-pos='4'] { transform: translate(185px, 40px) rotate(16deg); z-index: 1; }
+  /* Cards positioned with top-left translates so the visual bounding box
+     spans roughly ±200px around the fan reference — fits inside the right
+     column at viewport 1180 (col2 ≈ 533px) and any narrower viewport. */
+  .fan .fan-card[data-pos='1'] { transform: translate(-160px, 14px) rotate(-12deg); }
+  .fan .fan-card[data-pos='2'] { transform: translate(-130px, -4px) rotate(-3deg); z-index: 2; }
+  .fan .fan-card[data-pos='3'] { transform: translate(-100px, 0px) rotate(5deg); z-index: 3; box-shadow: 0 8px 0 rgba(0, 0, 0, 0.14); }
+  .fan .fan-card[data-pos='4'] { transform: translate(-68px, 18px) rotate(13deg); z-index: 1; }
 
-  .fan:hover .fan-card[data-pos='1'] { transform: translate(-210px, 20px) rotate(-20deg); }
-  .fan:hover .fan-card[data-pos='2'] { transform: translate(-72px, -22px) rotate(-8deg); }
-  .fan:hover .fan-card[data-pos='3'] { transform: translate(80px, -14px) rotate(10deg); }
-  .fan:hover .fan-card[data-pos='4'] { transform: translate(230px, 50px) rotate(22deg); }
+  .fan-wrap:hover .fan-card[data-pos='1'] { transform: translate(-184px, 12px) rotate(-16deg); }
+  .fan-wrap:hover .fan-card[data-pos='2'] { transform: translate(-142px, -12px) rotate(-6deg); }
+  .fan-wrap:hover .fan-card[data-pos='3'] { transform: translate(-94px, -6px) rotate(8deg); }
+  .fan-wrap:hover .fan-card[data-pos='4'] { transform: translate(-50px, 24px) rotate(16deg); }
+
+  @media (max-width: 1180px) {
+    .fan-wrap { padding-top: 0; height: 360px; }
+  }
+  /* Mobile: hide the entire fan + ambient floats — text-only hero. */
+  @media (max-width: 720px) {
+    .fan-wrap { display: none; }
+  }
 
   .winner { position: relative; }
   .winner::after {
@@ -628,8 +633,8 @@
       linear-gradient(180deg, var(--brand-grad-4), var(--brand-grad-1));
     border: 2px solid var(--brand-border);
   }
-  .float.f1 { top: 40px; left: -60px; transform: rotate(-14deg); animation-delay: -2s; }
-  .float.f2 { bottom: -40px; right: -40px; transform: rotate(18deg); animation-delay: -5s; width: 140px; height: 200px; }
+  .float.f1 { top: 40px; left: 30px; transform: rotate(-14deg); animation-delay: -2s; }
+  .float.f2 { bottom: -20px; right: 30px; transform: rotate(18deg); animation-delay: -5s; width: 140px; height: 200px; }
   @keyframes floaty { 0%, 100% { translate: 0 0; } 50% { translate: 0 -14px; } }
   @media (prefers-reduced-motion: reduce) { .float { animation: none; } }
 
