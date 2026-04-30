@@ -20,6 +20,18 @@
 #
 # Self-hoster guidance: pin :stable for production, :X.Y for conservative
 # auto-upgrade within a minor line, an exact :X.Y.Z if you need full freeze.
+#
+# Build topology:
+#   build (matrix: {backend, frontend} × {amd64, arm64})
+#     → each per-arch build runs on its native runner (no QEMU), pushes by
+#       digest only, exports the digest as an artifact.
+#   merge (matrix: {backend, frontend})
+#     → assembles a multi-arch manifest list under every metadata tag, then
+#       runs Trivy + provenance attestation against the merged index once.
+#
+# This replaces the previous single-runner QEMU build. Native arm64 (free
+# ubuntu-24.04-arm runner for public repos) typically cuts the frontend
+# wall-clock by ~3–5× because the SvelteKit/npm build no longer emulates.
 name: Docker publish
 
 on:
@@ -52,12 +64,16 @@ permissions:
   security-events: write
 
 jobs:
-  publish:
-    name: Build & push ${{ matrix.name }}
-    runs-on: ubuntu-latest
+  # Per-arch build. Each cell runs on its native runner (no QEMU), pushes the
+  # image by digest only (no tag), and uploads the digest for the merge job.
+  build:
+    name: Build ${{ matrix.name }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
+        name: [backend, frontend]
+        arch: [amd64, arm64]
         include:
           - name: backend
             context: ./backend
@@ -65,7 +81,12 @@ jobs:
           - name: frontend
             context: ./frontend
             dockerfile: ./frontend/Dockerfile
-
+          - arch: amd64
+            platform: linux/amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            platform: linux/arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -83,14 +104,98 @@ jobs:
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           echo "ref=ghcr.io/${owner}/fabdoyoumeme-${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Labels only — tags are applied later by the merge job to the manifest
+      # list. metadata-action still gives us the canonical OCI labels here.
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ steps.image.outputs.ref }}
+          labels: |
+            org.opencontainers.image.title=FabDoYouMeme ${{ matrix.name }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.licenses=GPL-3.0-or-later
+
+      # Push by digest only (`outputs: ...,push-by-digest=true,name-canonical=true`).
+      # No tag is applied at this stage; the merge job assembles the manifest
+      # list and attaches all tags atomically.
+      #
+      # Cache scope is per-(image, arch) so amd64 and arm64 don't evict each
+      # other and the GHA cache stays warm across runs.
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ steps.image.outputs.ref }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ matrix.name }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}-${{ matrix.arch }}
+
+      # Stash the digest as a one-line file so the merge job can pick all
+      # arches up via a single download-artifact glob. Filename is the bare
+      # hex (sha256: prefix stripped) so the merge job can rebuild full refs.
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.name }}-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Assemble per-arch digests into a manifest list, apply every tag from
+  # metadata-action atomically, then run Trivy + provenance once against the
+  # merged index.
+  merge:
+    name: Merge & publish ${{ matrix.name }}
+    needs: [build]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        name: [backend, frontend]
+    steps:
+      - name: Compute image reference
+        id: image
+        env:
+          IMAGE_NAME: ${{ matrix.name }}
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "ref=ghcr.io/${owner}/fabdoyoumeme-${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digest-${{ matrix.name }}-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -100,7 +205,7 @@ jobs:
       # `enable` clauses scope each pattern to the correct trigger.
       - name: Extract metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ steps.image.outputs.ref }}
           tags: |
@@ -109,27 +214,34 @@ jobs:
             type=semver,pattern={{major}}.{{minor}},enable=${{ github.event_name == 'release' }}
             type=semver,pattern={{major}},enable=${{ github.event_name == 'release' }}
             type=raw,value=stable,enable=${{ github.event_name == 'release' }}
-          labels: |
-            org.opencontainers.image.title=FabDoYouMeme ${{ matrix.name }}
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.licenses=GPL-3.0-or-later
 
-      # Multi-arch build. Go backend cross-compiles natively so arm64 is fast;
-      # frontend arm64 goes through QEMU, which is slower but still under the
-      # build cache window on repeat builds. GHA cache makes the second run ~3×
-      # faster than a cold start.
-      - name: Build and push
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+      # Build the manifest list pointing at every per-arch digest, applying
+      # every tag in one atomic call. `jq` produces the `-t TAG` flags;
+      # source refs are reconstructed from the digest filenames uploaded by
+      # the build job.
+      - name: Create and push manifest list
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.ref }}
+          TAGS_JSON: ${{ steps.meta.outputs.json }}
+        working-directory: /tmp/digests
+        run: |
+          set -euo pipefail
+          mapfile -t tag_args < <(jq -r '.tags[] | "-t\n" + .' <<< "$TAGS_JSON")
+          mapfile -t source_refs < <(printf '%s\n' * | sed "s|^|${IMAGE_REF}@sha256:|")
+          docker buildx imagetools create "${tag_args[@]}" "${source_refs[@]}"
+
+      # Re-resolve the merged manifest's digest so attestation + Trivy target
+      # the manifest list (not any one arch).
+      - name: Inspect merged digest
+        id: digest
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.ref }}
+          TAGS_JSON: ${{ steps.meta.outputs.json }}
+        run: |
+          set -euo pipefail
+          first_tag="$(jq -r '.tags[0]' <<< "$TAGS_JSON")"
+          digest="$(docker buildx imagetools inspect "${first_tag}" --format '{{json .Manifest}}' | jq -r '.digest')"
+          echo "value=${digest}" >> "$GITHUB_OUTPUT"
 
       # SLSA build provenance signed by GitHub's Sigstore identity. Verifiable
       # with `gh attestation verify <image>` — gives self-hosters cryptographic
@@ -138,7 +250,7 @@ jobs:
         uses: actions/attest-build-provenance@v2
         with:
           subject-name: ${{ steps.image.outputs.ref }}
-          subject-digest: ${{ steps.build.outputs.digest }}
+          subject-digest: ${{ steps.digest.outputs.value }}
           push-to-registry: true
 
       # Trivy: non-blocking OS/package vuln scan. Reports CRITICAL/HIGH to the
@@ -161,7 +273,7 @@ jobs:
         continue-on-error: true
         uses: aquasecurity/trivy-action@v0.35.0
         with:
-          image-ref: ${{ steps.image.outputs.ref }}@${{ steps.build.outputs.digest }}
+          image-ref: ${{ steps.image.outputs.ref }}@${{ steps.digest.outputs.value }}
           format: sarif
           output: trivy-${{ matrix.name }}.sarif
           severity: CRITICAL,HIGH
@@ -184,7 +296,7 @@ jobs:
       - name: Summary
         env:
           IMAGE_NAME: ${{ matrix.name }}
-          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE_DIGEST: ${{ steps.digest.outputs.value }}
           IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
         run: |
           set -euo pipefail
