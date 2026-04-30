@@ -1,7 +1,7 @@
 <div align="center">
 
 <!-- TODO(media): replace placeholder with a real banner exported to docs/assets/banner.png (recommended: 1280×320, transparent or dark background, logo left + tagline right). -->
-<img src="docs/assets/banner.png" alt="FabDoYouMeme banner" width="100%" />
+<!-- <img src="docs/assets/banner.png" alt="FabDoYouMeme banner" width="100%" /> -->
 
 # FabDoYouMeme
 
