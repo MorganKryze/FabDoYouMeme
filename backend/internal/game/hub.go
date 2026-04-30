@@ -885,10 +885,14 @@ func (h *Hub) sendRoundCtrl(ctx context.Context, msg roundCtrlMsg) bool {
 //
 // Passing a nil allDone is safe — a nil channel in a select case never fires,
 // so the inter-round delay (which has no early-exit) can reuse this helper.
-func (h *Hub) waitPhase(ctx context.Context, duration time.Duration, allDone chan struct{}) bool {
+//
+// The heartbeat ticker is owned by the caller (runRounds) and shared across
+// every phase. Owning the ticker here would re-introduce a fake-clock race:
+// tests advancing time the moment they observe a phase-start broadcast can
+// out-run a ticker registered after sendRoundCtrl returns, leaving the new
+// ticker scheduled past the advanced clock and never firing.
+func (h *Hub) waitPhase(ctx context.Context, duration time.Duration, allDone chan struct{}, heartbeat clock.Ticker) bool {
 	deadline := h.clock.Now().Add(duration)
-	ticker := h.clock.NewTicker(500 * time.Millisecond)
-	defer ticker.Stop()
 
 	var pauseStart time.Time
 	paused := false
@@ -919,7 +923,7 @@ func (h *Hub) waitPhase(ctx context.Context, duration time.Duration, allDone cha
 					return false
 				}
 			}
-		case <-ticker.C():
+		case <-heartbeat.C():
 			if paused {
 				if h.clock.Now().Sub(pauseStart) >= h.cfg.ReconnectGraceWindow {
 					if !h.sendRoundCtrl(ctx, roundCtrlEndGame{reason: "all_players_disconnected"}) {
@@ -987,6 +991,15 @@ func (h *Hub) runRounds(ctx context.Context) {
 	roundDuration := time.Duration(cfg.RoundDurationSeconds) * time.Second
 	votingDuration := time.Duration(cfg.VotingDurationSeconds) * time.Second
 
+	// Heartbeat ticker shared by every waitPhase call in this game loop.
+	// Created before any sendRoundCtrl(...) so a fake-clock test that
+	// observes a round-lifecycle broadcast and immediately fake.Advance(...)s
+	// finds the entry already registered on the clock; otherwise the test
+	// goroutine can race past per-phase ticker registration and the ticker
+	// ends up scheduled past the advanced clock, blocking forever.
+	heartbeat := h.clock.NewTicker(500 * time.Millisecond)
+	defer heartbeat.Stop()
+
 	for i := 0; i < cfg.RoundCount; i++ {
 		select {
 		case <-ctx.Done():
@@ -1051,7 +1064,7 @@ func (h *Hub) runRounds(ctx context.Context) {
 			return
 		}
 
-		if !h.waitPhase(ctx, roundDuration, allSubmittedCh) {
+		if !h.waitPhase(ctx, roundDuration, allSubmittedCh, heartbeat) {
 			return
 		}
 
@@ -1065,7 +1078,7 @@ func (h *Hub) runRounds(ctx context.Context) {
 			return
 		}
 
-		if !h.waitPhase(ctx, votingDuration, allVotedCh) {
+		if !h.waitPhase(ctx, votingDuration, allVotedCh, heartbeat) {
 			return
 		}
 
@@ -1077,6 +1090,14 @@ func (h *Hub) runRounds(ctx context.Context) {
 			// The value is echoed to clients in vote_results as next_round_at
 			// so they can render a matching countdown.
 			resultsDur = 10 * time.Second
+		}
+		// Register the host-paced safety timer BEFORE the vote_results
+		// broadcast so fake-clock tests that advance time after observing
+		// vote_results find the timer entry already on the clock. Same
+		// rationale as the heartbeat ticker above.
+		var safetyExpired <-chan time.Time
+		if cfg.HostPaced {
+			safetyExpired = h.clock.After(5 * time.Minute)
 		}
 		if !h.sendRoundCtrl(ctx, roundCtrlCloseVoting{resultsDuration: resultsDur}) {
 			return
@@ -1091,10 +1112,10 @@ func (h *Hub) runRounds(ctx context.Context) {
 				return
 			case <-h.roundAdvanceCh:
 				// host clicked "Next Round"
-			case <-h.clock.After(5 * time.Minute):
+			case <-safetyExpired:
 				// safety timeout: auto-advance
 			}
-		} else if !h.waitPhase(ctx, resultsDur, nil) {
+		} else if !h.waitPhase(ctx, resultsDur, nil, heartbeat) {
 			return
 		}
 	}
