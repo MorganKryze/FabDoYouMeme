@@ -43,16 +43,20 @@ describe('VoteForm.svelte', () => {
   });
 
   it('disables the vote button until a card is selected', async () => {
-    const { getByRole } = render(VoteForm, { props: { submissions: SUBMISSIONS } });
+    const { getByRole, getAllByRole } = render(VoteForm, { props: { submissions: SUBMISSIONS } });
 
-    const voteBtn = getByRole('button', { name: /lock in my vote/i });
-    expect(voteBtn).toBeDisabled();
+    // Desktop and mobile responsive variants both render a vote button bound
+    // to the same disabled state — assert every match transitions together.
+    let voteBtns = getAllByRole('button', { name: /lock in my vote/i });
+    expect(voteBtns.length).toBeGreaterThan(0);
+    for (const btn of voteBtns) expect(btn).toBeDisabled();
 
     // Click the first submission card (alice's — carol is voter, not own).
     const card = getByRole('button', { name: /first caption/i });
     await fireEvent.click(card);
     flushSync();
 
-    expect(voteBtn).not.toBeDisabled();
+    voteBtns = getAllByRole('button', { name: /lock in my vote/i });
+    for (const btn of voteBtns) expect(btn).not.toBeDisabled();
   });
 });

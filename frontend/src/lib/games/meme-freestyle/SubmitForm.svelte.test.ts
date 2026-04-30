@@ -28,14 +28,17 @@ describe('SubmitForm.svelte', () => {
   });
 
   it('disables the submit button when caption is empty', () => {
-    const { getByRole } = render(SubmitForm, { props: { round: makeRound() } });
+    const { getAllByRole } = render(SubmitForm, { props: { round: makeRound() } });
 
-    const button = getByRole('button', { name: /submit/i });
-    expect(button).toBeDisabled();
+    // Desktop and mobile responsive variants both render a submit button
+    // bound to the same disabled state — assert every match is disabled.
+    const buttons = getAllByRole('button', { name: /submit/i });
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const button of buttons) expect(button).toBeDisabled();
   });
 
   it('enables the submit button once caption has non-whitespace text', async () => {
-    const { getByRole, getByPlaceholderText } = render(SubmitForm, {
+    const { getAllByRole, getByPlaceholderText } = render(SubmitForm, {
       props: { round: makeRound() }
     });
 
@@ -43,7 +46,8 @@ describe('SubmitForm.svelte', () => {
     await fireEvent.input(textarea, { target: { value: 'funny' } });
     flushSync();
 
-    const button = getByRole('button', { name: /submit/i });
-    expect(button).not.toBeDisabled();
+    const buttons = getAllByRole('button', { name: /submit/i });
+    expect(buttons.length).toBeGreaterThan(0);
+    for (const button of buttons) expect(button).not.toBeDisabled();
   });
 });
