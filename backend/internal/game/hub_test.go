@@ -254,10 +254,13 @@ func dial(t *testing.T, env *hubEnv, userID, username string) *websocket.Conn {
 	return conn
 }
 
-// readMsg reads the next WebSocket message with a short deadline.
+// readMsg reads the next WebSocket message. The deadline is wall-clock,
+// not fake-clock — broadcasts triggered by a faked timer still have to flush
+// through the hub goroutine and the WS write pump in real time. The 10s
+// budget is sized for slow CI runners; passing tests still complete in ms.
 func readMsg(t *testing.T, conn *websocket.Conn) map[string]any {
 	t.Helper()
-	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	conn.SetReadDeadline(time.Now().Add(10 * time.Second))
 	_, b, err := conn.ReadMessage()
 	if err != nil {
 		t.Fatalf("readMsg: %v", err)
