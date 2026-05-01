@@ -4,7 +4,7 @@
   import { reveal } from '$lib/actions/reveal';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { hoverEffect } from '$lib/actions/hoverEffect';
-  import { LogIn, ArrowRight } from '$lib/icons';
+  import { LogIn, ArrowRight, AlertTriangle } from '$lib/icons';
   import * as m from '$lib/paraglide/messages';
   import type { ActionData, PageData } from './$types';
 
@@ -32,10 +32,12 @@
 
   {#if isExpired}
     <div
-      class="rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white px-5 py-3 text-sm font-bold"
+      role="alert"
+      class="rounded-2xl border-[2.5px] border-red-300 bg-red-50 px-4 py-3 flex items-start gap-3 text-left"
       style="box-shadow: 0 4px 0 rgba(0,0,0,0.06);"
     >
-      {m.auth_verify_expired()}
+      <AlertTriangle size={20} strokeWidth={2.5} class="text-red-600 shrink-0 mt-0.5" />
+      <p class="text-sm font-bold text-red-700 leading-snug">{m.auth_verify_expired()}</p>
     </div>
     <a
       href="/auth/magic-link"
@@ -63,10 +65,12 @@
       </form>
     {:else}
       <div
-        class="rounded-2xl border-[2.5px] border-brand-border-heavy bg-brand-white px-5 py-3 text-sm font-bold"
+        role="alert"
+        class="rounded-2xl border-[2.5px] border-red-300 bg-red-50 px-4 py-3 flex items-start gap-3 text-left"
         style="box-shadow: 0 4px 0 rgba(0,0,0,0.06);"
       >
-        {m.auth_verify_no_token()}
+        <AlertTriangle size={20} strokeWidth={2.5} class="text-red-600 shrink-0 mt-0.5" />
+        <p class="text-sm font-bold text-red-700 leading-snug">{m.auth_verify_no_token()}</p>
       </div>
       <a href="/auth/magic-link" class="underline text-sm font-bold hover:text-brand-text text-brand-text-muted">
         {m.auth_verify_request_new()}

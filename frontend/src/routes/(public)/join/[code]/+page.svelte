@@ -5,7 +5,7 @@
   import { hoverEffect } from '$lib/actions/hoverEffect';
   import RoomCodeInput from '$lib/components/RoomCodeInput.svelte';
   import { guest } from '$lib/state/guest.svelte';
-  import { Play } from '$lib/icons';
+  import { Play, AlertTriangle } from '$lib/icons';
   import type { PageData } from './$types';
   import * as m from '$lib/paraglide/messages';
 
@@ -70,10 +70,12 @@
 <form onsubmit={onSubmit} class="flex flex-col gap-4">
   {#if error}
     <div
-      class="rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-5 py-3 text-sm font-bold"
+      role="alert"
+      class="rounded-2xl border-[2.5px] border-red-300 bg-red-50 px-4 py-3 flex items-start gap-3"
       style="box-shadow: 0 4px 0 rgba(0,0,0,0.06);"
     >
-      {error}
+      <AlertTriangle size={20} strokeWidth={2.5} class="text-red-600 shrink-0 mt-0.5" />
+      <p class="text-sm font-bold text-red-700 leading-snug">{error}</p>
     </div>
   {/if}
 
