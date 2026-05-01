@@ -29,6 +29,11 @@
   // UX surfaces the right error when the user picks a personal pack in
   // group mode. Filter UX is a phase-5 polish.
   let selectedGroupID = $state(untrack(() => data.preselectedGroupID ?? ''));
+  // Per-room player cap chosen by the host. Defaults to the manifest cap so
+  // hosts who don't touch the slider get today's behaviour. The backend
+  // validates pack-size requirements against this number, so lowering it
+  // makes smaller packs viable for friend-sized lobbies.
+  let maxPlayers = $state<number | null>(null);
   // One catalogue per role so pickers can display side by side without fighting
   // over a shared array.
   let packsByRole = $state<Record<string, Pack[]>>({});
@@ -125,6 +130,18 @@
     for (const req of requiredPacks) {
       void loadPacksForRole(req.role);
     }
+  });
+
+  // When the game type changes, reset maxPlayers to the manifest cap so the
+  // input shows the right starting point. Hosts who actively want a smaller
+  // lobby drag the slider after; hosts who don't touch it get the prior
+  // (manifest-wide) behaviour.
+  $effect(() => {
+    if (!selectedGameType) {
+      maxPlayers = null;
+      return;
+    }
+    maxPlayers = selectedGameType.config.max_players ?? null;
   });
 
   // Clear any selected pack that's no longer valid under the current scope
@@ -286,6 +303,11 @@
         />
         <input type="hidden" name="is_solo" value={String(isSolo)} />
         <input type="hidden" name="group_id" value={selectedGroupID} />
+        <input
+          type="hidden"
+          name="max_players"
+          value={maxPlayers !== null ? String(maxPlayers) : ''}
+        />
 
         {#if data.groups.length > 0}
           <div
@@ -511,6 +533,44 @@
             {/if}
           </div>
         {/each}
+
+        {#if selectedGameType && selectedGameType.config.max_players}
+          {@const minP = selectedGameType.config.min_players}
+          {@const capP = selectedGameType.config.max_players}
+          <div
+            class="rounded-[18px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-4 flex flex-col gap-2"
+            style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
+          >
+            <label class="text-[0.6rem] font-bold uppercase tracking-[0.15em] text-brand-text-muted m-0" for="host-max-players">
+              {m.host_max_players_label()}
+            </label>
+            <div class="flex items-center gap-3">
+              <input
+                id="host-max-players"
+                type="range"
+                min={minP}
+                max={capP}
+                step="1"
+                bind:value={maxPlayers}
+                class="flex-1"
+              />
+              <input
+                type="number"
+                min={minP}
+                max={capP}
+                step="1"
+                bind:value={maxPlayers}
+                class="h-9 w-20 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-3 text-sm font-semibold text-center"
+              />
+              <span class="text-xs font-semibold text-brand-text-muted whitespace-nowrap">
+                {(maxPlayers ?? capP) === 1
+                  ? m.host_max_players_unit_one({ count: maxPlayers ?? capP })
+                  : m.host_max_players_unit_many({ count: maxPlayers ?? capP })}
+              </span>
+            </div>
+            <p class="text-xs text-brand-text-muted m-0">{m.host_max_players_hint()}</p>
+          </div>
+        {/if}
 
         {#if selectedGameType?.supports_solo}
           <label class="flex items-center gap-2 cursor-pointer">

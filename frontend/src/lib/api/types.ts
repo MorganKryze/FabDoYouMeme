@@ -8,7 +8,7 @@ export interface User {
 }
 
 export interface RequiredPack {
-  role: 'image' | 'text';
+  role: 'image' | 'text' | 'prompt' | 'filler';
   payload_versions: number[];
 }
 
@@ -88,6 +88,10 @@ export interface RoomConfig {
   /** Per-player hand of items dealt each round — only present for game types
    *  whose manifest declares hand-size bounds (e.g. meme-showdown). */
   hand_size?: number;
+  /** Per-room player cap chosen by the host. Pack-size validation and the
+   *  hub's join-time cap are evaluated against this value (clamped to the
+   *  manifest's min/max). Defaults to the manifest cap on creation. */
+  max_players?: number;
 }
 
 export interface Invite {

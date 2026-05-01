@@ -32,12 +32,13 @@ config:
   max_round_count: 30
   default_round_count: 5
 
-  # Simultaneous players in a room. Capped lower than meme-showdown (12) so
-  # the worst-case filler-pack sizing — hand_size*max_players +
-  # (round_count-1)*max_players — stays in reach for the bundled demo pack
-  # without forcing operators to ship hundreds of filler cards on day one.
+  # Simultaneous players in a room. Matches meme-showdown so hosts see a
+  # consistent ceiling across showdown-style games. Pack-size validation is
+  # per-room (rooms.config.max_players → ValidatePackRequirements), so a
+  # bundled-pack room just picks a smaller cap; rooms that want the full
+  # 12-player worst case must bring a filler pack large enough for it.
   min_players: 2
-  max_players: 8
+  max_players: 12
 
   # Filler hand dealt to each player at game start; refilled each round.
   min_hand_size: 3

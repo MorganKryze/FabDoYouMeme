@@ -1,5 +1,6 @@
 <script lang="ts">
   import { studio } from '$lib/state/studio.svelte';
+  import { gameTypes } from '$lib/state/game-types.svelte';
   import { user } from '$lib/state/user.svelte';
   import { reveal } from '$lib/actions/reveal';
   import { listItems } from '$lib/api/studio';
@@ -12,6 +13,13 @@
   import * as m from '$lib/paraglide/messages';
 
   let { data }: { data: PageData } = $props();
+
+  // Prime the game-types registry the first time the studio mounts so
+  // PackNavigator + ItemTable can render compatibility badges and the
+  // worst-case items counter without firing their own fetch.
+  $effect(() => {
+    void gameTypes.ensureLoaded();
+  });
 
   // Deep-link preselection fires once per "navigation that carries a new
   // pack id" — re-landing on the same id (e.g. a data-only refetch) must
@@ -67,8 +75,9 @@
 </div>
 
 <div class="hidden lg:flex flex-1 overflow-hidden h-[calc(100dvh-3.5rem)]" use:reveal>
-  <!-- Left: Pack Navigator (fixed width) -->
-  <div class="w-52 shrink-0 border-r border-brand-border overflow-y-auto">
+  <!-- Left: Pack Navigator (fixed width). Wider than a typical sidebar so
+       pack names + the item-count badge fit on one line without truncation. -->
+  <div class="w-80 shrink-0 border-r border-brand-border overflow-y-auto">
     <PackNavigator />
   </div>
 

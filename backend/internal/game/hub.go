@@ -131,6 +131,11 @@ type Hub struct {
 	gameTypeSlug string
 	hostUserID   string
 
+	// effectiveMaxPlayers is the per-room cap that join-time enforcement
+	// reads in handleRegister. See HubConfig.EffectiveMaxPlayers for the
+	// "zero = fall back to handler.MaxPlayers()" contract.
+	effectiveMaxPlayers int
+
 	registry *Registry
 	db       *db.Queries
 	cfg      *config.Config
@@ -257,6 +262,12 @@ type HubConfig struct {
 	Cfg          *config.Config
 	Log          *slog.Logger
 	Clock        clock.Clock
+
+	// EffectiveMaxPlayers is the per-room cap chosen by the host at room
+	// creation (rooms.config.max_players). Zero means "fall back to the
+	// handler's manifest cap" — both for legacy rooms whose config row
+	// predates the field and for handlers that opted out of a hard cap.
+	EffectiveMaxPlayers int
 }
 
 // NewHub creates a Hub but does not start it. Call hub.Run() in a goroutine.
@@ -266,11 +277,12 @@ func NewHub(hc HubConfig) *Hub {
 		clk = clock.Real{}
 	}
 	return &Hub{
-		roomCode:         hc.RoomCode,
-		roomID:           hc.RoomID,
-		gameTypeSlug:     hc.GameTypeSlug,
-		hostUserID:       hc.HostUserID,
-		registry:         hc.Registry,
+		roomCode:            hc.RoomCode,
+		roomID:              hc.RoomID,
+		gameTypeSlug:        hc.GameTypeSlug,
+		hostUserID:          hc.HostUserID,
+		effectiveMaxPlayers: hc.EffectiveMaxPlayers,
+		registry:            hc.Registry,
 		db:               hc.DB,
 		cfg:              hc.Cfg,
 		log:              hc.Log,
@@ -395,17 +407,24 @@ func (h *Hub) handleRegister(ctx context.Context, p *connectedPlayer) {
 	}
 	// HubFinished: new connections are accepted as read-only viewers; they get a room_state snapshot so the client shows the end screen.
 
-	// Reject the join once the handler's per-room cap is reached. MaxPlayers==0
-	// means "no explicit cap" — current behaviour for handlers that haven't
-	// wired in a limit yet. Finding 3.D in the 2026-04-10 review.
-	if handler, ok := h.registry.Get(h.gameTypeSlug); ok {
-		if cap := handler.MaxPlayers(); cap > 0 && len(h.players) >= cap {
-			writeWS(p.conn, buildMessage("error", map[string]string{
-				"code": "room_full", "message": "Room is full",
-			}))
-			p.conn.Close()
-			return
+	// Reject the join once the room's effective cap is reached. The per-room
+	// cap (from rooms.config.max_players) wins over the manifest cap so a
+	// host who picked a smaller lobby gets the smaller bound enforced. Both
+	// can legitimately be 0 — handler.MaxPlayers()==0 means the handler is
+	// unbounded, and effectiveMaxPlayers==0 means the room row predates the
+	// per-room field. In both cases we leave the join unbounded.
+	cap := h.effectiveMaxPlayers
+	if cap == 0 {
+		if handler, ok := h.registry.Get(h.gameTypeSlug); ok {
+			cap = handler.MaxPlayers()
 		}
+	}
+	if cap > 0 && len(h.players) >= cap {
+		writeWS(p.conn, buildMessage("error", map[string]string{
+			"code": "room_full", "message": "Room is full",
+		}))
+		p.conn.Close()
+		return
 	}
 
 	h.players[p.userID] = p

@@ -439,6 +439,8 @@ The room references packs **positionally**: `rooms.pack_id` (NOT NULL) is the *p
 
 At creation, the API counts compatible items per role and rejects the room if any pack is missing, empty of compatible items, or smaller than the role's `MinItemsFn` sizing.
 
+`MinItemsFn` is evaluated against the room's **effective player cap** — `rooms.config.max_players`, defaulted at creation from the manifest's `max_players` and overridable by the host within `[min_players, manifest.max_players]`. So a 4-player meme-showdown room sizes the caption deck to `hand_size × 4 + (round_count − 1) × 4` rather than the full-12 worst case. The host's chosen cap is also enforced at WebSocket join time by `Hub.handleRegister`. Rooms whose `config` row predates the field (`max_players` absent or zero) fall back to the handler's manifest cap so legacy lobbies keep working.
+
 Example item payloads:
 
 - `payload_version: 1` (image)  — `{ "image_url": "...", "prompt": "..." }`

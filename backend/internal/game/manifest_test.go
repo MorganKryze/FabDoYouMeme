@@ -155,3 +155,90 @@ func TestValidateAndFill_HandSize_OmittedWhenNotOptedIn(t *testing.T) {
 		t.Fatalf("HandSize = %d, want 0 when bounds opt-out", cfg.HandSize)
 	}
 }
+
+// cappedBounds returns a Bounds that declares a player cap. Used by the
+// max_players tests below — most other tests use validBounds() which leaves
+// MaxPlayers nil ("unbounded"), and we want to assert both shapes.
+func cappedBounds() game.Bounds {
+	b := validBounds()
+	cap := 12
+	b.MaxPlayers = &cap
+	return b
+}
+
+func TestValidateAndFill_MaxPlayers_DefaultsToManifestCap(t *testing.T) {
+	out, err := cappedBounds().ValidateAndFill(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var cfg game.RoomConfig
+	if err := json.Unmarshal(out, &cfg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if cfg.MaxPlayers != 12 {
+		t.Fatalf("MaxPlayers = %d, want 12 (manifest default)", cfg.MaxPlayers)
+	}
+}
+
+func TestValidateAndFill_MaxPlayers_HonoursExplicit(t *testing.T) {
+	out, err := cappedBounds().ValidateAndFill(json.RawMessage(`{"max_players":4}`))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var cfg game.RoomConfig
+	if err := json.Unmarshal(out, &cfg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if cfg.MaxPlayers != 4 {
+		t.Fatalf("MaxPlayers = %d, want 4", cfg.MaxPlayers)
+	}
+}
+
+func TestValidateAndFill_MaxPlayers_RejectsBelowMinPlayers(t *testing.T) {
+	_, err := cappedBounds().ValidateAndFill(json.RawMessage(`{"max_players":1}`))
+	var verr *game.ValidationError
+	if !errors.As(err, &verr) || verr.Field != "max_players" {
+		t.Fatalf("expected max_players ValidationError, got %v", err)
+	}
+}
+
+func TestValidateAndFill_MaxPlayers_RejectsAboveManifestCap(t *testing.T) {
+	_, err := cappedBounds().ValidateAndFill(json.RawMessage(`{"max_players":99}`))
+	var verr *game.ValidationError
+	if !errors.As(err, &verr) || verr.Field != "max_players" {
+		t.Fatalf("expected max_players ValidationError, got %v", err)
+	}
+}
+
+func TestValidateAndFill_MaxPlayers_UnboundedManifestLeavesZero(t *testing.T) {
+	// validBounds() has MaxPlayers nil — manifest opted out of a cap. Without
+	// explicit input the canonical config should leave MaxPlayers at 0 so
+	// the hub keeps its existing "no cap" behaviour.
+	out, err := validBounds().ValidateAndFill(nil)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var cfg game.RoomConfig
+	if err := json.Unmarshal(out, &cfg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if cfg.MaxPlayers != 0 {
+		t.Fatalf("MaxPlayers = %d, want 0 when manifest unbounded and no input", cfg.MaxPlayers)
+	}
+}
+
+func TestValidateAndFill_MaxPlayers_UnboundedManifestAcceptsInput(t *testing.T) {
+	// When the manifest is unbounded, an explicit value is accepted as long
+	// as it satisfies MinPlayers. There is no upper bound to enforce.
+	out, err := validBounds().ValidateAndFill(json.RawMessage(`{"max_players":50}`))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var cfg game.RoomConfig
+	if err := json.Unmarshal(out, &cfg); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if cfg.MaxPlayers != 50 {
+		t.Fatalf("MaxPlayers = %d, want 50", cfg.MaxPlayers)
+	}
+}

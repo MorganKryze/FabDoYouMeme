@@ -113,6 +113,43 @@ func (q *Queries) CountCompatibleItems(ctx context.Context, arg CountCompatibleI
 	return count, err
 }
 
+const countItemsForPacks = `-- name: CountItemsForPacks :many
+SELECT pack_id, COUNT(*)::bigint AS item_count
+FROM game_items
+WHERE pack_id = ANY($1::uuid[])
+  AND deleted_at IS NULL
+GROUP BY pack_id
+`
+
+type CountItemsForPacksRow struct {
+	PackID    uuid.UUID `json:"pack_id"`
+	ItemCount int64     `json:"item_count"`
+}
+
+// Batch row-count for the studio + host listings: returns one
+// (pack_id, item_count) row per pack id requested. Soft-deleted items are
+// excluded so the count matches what the user actually sees in the table.
+// Packs with zero items are omitted; the API enriches missing entries to 0.
+func (q *Queries) CountItemsForPacks(ctx context.Context, ids []uuid.UUID) ([]CountItemsForPacksRow, error) {
+	rows, err := q.db.Query(ctx, countItemsForPacks, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CountItemsForPacksRow
+	for rows.Next() {
+		var i CountItemsForPacksRow
+		if err := rows.Scan(&i.PackID, &i.ItemCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createPack = `-- name: CreatePack :one
 
 INSERT INTO game_packs (name, description, owner_id, is_official, visibility, language)

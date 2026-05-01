@@ -48,19 +48,25 @@ export const actions: Actions = {
     const text_pack_id = (data.get('text_pack_id') as string | null) || '';
     const is_solo = data.get('is_solo') === 'true';
     const group_id = (data.get('group_id') as string | null) || '';
+    const max_players_raw = (data.get('max_players') as string | null) || '';
+    const max_players = max_players_raw ? Number.parseInt(max_players_raw, 10) : NaN;
 
     // Defaults only — host tunes rounds/durations/host_paced inside the
     // room's staging area (WaitingStage) via PATCH /api/rooms/{code}/config.
+    const config: Record<string, unknown> = {
+      round_count: 5,
+      round_duration_seconds: 60,
+      voting_duration_seconds: 30,
+      host_paced: false
+    };
+    if (Number.isFinite(max_players) && max_players > 0) {
+      config.max_players = max_players;
+    }
     const payload: Record<string, unknown> = {
       game_type_id,
       pack_id,
       is_solo,
-      config: {
-        round_count: 5,
-        round_duration_seconds: 60,
-        voting_duration_seconds: 30,
-        host_paced: false
-      }
+      config
     };
     if (text_pack_id) payload.text_pack_id = text_pack_id;
     if (group_id) payload.group_id = group_id;

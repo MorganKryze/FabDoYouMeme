@@ -1,6 +1,7 @@
 <!-- frontend/src/lib/components/studio/PackNavigator.svelte -->
 <script lang="ts">
   import { studio } from '$lib/state/studio.svelte';
+  import { gameTypes } from '$lib/state/game-types.svelte';
   import { user } from '$lib/state/user.svelte';
   import { toast } from '$lib/state/toast.svelte';
   import { createPack, deletePack, listItems, updatePack } from '$lib/api/studio';
@@ -165,6 +166,11 @@
     }
   }
 
+  // Game-type slugs the chosen kind unlocks. Reads from the cached
+  // /api/game-types registry (preloaded at studio mount). Empty until the
+  // first response lands; the template hides the line in that case.
+  const compatibleSlugs = $derived(gameTypes.compatibleGameTypeSlugs(newPackKind));
+
   // A group pack is "manageable" (renamable, deletable) when the caller is
   // platform admin OR admin of that specific group — mirrors the spec and
   // the access rules in the backend's canAdminPack helper.
@@ -207,8 +213,14 @@
                 class="flex-1 text-left px-2 py-1.5 text-sm min-w-0
                   {studio.selectedPackId === pack.id ? 'text-primary font-medium' : 'text-brand-text'}"
               >
-                <span class="flex items-center gap-1.5 truncate">
-                  <span class="truncate {pack.status === 'banned' ? 'line-through text-brand-text-muted' : ''}">{pack.name}</span>
+                <span class="flex items-center gap-1.5 min-w-0">
+                  <span class="truncate min-w-0 flex-1 {pack.status === 'banned' ? 'line-through text-brand-text-muted' : ''}">{pack.name}</span>
+                  {#if typeof pack.item_count === 'number'}
+                    <span class="shrink-0 text-[10px] tabular-nums text-brand-text-muted"
+                          title={m.studio_nav_item_count_title({ count: pack.item_count })}>
+                      {pack.item_count}
+                    </span>
+                  {/if}
                   {#if pack.is_system}
                     <span class="shrink-0 text-[9px] font-bold uppercase tracking-wider text-brand-text-muted border border-brand-border px-1 py-[1px] rounded"
                           title={m.studio_nav_badge_system_title()}>
@@ -345,6 +357,14 @@
             {m.studio_nav_new_pack_kind_filler()}
           </label>
         </fieldset>
+        <p class="text-[10px] text-brand-text-muted px-1 leading-snug">
+          {#if compatibleSlugs.length > 0}
+            <span class="font-semibold uppercase tracking-wider">{m.studio_nav_new_pack_compat_label()}:</span>
+            {compatibleSlugs.join(', ')}
+          {:else}
+            {m.studio_nav_new_pack_compat_none()}
+          {/if}
+        </p>
         <div class="flex gap-1">
           <button
             type="button"

@@ -74,6 +74,13 @@ type RoomConfig struct {
 	// items (e.g. meme-showdown). omitempty keeps rooms.config compact for
 	// game types that do not use a hand.
 	HandSize int `json:"hand_size,omitempty"`
+
+	// MaxPlayers is the per-room player cap chosen by the host at creation.
+	// Defaults to the manifest's MaxPlayers when unset; pack-size validation
+	// (ValidatePackRequirements) and the hub's join-time cap both read this
+	// value. A zero here means "use the handler's manifest cap" — kept for
+	// backwards compatibility with rooms.config rows that predate this field.
+	MaxPlayers int `json:"max_players,omitempty"`
 }
 
 // LoadManifest parses a YAML manifest and fails fast on any internal
@@ -182,6 +189,7 @@ func (b Bounds) ValidateAndFill(raw json.RawMessage) (json.RawMessage, error) {
 		JokerCount            *int  `json:"joker_count"`
 		AllowSkipVote         *bool `json:"allow_skip_vote"`
 		HandSize              *int  `json:"hand_size"`
+		MaxPlayers            *int  `json:"max_players"`
 	}
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &in); err != nil {
@@ -226,6 +234,29 @@ func (b Bounds) ValidateAndFill(raw json.RawMessage) (json.RawMessage, error) {
 				Reason: fmt.Sprintf("must be between %d and %d", b.MinHandSize, b.MaxHandSize),
 			}
 		}
+	}
+	// max_players defaults to the manifest cap when the host did not
+	// explicitly choose one. A nil MaxPlayers in Bounds means "no cap" —
+	// the handler is unbounded — and we leave RoomConfig.MaxPlayers at 0
+	// so the hub falls back to its existing unbounded behaviour.
+	manifestCap := 0
+	if b.MaxPlayers != nil {
+		manifestCap = *b.MaxPlayers
+	}
+	if in.MaxPlayers != nil {
+		out.MaxPlayers = *in.MaxPlayers
+		if out.MaxPlayers < b.MinPlayers || (manifestCap > 0 && out.MaxPlayers > manifestCap) {
+			upper := manifestCap
+			if upper == 0 {
+				upper = out.MaxPlayers
+			}
+			return nil, &ValidationError{
+				Field:  "max_players",
+				Reason: fmt.Sprintf("must be between %d and %d", b.MinPlayers, upper),
+			}
+		}
+	} else if manifestCap > 0 {
+		out.MaxPlayers = manifestCap
 	}
 	return json.Marshal(out)
 }

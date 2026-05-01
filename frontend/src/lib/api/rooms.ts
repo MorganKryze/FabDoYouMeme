@@ -8,6 +8,7 @@ export const roomsApi = {
     text_pack_id?: string;
     mode?: 'multiplayer' | 'solo';
     config?: Partial<RoomConfig>;
+    group_id?: string;
   }) => api.post<Room>('/api/rooms', body),
 
   get: (code: string) => api.get<Room>(`/api/rooms/${code}`),

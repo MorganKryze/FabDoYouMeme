@@ -57,6 +57,17 @@ SELECT COUNT(*) FROM game_packs WHERE deleted_at IS NULL;
 -- still want audit history to show what was banned/deleted.
 SELECT id, name FROM game_packs WHERE id = ANY(sqlc.arg(ids)::uuid[]);
 
+-- name: CountItemsForPacks :many
+-- Batch row-count for the studio + host listings: returns one
+-- (pack_id, item_count) row per pack id requested. Soft-deleted items are
+-- excluded so the count matches what the user actually sees in the table.
+-- Packs with zero items are omitted; the API enriches missing entries to 0.
+SELECT pack_id, COUNT(*)::bigint AS item_count
+FROM game_items
+WHERE pack_id = ANY(sqlc.arg(ids)::uuid[])
+  AND deleted_at IS NULL
+GROUP BY pack_id;
+
 -- name: CountCompatibleItems :one
 -- Counts only live items in a live pack — `gi.deleted_at IS NULL` excludes
 -- soft-deleted items so room-creation validation can't be inflated by tombstones.

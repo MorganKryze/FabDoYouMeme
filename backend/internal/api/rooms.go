@@ -149,7 +149,18 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 		packRefs[secondaryRole] = textPackID
 	}
-	maxPlayers := handler.MaxPlayers()
+	// Pack-size requirements are evaluated against the room's effective cap
+	// (the host's chosen max_players, defaulted from the manifest by
+	// ValidateAndFill) rather than the manifest cap directly. This lets a
+	// 4-player meme-showdown room validate a small caption pack that would
+	// otherwise need ~432 items if we always assumed a full 12-player lobby.
+	// Fall back defensively to the manifest cap when the normalised config
+	// reports zero — current ValidateAndFill never emits that for capped
+	// manifests, but the guard keeps legacy/unbounded handlers working.
+	maxPlayers := normalized.MaxPlayers
+	if maxPlayers == 0 {
+		maxPlayers = handler.MaxPlayers()
+	}
 	if maxPlayers == 0 {
 		maxPlayers = 12
 	}

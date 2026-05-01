@@ -63,6 +63,10 @@ Holds the active room's state: `code`, `gameType`, `players`, room `state` (`lob
 
 Holds selected pack, item, and version state for the studio editor. Data is loaded on demand — not prefetched. Supports side-by-side version comparison (up to 2 selected version IDs).
 
+### `game-types.svelte.ts`
+
+Caches `GET /api/game-types` for the session. Powers two studio surfaces: the new-pack form's "Used by: meme-showdown, …" hint (`compatibleGameTypeSlugs(kind)`) and the item-table's "X / Y for full room" badge (`worstCaseItemsNeeded(kind)`). The math mirrors the backend's `MinItemsFn` so the badge predicts what `POST /api/rooms` will accept. Loaded lazily via `ensureLoaded()` from `/studio/+page.svelte`.
+
 ---
 
 ## Server vs client data loading

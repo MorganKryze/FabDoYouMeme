@@ -46,7 +46,12 @@
   const gameName = $derived(localized?.name ?? m.room_game_fallback());
   const gameDescription = $derived(localized?.description ?? '');
   const minPlayers = $derived(gameType?.config.min_players ?? 2);
-  const maxPlayers = $derived(gameType?.config.max_players ?? 8);
+  // Effective room cap = host's chosen max_players (defaulted from the
+  // manifest at room creation), falling back to the manifest cap for
+  // legacy rooms whose config row predates the field.
+  const maxPlayers = $derived(
+    pageRoom?.config.max_players ?? gameType?.config.max_players ?? 8
+  );
 
   // Round / timing values come from the room's own config (the host's
   // selected values), not the game type's defaults.

@@ -263,8 +263,46 @@ func (h *PackHandler) List(w http.ResponseWriter, r *http.Request) {
 		packs = filtered
 	}
 
+	// Enrich each pack row with its live item count so the navigator (and
+	// any other listing) can render "(N items)" without firing one fetch
+	// per pack. One batched COUNT query covers the whole page; missing
+	// pack IDs come back as zero by virtue of the map default.
+	itemCounts := map[uuid.UUID]int64{}
+	if len(packs) > 0 {
+		ids := make([]uuid.UUID, len(packs))
+		for i, p := range packs {
+			ids[i] = p.ID
+		}
+		rows, cerr := h.db.CountItemsForPacks(r.Context(), ids)
+		if cerr != nil {
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to count pack items")
+			return
+		}
+		for _, row := range rows {
+			itemCounts[row.PackID] = row.ItemCount
+		}
+	}
+	enriched := make([]map[string]any, 0, len(packs))
+	for _, p := range packs {
+		enriched = append(enriched, map[string]any{
+			"id":           p.ID,
+			"name":         p.Name,
+			"description":  p.Description,
+			"owner_id":     p.OwnerID,
+			"is_official":  p.IsOfficial,
+			"visibility":   p.Visibility,
+			"status":       p.Status,
+			"is_system":    p.IsSystem,
+			"language":     p.Language,
+			"group_id":     p.GroupID,
+			"created_at":   p.CreatedAt,
+			"deleted_at":   p.DeletedAt,
+			"item_count":   itemCounts[p.ID],
+		})
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"data":        packs,
+		"data":        enriched,
 		"next_cursor": nextCursor(len(packs), limit, offset),
 	})
 }

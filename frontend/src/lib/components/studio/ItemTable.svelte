@@ -1,6 +1,7 @@
 <!-- frontend/src/lib/components/studio/ItemTable.svelte -->
 <script lang="ts">
   import { studio } from '$lib/state/studio.svelte';
+  import { gameTypes } from '$lib/state/game-types.svelte';
   import { toast } from '$lib/state/toast.svelte';
   import {
     deleteItem,
@@ -27,6 +28,21 @@
   );
   const isSystem = $derived(selectedPack?.is_system ?? false);
   const kind = $derived(studio.kindFor(studio.selectedPackId));
+
+  // Worst-case items the largest compatible game type would consume from a
+  // pack of this kind (image/text/filler/prompt). 0 until the registry has
+  // loaded — the template hides the badge in that case.
+  const worstCaseNeeded = $derived(gameTypes.worstCaseItemsNeeded(kind));
+
+  // Status palette for the capacity pill: green when the pack already
+  // covers the worst case, amber while it's still being filled, muted when
+  // empty. Green = "ready for any compatible room"; amber = "fine for a
+  // smaller cap, short of a full lobby".
+  const capacityStatus = $derived.by<'met' | 'partial' | 'empty'>(() => {
+    if (studio.items.length === 0) return 'empty';
+    if (studio.items.length >= worstCaseNeeded) return 'met';
+    return 'partial';
+  });
 
   // Per-spec: deleting an item from a group pack is admin-only. Regular
   // members can still modify items (see uploads / version promote). Hide
@@ -198,6 +214,21 @@
       <span class="text-brand-text-muted font-normal">
         {studio.items.length === 0 ? m.studio_items_count_empty() : m.studio_items_count({ count: studio.items.length })}
       </span>
+      {#if worstCaseNeeded > 0}
+        <span
+          class="ml-2 inline-flex items-center text-[10px] font-semibold uppercase tracking-wider rounded-full px-2 py-0.5 border cursor-help
+            {capacityStatus === 'met'
+              ? 'text-emerald-700 border-emerald-500 bg-emerald-50'
+              : capacityStatus === 'partial'
+                ? 'text-amber-700 border-amber-500 bg-amber-50'
+                : 'text-brand-text-muted border-brand-border bg-transparent'}"
+          title={capacityStatus === 'met'
+            ? m.studio_items_capacity_title_met({ need: worstCaseNeeded })
+            : m.studio_items_capacity_title_partial({ have: studio.items.length, need: worstCaseNeeded })}
+        >
+          {m.studio_items_capacity_short({ have: studio.items.length, need: worstCaseNeeded })}
+        </span>
+      {/if}
     </h2>
 
     {#if isSystem}
@@ -266,10 +297,10 @@
     {:else}
       <table class="w-full text-sm">
         <thead>
-          <tr class="border-b border-brand-border text-xs text-brand-text-muted font-medium">
-            <th class="text-left px-4 py-2">{m.studio_items_col_name()}</th>
-            <th class="text-right px-4 py-2">{m.studio_items_col_version()}</th>
-            <th class="px-4 py-2"></th>
+          <tr class="border-b border-brand-border text-[11px] text-brand-text-muted font-medium">
+            <th class="text-left px-3 py-1.5">{m.studio_items_col_name()}</th>
+            <th class="text-right px-3 py-1.5">{m.studio_items_col_version()}</th>
+            <th class="px-3 py-1.5"></th>
           </tr>
         </thead>
         <tbody>
@@ -280,39 +311,39 @@
                 {studio.selectedItemId === item.id ? 'bg-primary/5' : ''}"
               onclick={() => selectItem(item)}
             >
-              <td class="px-4 py-2">
+              <td class="px-3 py-1">
                 <div class="flex items-center gap-2 min-w-0">
                   {#if item.payload_version === 2 || item.payload_version === 3 || item.payload_version === 4}
-                    <div class="h-8 w-8 rounded bg-muted shrink-0 flex items-center justify-center text-brand-text-muted">
-                      <FileText size={14} strokeWidth={2.5} />
+                    <div class="h-6 w-6 rounded bg-muted shrink-0 flex items-center justify-center text-brand-text-muted">
+                      <FileText size={12} strokeWidth={2.5} />
                     </div>
-                    <div class="flex flex-col min-w-0">
-                      <span class="truncate max-w-[12rem] text-sm">{item.name}</span>
+                    <div class="flex flex-col min-w-0 leading-tight">
+                      <span class="truncate text-[13px]">{item.name}</span>
                       {#if textSnippet(item)}
-                        <span class="truncate max-w-[12rem] text-[11px] text-brand-text-muted">{textSnippet(item)}</span>
+                        <span class="truncate text-[11px] text-brand-text-muted">{textSnippet(item)}</span>
                       {/if}
                     </div>
                   {:else if item.thumbnail_url}
-                    <img src={item.thumbnail_url} alt="" class="h-8 w-8 rounded object-cover shrink-0" />
-                    <span class="truncate max-w-[8rem]">{item.name}</span>
+                    <img src={item.thumbnail_url} alt="" class="h-6 w-6 rounded object-cover shrink-0" />
+                    <span class="truncate text-[13px]">{item.name}</span>
                   {:else}
-                    <div class="h-8 w-8 rounded bg-muted shrink-0 flex items-center justify-center text-brand-text-muted">
-                      <ImageIcon size={14} strokeWidth={2.5} />
+                    <div class="h-6 w-6 rounded bg-muted shrink-0 flex items-center justify-center text-brand-text-muted">
+                      <ImageIcon size={12} strokeWidth={2.5} />
                     </div>
-                    <span class="truncate max-w-[8rem]">{item.name}</span>
+                    <span class="truncate text-[13px]">{item.name}</span>
                   {/if}
                 </div>
               </td>
-              <td class="px-4 py-2 text-right text-brand-text-muted">v{item.version_number ?? 1}</td>
-              <td class="px-4 py-2 text-right">
+              <td class="px-3 py-1 text-right text-[11px] text-brand-text-muted">v{item.version_number ?? 1}</td>
+              <td class="px-3 py-1 text-right">
                 {#if canDeleteItems}
                   <button
                     type="button"
                     onclick={(e) => { e.stopPropagation(); handleDelete(item); }}
-                    class="text-brand-text-muted hover:text-red-600 transition-colors inline-flex items-center p-1 rounded-full"
+                    class="text-brand-text-muted hover:text-red-600 transition-colors inline-flex items-center p-0.5 rounded-full"
                     aria-label={m.studio_items_delete_aria()}
                   >
-                    <Trash2 size={14} strokeWidth={2.5} />
+                    <Trash2 size={12} strokeWidth={2.5} />
                   </button>
                 {/if}
               </td>

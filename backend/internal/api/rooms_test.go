@@ -502,6 +502,108 @@ func TestCreateRoom_MemeVote_TextPackInsufficient(t *testing.T) {
 	}
 }
 
+// TestCreateRoom_MaxPlayers_FullCapRejects mirrors the
+// existing "insufficient" test but seeds a sub-worst-case pack (28 items)
+// and explicitly leaves max_players at the manifest cap (12). With a 4-round
+// game the requirement is hand_size×12 + (4-1)×12 = 5×12 + 3×12 = 96 > 28,
+// so the validator should reject. Pairs with the next test, which keeps the
+// pack the same but lowers max_players to 4 and expects success.
+func TestCreateRoom_MaxPlayers_FullCapRejects(t *testing.T) {
+	h, q := newRoomHandler(t)
+	user := seedRoomUser(t, q)
+	ctx := context.Background()
+
+	gt, _ := q.GetGameTypeBySlug(ctx, "meme-showdown")
+	imgPack := seedPackWithItems(t, q, ctx, "img", 1, 5)
+	textPack := seedPackWithItems(t, q, ctx, "txt", 2, 28)
+
+	body, _ := json.Marshal(map[string]any{
+		"game_type_id": gt.ID.String(),
+		"pack_id":      imgPack.ID.String(),
+		"text_pack_id": textPack.ID.String(),
+		"mode":         "multiplayer",
+		"config":       json.RawMessage(`{"round_count":4,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5,"max_players":12}`),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
+	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
+	rec := httptest.NewRecorder()
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Errorf("want 422, got %d — body: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]string
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["code"] != "text_pack_insufficient" {
+		t.Errorf("want text_pack_insufficient, got %s", resp["code"])
+	}
+}
+
+// TestCreateRoom_MaxPlayers_SmallCapAccepts proves the new
+// per-room sizing: same 28-item pack as the test above, same 4-round config,
+// but the host caps the room at 4 players. Requirement becomes 5×4 + 3×4 = 32
+// — still > 28, so we need 5 players' worth. Use max_players=3:
+// 5×3 + 3×3 = 24 ≤ 28 → accepted.
+func TestCreateRoom_MaxPlayers_SmallCapAccepts(t *testing.T) {
+	h, q := newRoomHandler(t)
+	user := seedRoomUser(t, q)
+	ctx := context.Background()
+
+	gt, _ := q.GetGameTypeBySlug(ctx, "meme-showdown")
+	imgPack := seedPackWithItems(t, q, ctx, "img", 1, 5)
+	textPack := seedPackWithItems(t, q, ctx, "txt", 2, 28)
+
+	body, _ := json.Marshal(map[string]any{
+		"game_type_id": gt.ID.String(),
+		"pack_id":      imgPack.ID.String(),
+		"text_pack_id": textPack.ID.String(),
+		"mode":         "multiplayer",
+		"config":       json.RawMessage(`{"round_count":4,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5,"max_players":3}`),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
+	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
+	rec := httptest.NewRecorder()
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("want 201 with smaller cap, got %d — body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestCreateRoom_MaxPlayers_RejectAboveCap asserts the new
+// max_players field is bounds-checked by ValidateAndFill. Sending 99 against
+// a manifest that caps at 12 returns invalid_config + a max_players hint.
+func TestCreateRoom_MaxPlayers_RejectAboveCap(t *testing.T) {
+	h, q := newRoomHandler(t)
+	user := seedRoomUser(t, q)
+	ctx := context.Background()
+
+	gt, _ := q.GetGameTypeBySlug(ctx, "meme-showdown")
+	imgPack := seedPackWithItems(t, q, ctx, "img", 1, 5)
+	textPack := seedPackWithItems(t, q, ctx, "txt", 2, 5)
+
+	body, _ := json.Marshal(map[string]any{
+		"game_type_id": gt.ID.String(),
+		"pack_id":      imgPack.ID.String(),
+		"text_pack_id": textPack.ID.String(),
+		"mode":         "multiplayer",
+		"config":       json.RawMessage(`{"round_count":4,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5,"max_players":99}`),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
+	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
+	rec := httptest.NewRecorder()
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("want 422 invalid_config, got %d — body: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]string
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["code"] != "invalid_config" {
+		t.Errorf("want invalid_config, got %s", resp["code"])
+	}
+}
+
 func TestCreateRoom_MemeVote_Success(t *testing.T) {
 	h, q := newRoomHandler(t)
 	user := seedRoomUser(t, q)

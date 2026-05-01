@@ -58,6 +58,11 @@ type hubEnvOpts struct {
 	// WSHandler must lazy-create the hub on first connect. P1.1 acceptance
 	// test uses this to reproduce the production 404 bug.
 	skipPreCreate bool
+	// effectiveMaxPlayers, when > 0, is baked into rooms.config.max_players
+	// and threaded through the manager so the hub enforces the per-room cap
+	// at join. Zero (the default) keeps the prior behaviour: the hub falls
+	// back to handler.MaxPlayers().
+	effectiveMaxPlayers int
 }
 
 // defaultJokerCount mirrors the ValidateAndFill ceil(round_count/5) default so
@@ -168,10 +173,14 @@ func newHubEnvWith(t *testing.T, opts hubEnvOpts) *hubEnv {
 	}
 
 	code := hubCode()
+	maxPlayersField := ""
+	if opts.effectiveMaxPlayers > 0 {
+		maxPlayersField = fmt.Sprintf(`,"max_players":%d`, opts.effectiveMaxPlayers)
+	}
 	roomConfig := fmt.Sprintf(
-		`{"round_count":%d,"round_duration_seconds":%d,"voting_duration_seconds":%d,"host_paced":%t,"joker_count":%d,"allow_skip_vote":true}`,
+		`{"round_count":%d,"round_duration_seconds":%d,"voting_duration_seconds":%d,"host_paced":%t,"joker_count":%d,"allow_skip_vote":true%s}`,
 		opts.roundCount, opts.roundDurationSeconds, opts.votingDurationSeconds, opts.hostPaced,
-		defaultJokerCount(opts.roundCount),
+		defaultJokerCount(opts.roundCount), maxPlayersField,
 	)
 	room, err := q.CreateRoom(ctx, db.CreateRoomParams{
 		Code:       code,
@@ -200,7 +209,7 @@ func newHubEnvWith(t *testing.T, opts hubEnvOpts) *hubEnv {
 	manager := game.NewManager(context.Background(), registry, q, cfg, slog.Default(), clk)
 	var createdHub *game.Hub
 	if !opts.skipPreCreate {
-		createdHub = manager.GetOrCreate(ctx, room.Code, room.ID, gt.Slug, host.ID.String())
+		createdHub = manager.GetOrCreate(ctx, room.Code, room.ID, gt.Slug, host.ID.String(), opts.effectiveMaxPlayers)
 	}
 
 	// Passing [""] means the empty Origin (no header set by the test dialer)

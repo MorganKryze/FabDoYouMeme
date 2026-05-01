@@ -52,6 +52,46 @@ func TestHub_RejectJoinWhenFull(t *testing.T) {
 	}
 }
 
+// TestHub_RejectJoinWhenPerRoomCapReached covers Solution B's hub side:
+// a host who picked max_players=3 must see player 4 bounced even though
+// the meme-freestyle manifest allows 12. The cap travels via
+// rooms.config.max_players → manager → HubConfig.EffectiveMaxPlayers and
+// is consulted in handleRegister before the manifest fallback.
+func TestHub_RejectJoinWhenPerRoomCapReached(t *testing.T) {
+	env := newHubEnvWith(t, hubEnvOpts{effectiveMaxPlayers: 3})
+
+	conns := make([]*dialCloser, 0, 3)
+	t.Cleanup(func() {
+		for _, c := range conns {
+			c.Close()
+		}
+	})
+
+	c := dial(t, env, env.hostID, "host")
+	conns = append(conns, &dialCloser{c})
+	readUntilType(t, c, "player_joined")
+
+	for i := 1; i < 3; i++ {
+		uid := fmt.Sprintf("00000000-0000-0000-0000-0000000003%02d", i)
+		c := dial(t, env, uid, fmt.Sprintf("p%d", i))
+		conns = append(conns, &dialCloser{c})
+	}
+
+	// 4th join: must hit room_full from the per-room cap, not the manifest.
+	c4 := dial(t, env, "00000000-0000-0000-0000-00000000bb04", "p4")
+	defer c4.Close()
+
+	c4.SetReadDeadline(time.Now().Add(3 * time.Second))
+	m := readMsg(t, c4)
+	if m["type"] != "error" {
+		t.Fatalf("want type=error, got %v", m["type"])
+	}
+	data, _ := m["data"].(map[string]any)
+	if data["code"] != "room_full" {
+		t.Fatalf("want code=room_full, got %v", data["code"])
+	}
+}
+
 // dialCloser wraps *websocket.Conn for defer-friendly batch cleanup.
 type dialCloser struct{ inner interface{ Close() error } }
 

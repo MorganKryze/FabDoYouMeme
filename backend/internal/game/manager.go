@@ -3,6 +3,7 @@ package game
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -67,33 +68,36 @@ func NewManager(parent context.Context, registry *Registry, queries *db.Queries,
 
 // GetOrCreate returns the hub for roomCode, creating it if it does not exist.
 // roomID, gameTypeSlug, and hostUserID are only used when creating a new hub.
+// effectiveMaxPlayers is the per-room cap from rooms.config.max_players;
+// pass 0 to fall back to the handler's manifest cap.
 //
 // The ctx parameter is retained for API compatibility with existing test and
 // REST handler call sites, but the hub's Run goroutine is scoped to
 // Manager.serverCtx — not to ctx — so a request-scoped cancellation cannot
 // inadvertently terminate an in-flight game.
-func (m *Manager) GetOrCreate(ctx context.Context, roomCode string, roomID uuid.UUID, gameTypeSlug, hostUserID string) *Hub {
+func (m *Manager) GetOrCreate(ctx context.Context, roomCode string, roomID uuid.UUID, gameTypeSlug, hostUserID string, effectiveMaxPlayers int) *Hub {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.createLocked(roomCode, roomID, gameTypeSlug, hostUserID)
+	return m.createLocked(roomCode, roomID, gameTypeSlug, hostUserID, effectiveMaxPlayers)
 }
 
 // createLocked does the actual hub construction; caller must already hold m.mu.
-func (m *Manager) createLocked(roomCode string, roomID uuid.UUID, gameTypeSlug, hostUserID string) *Hub {
+func (m *Manager) createLocked(roomCode string, roomID uuid.UUID, gameTypeSlug, hostUserID string, effectiveMaxPlayers int) *Hub {
 	if h, ok := m.hubs[roomCode]; ok {
 		return h
 	}
 
 	h := NewHub(HubConfig{
-		RoomCode:     roomCode,
-		RoomID:       roomID,
-		GameTypeSlug: gameTypeSlug,
-		HostUserID:   hostUserID,
-		Registry:     m.registry,
-		DB:           m.db,
-		Cfg:          m.cfg,
-		Log:          m.log,
-		Clock:        m.clock,
+		RoomCode:            roomCode,
+		RoomID:              roomID,
+		GameTypeSlug:        gameTypeSlug,
+		HostUserID:          hostUserID,
+		EffectiveMaxPlayers: effectiveMaxPlayers,
+		Registry:            m.registry,
+		DB:                  m.db,
+		Cfg:                 m.cfg,
+		Log:                 m.log,
+		Clock:               m.clock,
 	})
 	m.hubs[roomCode] = h
 
@@ -139,9 +143,22 @@ func (m *Manager) GetOrLoad(ctx context.Context, roomCode string) (*Hub, error) 
 		hostUserID = uuid.UUID(row.HostID.Bytes).String()
 	}
 
+	// Decode rooms.config.max_players so the hub can enforce the host's
+	// chosen lobby size at join time. A decode error is non-fatal (legacy
+	// or hand-edited rows fall back to the manifest cap inside the hub).
+	effectiveMaxPlayers := 0
+	if len(row.Config) > 0 {
+		var cfg struct {
+			MaxPlayers int `json:"max_players"`
+		}
+		if err := json.Unmarshal(row.Config, &cfg); err == nil {
+			effectiveMaxPlayers = cfg.MaxPlayers
+		}
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.createLocked(row.Code, row.ID, row.GameTypeSlug, hostUserID), nil
+	return m.createLocked(row.Code, row.ID, row.GameTypeSlug, hostUserID, effectiveMaxPlayers), nil
 }
 
 // Get returns the hub for roomCode, or (nil, false) if no hub is running.
