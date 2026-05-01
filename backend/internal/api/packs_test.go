@@ -77,6 +77,46 @@ func TestCreatePack_Success(t *testing.T) {
 	}
 }
 
+// When the client omits `language`, the handler inherits the session user's
+// UI locale — see profile_language_hint ("Sets the language of … your own
+// new packs"). Regression guard for the studio/admin create paths that don't
+// surface a language picker.
+func TestCreatePack_DefaultsToSessionLocale(t *testing.T) {
+	h, q := newPackHandler(t)
+	slug := strings.ToLower(strings.NewReplacer("/", "_", " ", "_").Replace(t.Name()))
+	if len(slug) > 30 {
+		slug = slug[:30]
+	}
+	u, err := q.CreateUser(context.Background(), db.CreateUserParams{
+		Username:  slug,
+		Email:     slug + "@test.com",
+		Role:      "player",
+		IsActive:  true,
+		ConsentAt: time.Now(),
+		Locale:    "fr",
+	})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+
+	body := `{"name":"Sans langue"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/packs", bytes.NewBufferString(body))
+	req = req.WithContext(context.WithValue(req.Context(), middleware.SessionUserContextKey, middleware.SessionUser{
+		UserID: u.ID.String(), Username: u.Username, Email: u.Email, Role: u.Role, Locale: u.Locale,
+	}))
+	rec := httptest.NewRecorder()
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("want 201, got %d — body: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]any
+	json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["language"] != "fr" {
+		t.Errorf("want language=fr (inherited from session locale), got %v", resp["language"])
+	}
+}
+
 func newChiCtx(key, val string) func(*http.Request) *http.Request {
 	return func(r *http.Request) *http.Request {
 		rctx := chi.NewRouteContext()

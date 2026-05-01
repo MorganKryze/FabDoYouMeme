@@ -168,8 +168,11 @@ func (h *PackHandler) Create(w http.ResponseWriter, r *http.Request) {
 		req.Visibility = "private"
 	}
 	if req.Language == "" {
-		writeError(w, r, http.StatusBadRequest, "e_pack_language_required", "language is required")
-		return
+		// Honour the profile-hint contract ("Sets the language of … your own
+		// new packs"): when the client omits language, inherit the session
+		// user's UI locale. Admins / API callers that want a locale-agnostic
+		// pack still pass "multi" explicitly.
+		req.Language = u.Locale
 	}
 	if req.Language != "en" && req.Language != "fr" && req.Language != "multi" {
 		writeError(w, r, http.StatusBadRequest, "e_invalid_pack_language", "language must be en, fr, or multi")
