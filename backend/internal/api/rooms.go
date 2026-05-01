@@ -43,12 +43,19 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusUnauthorized, "unauthorized", "Authentication required")
 		return
 	}
+	// ADR-016 wire format: a room's content is a list of (role, pack_id,
+	// weight) tuples. The handler picks role names from each game type's
+	// RequiredPacks() declaration; the API is role-agnostic so adding a new
+	// game type with a third role costs nothing here.
 	var req struct {
-		GameTypeID string          `json:"game_type_id"`
-		PackID     string          `json:"pack_id"`
-		TextPackID string          `json:"text_pack_id"`
-		Mode       string          `json:"mode"`
-		Config     json.RawMessage `json:"config"`
+		GameTypeID string `json:"game_type_id"`
+		Packs      []struct {
+			Role   string `json:"role"`
+			PackID string `json:"pack_id"`
+			Weight int    `json:"weight"`
+		} `json:"packs"`
+		Mode   string          `json:"mode"`
+		Config json.RawMessage `json:"config"`
 		// Phase 4 (groups) — optional group scoping. When non-empty the
 		// room inherits the group's classification, rejects non-members
 		// and guests at WS join, and narrows pack sources to group-owned
@@ -64,18 +71,35 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid game_type_id")
 		return
 	}
-	packID, err := uuid.Parse(req.PackID)
-	if err != nil {
-		writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid pack_id")
+	if len(req.Packs) == 0 {
+		writeError(w, r, http.StatusBadRequest, "bad_request", "packs is required")
 		return
 	}
-	var textPackID uuid.UUID
-	if req.TextPackID != "" {
-		textPackID, err = uuid.Parse(req.TextPackID)
-		if err != nil {
-			writeError(w, r, http.StatusBadRequest, "bad_request", "Invalid text_pack_id")
+	packRefs := map[game.PackRole][]game.WeightedPackRef{}
+	parsedPackIDs := make([]uuid.UUID, 0, len(req.Packs))
+	for i, p := range req.Packs {
+		if p.Role == "" {
+			writeError(w, r, http.StatusBadRequest, "bad_request",
+				fmt.Sprintf("packs[%d]: role is required", i))
 			return
 		}
+		pid, perr := uuid.Parse(p.PackID)
+		if perr != nil {
+			writeError(w, r, http.StatusBadRequest, "bad_request",
+				fmt.Sprintf("packs[%d]: invalid pack_id", i))
+			return
+		}
+		// Default weight of 1 keeps the single-pack happy path one click.
+		weight := p.Weight
+		if weight == 0 {
+			weight = 1
+		}
+		role := game.PackRole(p.Role)
+		packRefs[role] = append(packRefs[role], game.WeightedPackRef{
+			PackID: pid,
+			Weight: weight,
+		})
+		parsedPackIDs = append(parsedPackIDs, pid)
 	}
 	// Validate mode
 	switch req.Mode {
@@ -122,32 +146,13 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Role-aware pack validation. The handler declares what packs it needs
 	// (image, text, prompt, filler…) and ValidatePackRequirements enforces
-	// presence + item counts across every declared role. Error codes are
-	// scoped per role so the client can map them to the right picker.
-	//
-	// The pack_id column holds the primary pack (whatever role is declared
-	// first in RequiredPacks()), and text_pack_id holds the secondary if any.
-	// Both are positional — the role each one fills is decided per game type.
+	// presence + per-role item counts across every declared role using the
+	// pool model (ADR-016). Error codes are scoped per role so the client
+	// can map them to the right picker.
 	var normalized game.RoomConfig
 	if err := json.Unmarshal(roomConfig, &normalized); err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to parse normalized config")
 		return
-	}
-	required := handler.RequiredPacks()
-	packRefs := map[game.PackRole][16]byte{}
-	if len(required) >= 1 {
-		packRefs[required[0].Role] = packID
-	}
-	if req.TextPackID != "" {
-		// A secondary pack was supplied. Assign it to whichever role the
-		// handler declares second; if the handler only needs one pack, fall
-		// back to the legacy "text" role so the validator surfaces a stable
-		// text_pack_not_applicable error code.
-		secondaryRole := game.PackRoleText
-		if len(required) >= 2 {
-			secondaryRole = required[1].Role
-		}
-		packRefs[secondaryRole] = textPackID
 	}
 	// Pack-size requirements are evaluated against the room's effective cap
 	// (the host's chosen max_players, defaulted from the manifest by
@@ -230,15 +235,12 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 			s := "pack_not_in_group"
 			return &s
 		}
-		if code := checkPackSource(packID); code != nil {
-			writeError(w, r, http.StatusConflict, *code,
-				"Group-scoped rooms accept only group or system packs.")
-			return
-		}
-		if req.TextPackID != "" {
-			if code := checkPackSource(textPackID); code != nil {
+		// Every pack in the room mix must be either group-owned or a system
+		// pack — across every role and every weighted entry.
+		for _, pid := range parsedPackIDs {
+			if code := checkPackSource(pid); code != nil {
 				writeError(w, r, http.StatusConflict, *code,
-					"Group-scoped rooms accept only group or system text packs.")
+					"Group-scoped rooms accept only group or system packs.")
 				return
 			}
 		}
@@ -258,15 +260,9 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to check active room")
 		return
 	}
-	textPackParam := pgtype.UUID{}
-	if req.TextPackID != "" {
-		textPackParam = pgtype.UUID{Bytes: textPackID, Valid: true}
-	}
 	room, err := h.db.CreateRoom(r.Context(), db.CreateRoomParams{
 		Code:       generateRoomCode(),
 		GameTypeID: gameTypeID,
-		PackID:     packID,
-		TextPackID: textPackParam,
 		HostID:     hostPG,
 		Mode:       req.Mode,
 		Config:     roomConfig,
@@ -275,6 +271,24 @@ func (h *RoomHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to create room")
 		return
+	}
+	// Persist the room's pack mix into room_packs, one row per (role, pack).
+	// Best-effort failure handling: a partial write here would leave the
+	// room un-startable, so on insert error we delete the orphan room and
+	// surface a 500. Single-machine, no concurrent writers per room.
+	for role, entries := range packRefs {
+		for _, e := range entries {
+			if ierr := h.db.InsertRoomPack(r.Context(), db.InsertRoomPackParams{
+				RoomID:  room.ID,
+				Role:    string(role),
+				PackID:  uuid.UUID(e.PackID),
+				Weight:  int32(e.Weight),
+			}); ierr != nil {
+				_ = h.db.DeleteRoom(r.Context(), room.ID)
+				writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to persist room packs")
+				return
+			}
+		}
 	}
 	// Persist the host into room_players so GetActiveRoomForUser and
 	// UpdatePlayerScore / leaderboard / history all agree on membership. The
@@ -332,6 +346,20 @@ type sqlcCounter struct{ q *db.Queries }
 func (c sqlcCounter) CountItemsForPack(ctx context.Context, packID [16]byte, versions []int) (int64, error) {
 	return c.q.CountCompatibleItems(ctx, db.CountCompatibleItemsParams{
 		PackID:   packID,
+		Versions: int32SliceToI32Arr(versions),
+	})
+}
+
+// CountItemsForPacksPool sums compatible item counts across the supplied
+// packs in a single round-trip. Backs the role-wide pool capacity check in
+// ValidatePackRequirements (ADR-016).
+func (c sqlcCounter) CountItemsForPacksPool(ctx context.Context, packIDs [][16]byte, versions []int) (int64, error) {
+	ids := make([]uuid.UUID, len(packIDs))
+	for i, p := range packIDs {
+		ids[i] = uuid.UUID(p)
+	}
+	return c.q.CountItemsForPacksByVersion(ctx, db.CountItemsForPacksByVersionParams{
+		Ids:      ids,
 		Versions: int32SliceToI32Arr(versions),
 	})
 }

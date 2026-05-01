@@ -119,13 +119,17 @@ func seedFinishedRoomForUser(t *testing.T, q *db.Queries, user db.User, withGame
 	room, err := q.CreateRoom(ctx, db.CreateRoomParams{
 		Code:       code,
 		GameTypeID: gt.ID,
-		PackID:     pack.ID,
 		HostID:     pgtype.UUID{Bytes: user.ID, Valid: true},
 		Mode:       "multiplayer",
 		Config:     json.RawMessage(`{"round_count":3,"round_duration_seconds":30,"voting_duration_seconds":15}`),
 	})
 	if err != nil {
 		t.Fatalf("seedFinishedRoomForUser: create room: %v", err)
+	}
+	if err := q.InsertRoomPack(ctx, db.InsertRoomPackParams{
+		RoomID: room.ID, Role: "image", PackID: pack.ID, Weight: 1,
+	}); err != nil {
+		t.Fatalf("seedFinishedRoomForUser: insert room_pack: %v", err)
 	}
 	if err := q.UpsertRoomPlayer(ctx, db.UpsertRoomPlayerParams{
 		RoomID: room.ID,

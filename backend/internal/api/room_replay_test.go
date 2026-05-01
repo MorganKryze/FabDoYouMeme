@@ -64,13 +64,17 @@ func seedFinishedReplayRoom(t *testing.T, q *db.Queries, user db.User, startRoun
 	room, err := q.CreateRoom(ctx, db.CreateRoomParams{
 		Code:       code,
 		GameTypeID: gt.ID,
-		PackID:     pack.ID,
 		HostID:     pgtype.UUID{Bytes: user.ID, Valid: true},
 		Mode:       "multiplayer",
 		Config:     json.RawMessage(`{"round_count":3,"round_duration_seconds":30,"voting_duration_seconds":15}`),
 	})
 	if err != nil {
 		t.Fatalf("create room: %v", err)
+	}
+	if err := q.InsertRoomPack(ctx, db.InsertRoomPackParams{
+		RoomID: room.ID, Role: "image", PackID: pack.ID, Weight: 1,
+	}); err != nil {
+		t.Fatalf("insert room_pack: %v", err)
 	}
 	if err := q.UpsertRoomPlayer(ctx, db.UpsertRoomPlayerParams{
 		RoomID: room.ID,
@@ -371,14 +375,22 @@ func seedFinishedShowdownRoom(t *testing.T, q *db.Queries, host db.User, textPac
 	room, err := q.CreateRoom(ctx, db.CreateRoomParams{
 		Code:       code,
 		GameTypeID: gt.ID,
-		PackID:     imgPack.ID,
-		TextPackID: pgtype.UUID{Bytes: textPackID, Valid: true},
 		HostID:     pgtype.UUID{Bytes: host.ID, Valid: true},
 		Mode:       "multiplayer",
 		Config:     json.RawMessage(`{"round_count":1,"round_duration_seconds":30,"voting_duration_seconds":15}`),
 	})
 	if err != nil {
 		t.Fatalf("create showdown room: %v", err)
+	}
+	if err := q.InsertRoomPack(ctx, db.InsertRoomPackParams{
+		RoomID: room.ID, Role: "image", PackID: imgPack.ID, Weight: 1,
+	}); err != nil {
+		t.Fatalf("insert image room_pack: %v", err)
+	}
+	if err := q.InsertRoomPack(ctx, db.InsertRoomPackParams{
+		RoomID: room.ID, Role: "text", PackID: textPackID, Weight: 1,
+	}); err != nil {
+		t.Fatalf("insert text room_pack: %v", err)
 	}
 	if err := q.UpsertRoomPlayer(ctx, db.UpsertRoomPlayerParams{
 		RoomID: room.ID, UserID: pgtype.UUID{Bytes: host.ID, Valid: true},

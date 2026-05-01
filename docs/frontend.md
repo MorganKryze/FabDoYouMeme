@@ -67,6 +67,10 @@ Holds selected pack, item, and version state for the studio editor. Data is load
 
 Caches `GET /api/game-types` for the session. Powers two studio surfaces: the new-pack form's "Used by: meme-showdown, …" hint (`compatibleGameTypeSlugs(kind)`) and the item-table's "X / Y for full room" badge (`worstCaseItemsNeeded(kind)`). The math mirrors the backend's `MinItemsFn` so the badge predicts what `POST /api/rooms` will accept. Loaded lazily via `ensureLoaded()` from `/studio/+page.svelte`.
 
+### Host page weighted multi-pack picker (ADR-016)
+
+`routes/(app)/host/+page.svelte` keeps per-role state as a list of `{ pack_id, weight }` tuples. Clicking a pack card toggles its presence in the role's list; once two or more packs are picked, a "Mix weights" panel exposes a per-row weight number input plus a remove button, and renders the renormalised percentages as a single-line hint (`3:1:1 → 60% / 20% / 20%`). The form serialises every selection across every role into one hidden JSON input (`name="packs"`); the server action forwards it verbatim to `POST /api/rooms`.
+
 ---
 
 ## Server vs client data loading

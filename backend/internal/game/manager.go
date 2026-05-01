@@ -69,7 +69,8 @@ func NewManager(parent context.Context, registry *Registry, queries *db.Queries,
 // GetOrCreate returns the hub for roomCode, creating it if it does not exist.
 // roomID, gameTypeSlug, and hostUserID are only used when creating a new hub.
 // effectiveMaxPlayers is the per-room cap from rooms.config.max_players;
-// pass 0 to fall back to the handler's manifest cap.
+// pass 0 to fall back to the handler's manifest cap. PacksByRole may be nil
+// — the hub will lazy-load from room_packs on first access.
 //
 // The ctx parameter is retained for API compatibility with existing test and
 // REST handler call sites, but the hub's Run goroutine is scoped to
@@ -78,11 +79,11 @@ func NewManager(parent context.Context, registry *Registry, queries *db.Queries,
 func (m *Manager) GetOrCreate(ctx context.Context, roomCode string, roomID uuid.UUID, gameTypeSlug, hostUserID string, effectiveMaxPlayers int) *Hub {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.createLocked(roomCode, roomID, gameTypeSlug, hostUserID, effectiveMaxPlayers)
+	return m.createLocked(roomCode, roomID, gameTypeSlug, hostUserID, effectiveMaxPlayers, nil)
 }
 
 // createLocked does the actual hub construction; caller must already hold m.mu.
-func (m *Manager) createLocked(roomCode string, roomID uuid.UUID, gameTypeSlug, hostUserID string, effectiveMaxPlayers int) *Hub {
+func (m *Manager) createLocked(roomCode string, roomID uuid.UUID, gameTypeSlug, hostUserID string, effectiveMaxPlayers int, packsByRole map[PackRole][]WeightedPackRef) *Hub {
 	if h, ok := m.hubs[roomCode]; ok {
 		return h
 	}
@@ -93,6 +94,7 @@ func (m *Manager) createLocked(roomCode string, roomID uuid.UUID, gameTypeSlug, 
 		GameTypeSlug:        gameTypeSlug,
 		HostUserID:          hostUserID,
 		EffectiveMaxPlayers: effectiveMaxPlayers,
+		PacksByRole:         packsByRole,
 		Registry:            m.registry,
 		DB:                  m.db,
 		Cfg:                 m.cfg,
@@ -156,9 +158,23 @@ func (m *Manager) GetOrLoad(ctx context.Context, roomCode string) (*Hub, error) 
 		}
 	}
 
+	// Pre-load the room's weighted pack mix so the hub does not pay a DB
+	// round-trip on the first round. A failure here is non-fatal; the hub
+	// will lazy-load on first access in pickPrimaryItem / initHandDeck.
+	var packsByRole map[PackRole][]WeightedPackRef
+	if rows, perr := m.db.ListRoomPacks(ctx, row.ID); perr == nil {
+		packsByRole = map[PackRole][]WeightedPackRef{}
+		for _, rp := range rows {
+			packsByRole[PackRole(rp.Role)] = append(packsByRole[PackRole(rp.Role)], WeightedPackRef{
+				PackID: rp.PackID,
+				Weight: int(rp.Weight),
+			})
+		}
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.createLocked(row.Code, row.ID, row.GameTypeSlug, hostUserID, effectiveMaxPlayers), nil
+	return m.createLocked(row.Code, row.ID, row.GameTypeSlug, hostUserID, effectiveMaxPlayers, packsByRole), nil
 }
 
 // Get returns the hub for roomCode, or (nil, false) if no hub is running.

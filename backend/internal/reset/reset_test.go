@@ -73,13 +73,17 @@ func seedGameHistory(t *testing.T, ctx context.Context, q *db.Queries, slug stri
 	room, err := q.CreateRoom(ctx, db.CreateRoomParams{
 		Code:       code,
 		GameTypeID: gt.ID,
-		PackID:     pack.ID,
 		HostID:     pgtype.UUID{Bytes: user.ID, Valid: true},
 		Mode:       "multiplayer",
 		Config:     json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
 	})
 	if err != nil {
 		t.Fatalf("CreateRoom: %v", err)
+	}
+	if err := q.InsertRoomPack(ctx, db.InsertRoomPackParams{
+		RoomID: room.ID, Role: "image", PackID: pack.ID, Weight: 1,
+	}); err != nil {
+		t.Fatalf("InsertRoomPack: %v", err)
 	}
 	round, err := q.CreateRound(ctx, db.CreateRoundParams{
 		RoomID: room.ID,

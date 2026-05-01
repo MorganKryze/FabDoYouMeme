@@ -23,6 +23,14 @@ type PackRequirement struct {
 	MinItemsFn      func(cfg RoomConfig, maxPlayers int) int
 }
 
+// WeightedPackRef pairs a pack with the host's chosen relative weight in a
+// room's mix for that role. Weights are positive integers; they are
+// renormalised at runtime so 3:1:1 and 30:10:10 behave identically.
+type WeightedPackRef struct {
+	PackID [16]byte
+	Weight int
+}
+
 // ManifestPackRequirement is the YAML/JSON projection of PackRequirement:
 // roles and payload versions only. The handler's RequiredPacks() method reads
 // this list from the manifest and attaches MinItemsFn at runtime.

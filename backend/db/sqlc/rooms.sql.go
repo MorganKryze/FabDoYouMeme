@@ -158,16 +158,14 @@ func (q *Queries) CreateGuestVote(ctx context.Context, arg CreateGuestVoteParams
 
 const createRoom = `-- name: CreateRoom :one
 
-INSERT INTO rooms (code, game_type_id, pack_id, text_pack_id, host_id, mode, config, group_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-RETURNING id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at, text_pack_id, group_id
+INSERT INTO rooms (code, game_type_id, host_id, mode, config, group_id)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, code, game_type_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at, group_id
 `
 
 type CreateRoomParams struct {
 	Code       string          `json:"code"`
 	GameTypeID uuid.UUID       `json:"game_type_id"`
-	PackID     uuid.UUID       `json:"pack_id"`
-	TextPackID pgtype.UUID     `json:"text_pack_id"`
 	HostID     pgtype.UUID     `json:"host_id"`
 	Mode       string          `json:"mode"`
 	Config     json.RawMessage `json:"config"`
@@ -175,12 +173,12 @@ type CreateRoomParams struct {
 }
 
 // backend/db/queries/rooms.sql
+// Pack references live in room_packs (see queries/room_packs.sql); the API
+// handler inserts those rows in the same transaction as the room itself.
 func (q *Queries) CreateRoom(ctx context.Context, arg CreateRoomParams) (Room, error) {
 	row := q.db.QueryRow(ctx, createRoom,
 		arg.Code,
 		arg.GameTypeID,
-		arg.PackID,
-		arg.TextPackID,
 		arg.HostID,
 		arg.Mode,
 		arg.Config,
@@ -191,7 +189,6 @@ func (q *Queries) CreateRoom(ctx context.Context, arg CreateRoomParams) (Room, e
 		&i.ID,
 		&i.Code,
 		&i.GameTypeID,
-		&i.PackID,
 		&i.HostID,
 		&i.Mode,
 		&i.State,
@@ -199,7 +196,6 @@ func (q *Queries) CreateRoom(ctx context.Context, arg CreateRoomParams) (Room, e
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.RematchWindowExpiresAt,
-		&i.TextPackID,
 		&i.GroupID,
 	)
 	return i, err
@@ -415,14 +411,17 @@ SELECT
   r.config,
   r.created_at AS started_at,
   r.finished_at,
-  gt.slug::text                            AS game_type_slug,
-  gp.name::text                            AS pack_name,
-  COALESCE(tp.name, '')::text              AS text_pack_name,
+  gt.slug::text AS game_type_slug,
+  COALESCE((
+    SELECT string_agg(gp.name, ', ' ORDER BY rp2.weight DESC, rp2.pack_id)
+    FROM room_packs rp2
+    JOIN game_packs gp ON rp2.pack_id = gp.id
+    WHERE rp2.room_id = r.id
+  ), '')::text AS pack_name,
+  ''::text AS text_pack_name,
   (SELECT COUNT(*) FROM room_players rp WHERE rp.room_id = r.id)::bigint AS player_count
 FROM rooms r
 JOIN game_types gt ON r.game_type_id = gt.id
-JOIN game_packs gp ON r.pack_id = gp.id
-LEFT JOIN game_packs tp ON r.text_pack_id = tp.id
 WHERE r.code = $1 AND r.state = 'finished'
 `
 
@@ -440,8 +439,11 @@ type GetFinishedRoomByCodeRow struct {
 	PlayerCount  int64              `json:"player_count"`
 }
 
-// Replay landing lookup. Returns public room metadata plus slug/pack names.
-// text_pack_name is the empty string when the game type has no text pack.
+// Replay landing lookup. Returns public room metadata plus slug + a single
+// label aggregating every pack the room used. Multi-pack rooms (per ADR-016)
+// collapse to a comma-separated list ordered by weight then pack_id.
+// text_pack_name stays in the response shape but is always empty now —
+// frontend treats it as optional already.
 func (q *Queries) GetFinishedRoomByCode(ctx context.Context, code string) (GetFinishedRoomByCodeRow, error) {
 	row := q.db.QueryRow(ctx, getFinishedRoomByCode, code)
 	var i GetFinishedRoomByCodeRow
@@ -469,11 +471,17 @@ SELECT
   r.created_at,
   r.finished_at,
   gt.slug AS game_type_slug,
-  gp.name AS pack_name
+  (
+    SELECT gp.name
+    FROM room_packs rp2
+    JOIN game_packs gp ON rp2.pack_id = gp.id
+    WHERE rp2.room_id = r.id
+    ORDER BY rp2.weight DESC, rp2.pack_id
+    LIMIT 1
+  )::text AS pack_name
 FROM room_players rp
 JOIN rooms r ON rp.room_id = r.id
 JOIN game_types gt ON r.game_type_id = gt.id
-JOIN game_packs gp ON r.pack_id = gp.id
 WHERE rp.user_id = $1
   AND r.created_at > now() - interval '30 days'
 ORDER BY r.created_at DESC
@@ -498,6 +506,8 @@ type GetRecentRoomsForUserRow struct {
 // Powers the "Recent rooms" strip on the new Home page. Scoped to the session
 // user — never take a user_id parameter from the client. Participation is
 // detected via room_players join so both hosts and non-host players qualify.
+// pack_name is the heaviest primary-role pack for the room (per ADR-016 the
+// mix can include multiple packs; the home strip surfaces a single label).
 func (q *Queries) GetRecentRoomsForUser(ctx context.Context, arg GetRecentRoomsForUserParams) ([]GetRecentRoomsForUserRow, error) {
 	rows, err := q.db.Query(ctx, getRecentRoomsForUser, arg.UserID, arg.Limit)
 	if err != nil {
@@ -697,7 +707,7 @@ func (q *Queries) GetReplaySubmissions(ctx context.Context, roomID uuid.UUID) ([
 }
 
 const getRoomByCode = `-- name: GetRoomByCode :one
-SELECT r.id, r.code, r.game_type_id, r.pack_id, r.host_id, r.mode, r.state, r.config, r.created_at, r.finished_at, r.rematch_window_expires_at, r.text_pack_id, r.group_id, gt.slug AS game_type_slug FROM rooms r
+SELECT r.id, r.code, r.game_type_id, r.host_id, r.mode, r.state, r.config, r.created_at, r.finished_at, r.rematch_window_expires_at, r.group_id, gt.slug AS game_type_slug FROM rooms r
 JOIN game_types gt ON r.game_type_id = gt.id
 WHERE r.code = $1
 `
@@ -706,7 +716,6 @@ type GetRoomByCodeRow struct {
 	ID                     uuid.UUID          `json:"id"`
 	Code                   string             `json:"code"`
 	GameTypeID             uuid.UUID          `json:"game_type_id"`
-	PackID                 uuid.UUID          `json:"pack_id"`
 	HostID                 pgtype.UUID        `json:"host_id"`
 	Mode                   string             `json:"mode"`
 	State                  string             `json:"state"`
@@ -714,7 +723,6 @@ type GetRoomByCodeRow struct {
 	CreatedAt              time.Time          `json:"created_at"`
 	FinishedAt             pgtype.Timestamptz `json:"finished_at"`
 	RematchWindowExpiresAt pgtype.Timestamptz `json:"rematch_window_expires_at"`
-	TextPackID             pgtype.UUID        `json:"text_pack_id"`
 	GroupID                pgtype.UUID        `json:"group_id"`
 	GameTypeSlug           string             `json:"game_type_slug"`
 }
@@ -726,7 +734,6 @@ func (q *Queries) GetRoomByCode(ctx context.Context, code string) (GetRoomByCode
 		&i.ID,
 		&i.Code,
 		&i.GameTypeID,
-		&i.PackID,
 		&i.HostID,
 		&i.Mode,
 		&i.State,
@@ -734,7 +741,6 @@ func (q *Queries) GetRoomByCode(ctx context.Context, code string) (GetRoomByCode
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.RematchWindowExpiresAt,
-		&i.TextPackID,
 		&i.GroupID,
 		&i.GameTypeSlug,
 	)
@@ -742,7 +748,7 @@ func (q *Queries) GetRoomByCode(ctx context.Context, code string) (GetRoomByCode
 }
 
 const getRoomByID = `-- name: GetRoomByID :one
-SELECT id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at, text_pack_id, group_id FROM rooms WHERE id = $1
+SELECT id, code, game_type_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at, group_id FROM rooms WHERE id = $1
 `
 
 func (q *Queries) GetRoomByID(ctx context.Context, id uuid.UUID) (Room, error) {
@@ -752,7 +758,6 @@ func (q *Queries) GetRoomByID(ctx context.Context, id uuid.UUID) (Room, error) {
 		&i.ID,
 		&i.Code,
 		&i.GameTypeID,
-		&i.PackID,
 		&i.HostID,
 		&i.Mode,
 		&i.State,
@@ -760,7 +765,6 @@ func (q *Queries) GetRoomByID(ctx context.Context, id uuid.UUID) (Room, error) {
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.RematchWindowExpiresAt,
-		&i.TextPackID,
 		&i.GroupID,
 	)
 	return i, err
@@ -1074,7 +1078,7 @@ func (q *Queries) RemoveRoomPlayer(ctx context.Context, arg RemoveRoomPlayerPara
 
 const setRoomState = `-- name: SetRoomState :one
 UPDATE rooms SET state = $2, finished_at = CASE WHEN $2 = 'finished' THEN now() ELSE NULL END
-WHERE id = $1 RETURNING id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at, text_pack_id, group_id
+WHERE id = $1 RETURNING id, code, game_type_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at, group_id
 `
 
 type SetRoomStateParams struct {
@@ -1089,7 +1093,6 @@ func (q *Queries) SetRoomState(ctx context.Context, arg SetRoomStateParams) (Roo
 		&i.ID,
 		&i.Code,
 		&i.GameTypeID,
-		&i.PackID,
 		&i.HostID,
 		&i.Mode,
 		&i.State,
@@ -1097,7 +1100,6 @@ func (q *Queries) SetRoomState(ctx context.Context, arg SetRoomStateParams) (Roo
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.RematchWindowExpiresAt,
-		&i.TextPackID,
 		&i.GroupID,
 	)
 	return i, err
@@ -1172,7 +1174,7 @@ func (q *Queries) UpdatePlayerScore(ctx context.Context, arg UpdatePlayerScorePa
 }
 
 const updateRoomConfig = `-- name: UpdateRoomConfig :one
-UPDATE rooms SET config = $2 WHERE id = $1 AND state = 'lobby' RETURNING id, code, game_type_id, pack_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at, text_pack_id, group_id
+UPDATE rooms SET config = $2 WHERE id = $1 AND state = 'lobby' RETURNING id, code, game_type_id, host_id, mode, state, config, created_at, finished_at, rematch_window_expires_at, group_id
 `
 
 type UpdateRoomConfigParams struct {
@@ -1187,7 +1189,6 @@ func (q *Queries) UpdateRoomConfig(ctx context.Context, arg UpdateRoomConfigPara
 		&i.ID,
 		&i.Code,
 		&i.GameTypeID,
-		&i.PackID,
 		&i.HostID,
 		&i.Mode,
 		&i.State,
@@ -1195,7 +1196,6 @@ func (q *Queries) UpdateRoomConfig(ctx context.Context, arg UpdateRoomConfigPara
 		&i.CreatedAt,
 		&i.FinishedAt,
 		&i.RematchWindowExpiresAt,
-		&i.TextPackID,
 		&i.GroupID,
 	)
 	return i, err

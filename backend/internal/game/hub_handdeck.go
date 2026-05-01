@@ -16,10 +16,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand/v2"
+	"sort"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
 )
@@ -116,31 +117,57 @@ var (
 	errPackExhausted = errors.New("pack_exhausted")
 )
 
-// loadHandDeck fetches every item in the secondary pack at the requested
-// payload version and returns the id deck (unshuffled) plus a lookup of
-// each item's text. Returns an error if the pack id is NULL or the DB
-// read fails; an empty deck is not an error here — ValidatePackRequirements
-// at room creation already guarantees the deck is large enough.
-func loadHandDeck(ctx context.Context, q *db.Queries, packID pgtype.UUID, payloadVersion int) ([]uuid.UUID, map[uuid.UUID]string, error) {
-	if !packID.Valid {
+// loadWeightedHandDeck fetches every item across the supplied weighted pack
+// list at the requested payload version, then returns a single id deck whose
+// order is biased by per-pack weight (each item's exponential key is
+// `-ln(rand)/weight`). Drawing from the deck (which the hub does by popping
+// the tail in handState.drawOne) consumes the lightest-key items first, so
+// the dealt hand's marginal distribution across packs matches the weights.
+//
+// An empty deck is not an error here — ValidatePackRequirements at room
+// creation already guarantees the pool is large enough.
+func loadWeightedHandDeck(ctx context.Context, q *db.Queries, packs []WeightedPackRef, payloadVersion int) ([]uuid.UUID, map[uuid.UUID]string, error) {
+	if len(packs) == 0 {
 		return nil, nil, fmt.Errorf("no secondary pack on room")
 	}
-	rows, err := q.ListPackItemsByPayloadVersion(ctx, db.ListPackItemsByPayloadVersionParams{
-		PackID:         packID.Bytes,
-		PayloadVersion: int32(payloadVersion),
-	})
-	if err != nil {
-		return nil, nil, err
+	type keyed struct {
+		id  uuid.UUID
+		key float64
 	}
-	deck := make([]uuid.UUID, 0, len(rows))
-	text := make(map[uuid.UUID]string, len(rows))
-	for _, row := range rows {
-		deck = append(deck, row.ID)
-		var p struct {
-			Text string `json:"text"`
+	all := make([]keyed, 0)
+	text := make(map[uuid.UUID]string)
+	for _, p := range packs {
+		rows, err := q.ListPackItemsByPayloadVersion(ctx, db.ListPackItemsByPayloadVersionParams{
+			PackID:         p.PackID,
+			PayloadVersion: int32(payloadVersion),
+		})
+		if err != nil {
+			return nil, nil, err
 		}
-		_ = json.Unmarshal(row.Payload, &p)
-		text[row.ID] = p.Text
+		w := float64(p.Weight)
+		if w <= 0 {
+			w = 1
+		}
+		for _, row := range rows {
+			u := rand.Float64()
+			if u < 1e-12 {
+				u = 1e-12
+			}
+			all = append(all, keyed{id: row.ID, key: -math.Log(u) / w})
+			var pl struct {
+				Text string `json:"text"`
+			}
+			_ = json.Unmarshal(row.Payload, &pl)
+			text[row.ID] = pl.Text
+		}
+	}
+	// Sort ascending — handState.drawOne pops the tail, so put the highest
+	// key (lowest probability of being dealt) at the front. The exponential
+	// keying does the rest of the work.
+	sort.Slice(all, func(i, j int) bool { return all[i].key > all[j].key })
+	deck := make([]uuid.UUID, len(all))
+	for i, k := range all {
+		deck[i] = k.id
 	}
 	return deck, text, nil
 }
@@ -188,7 +215,15 @@ func (h *Hub) initHandDeck(ctx context.Context) bool {
 	if cfg.HandSize <= 0 {
 		cfg.HandSize = 5
 	}
-	deck, textFor, err := loadHandDeck(ctx, h.db, room.TextPackID, payloadVersion)
+	if err := h.ensurePacksLoaded(ctx); err != nil {
+		if h.log != nil {
+			h.log.Error("hub: handdeck load packs", "error", err, "room", h.roomCode)
+		}
+		h.finishRoom(ctx, "pack_exhausted", nil)
+		return false
+	}
+	secondaryRefs := h.packsByRole[h.secondaryRole()]
+	deck, textFor, err := loadWeightedHandDeck(ctx, h.db, secondaryRefs, payloadVersion)
 	if err != nil {
 		if h.log != nil {
 			h.log.Error("hub: handdeck load deck", "error", err, "room", h.roomCode)
@@ -196,7 +231,6 @@ func (h *Hub) initHandDeck(ctx context.Context) bool {
 		h.finishRoom(ctx, "pack_exhausted", nil)
 		return false
 	}
-	shuffleDeck(deck)
 	h.handDeck = newHandStateWithText(deck, textFor, cfg.HandSize)
 	h.handDeck.DealInitial(h.seatedPlayerIDs())
 	return true

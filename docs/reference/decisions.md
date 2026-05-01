@@ -226,3 +226,27 @@ The contradictory note in the pre-redesign `04-api.md` ("backend sets user_id = 
 4. **Hosts must commit to a cap up front.** "We'll see how many show up" rooms are slightly less ergonomic — the host has to think about the cap before validation. The platform's invite-only nature makes this a soft constraint, but it is real. Mitigated by the studio surfacing pack ↔ game-type compatibility and a worst-case items counter so the host knows what they're signing up for.
 5. **Rejected alternative — dedicated `rooms.max_players` column.** Considered, would unlock indexed queries (`WHERE max_players >= ?`), but no current path needs that and it would have forced touching every room SQL file plus a regeneration. The JSONB field reuses the existing partial-PATCH lifecycle (`PATCH /api/rooms/:code/config` accepts `max_players` for free) and keeps `ValidateAndFill` as the single bounds-enforcement seam.
 6. **Rejected alternative — pack-level `accepted_payload_versions` declaration.** Would let the pack constrain itself ("this is for prompt-showdown") but would prevent legitimate pack reuse across game types (image v1 already serves both `meme-freestyle` and `meme-showdown`). The discoverability story is solved instead by surfacing `handler.RequiredPacks()` in the studio (the kind → game-types reverse index), which costs nothing schema-side.
+
+
+---
+
+## ADR-016 — Weighted Multi-Pack Rooms via `room_packs` Join Table
+
+**Status**: Accepted
+
+**Context**: The room→pack relationship was strictly one-to-one per role: `rooms.pack_id` (primary) and `rooms.text_pack_id` (secondary, nullable). A host who wanted to mix sources — "60% house image pack, 25% group's hand-curated set, 15% NSFW spice" — had to duplicate items into a single mega-pack. ADR-013 named the future direction ("introduce `room_packs(room_id, role, pack_id)`, backfill, drop the columns"); this ADR cashes that in and adds per-pack `weight` so the host can bias the mix without ever editing pack contents.
+
+**Decision**: replace the two pack columns on `rooms` with a join table `room_packs(room_id, role, pack_id, weight)`, PK `(room_id, role, pack_id)`. Weights are positive integers with relative semantics — `3:1:1` and `30:10:10` produce the same sampler. The validator (`game.ValidatePackRequirements`) takes `map[PackRole][]WeightedPackRef` and uses the **pool model** for capacity: `MinItemsFn` is checked against the SUM of compatible items across the role's packs (a 5%-weighted 10-item pack can ride alongside a 95%-weighted 500-item pack). Each individual pack must still hold at least one compatible item — that's a misconfig, not a weight question.
+
+Runtime selection:
+- Primary role (per-round prompt/image): the pack list is shuffled by `-ln(rand)/weight`; the first pack with an unplayed item wins. Subsequent packs are the fallback order.
+- Secondary role (hand-deck): the union of all listed packs' items is keyed the same way, sorted, and consumed by the existing `handState.drawOne` (which pops the tail). Marginal distribution matches the weights; refill keeps reading from the same shuffled deck.
+
+**Consequences**:
+
+1. **Hosts can mix without editing packs.** The studio remains the place to author content; the host page is now the place to compose the *room's* content from existing packs at runtime.
+2. **Single-pack rooms stay one click.** The host page's per-role picker degrades to today's UX when the host adds no extra rows; weights default to `1` and the pool model collapses to the old single-pack check.
+3. **Hard-cut migration, not additive.** Project is in active dev with no live production data. Migration `016_room_packs.up.sql` creates the join table, backfills from the existing columns at `weight=1` for the four shipped game types, and drops both columns in the same transaction. The down migration restores the columns by collapsing each role's mix to its highest-weighted pack — lossy by design, faithful to "best-effort restoration".
+4. **`text_pack_id` finally dies.** The historical artefact named in ADR-013 is gone. The replay header still exposes a `text_pack_name` field for backwards-compat with the JSON shape but it's always empty now; clients that already treat it as optional keep working.
+5. **Trade-off — discoverability of the multi-pack feature.** Until the host opens the picker and sees "+ Add pack", they may not know the feature exists. Mitigated by the studio's existing capacity pill: a small pack tagged green tells the host "this alone covers a full room" and an amber pack invites the question "could I combine this with another?". Real onboarding lives in product copy, not architecture.
+6. **Rejected alternatives.** A `pack_weights JSONB` column on `rooms` (no schema migration) would have worked but loses FK integrity on each pack id and forces every reader to JSON-decode just to learn what packs the room uses. A pack-level `accepted_payload_versions` declaration was considered and rejected in ADR-016 design notes (would prevent legitimate cross-game-type pack reuse, e.g. image v1 already serving both meme variants). Percentages-summing-to-100 weight UX was rejected in favour of relative integers — adding a pack auto-renormalises, no validation copy, no float drift in the DB.

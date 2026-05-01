@@ -1,11 +1,10 @@
 import { api } from './client';
-import type { Room, RoomConfig } from './types';
+import type { Room, RoomConfig, RoomPackChoice } from './types';
 
 export const roomsApi = {
   create: (body: {
     game_type_id: string;
-    pack_id: string;
-    text_pack_id?: string;
+    packs: RoomPackChoice[];
     mode?: 'multiplayer' | 'solo';
     config?: Partial<RoomConfig>;
     group_id?: string;

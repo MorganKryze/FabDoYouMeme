@@ -47,13 +47,17 @@ func roomInState(t *testing.T, q *db.Queries, host db.User, state string) db.Roo
 	room, err := q.CreateRoom(ctx, db.CreateRoomParams{
 		Code:       code,
 		GameTypeID: gt.ID,
-		PackID:     pack.ID,
 		HostID:     pgtype.UUID{Bytes: host.ID, Valid: true},
 		Mode:       "multiplayer",
 		Config:     json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
 	})
 	if err != nil {
 		t.Fatalf("roomInState: create room: %v", err)
+	}
+	if err := q.InsertRoomPack(ctx, db.InsertRoomPackParams{
+		RoomID: room.ID, Role: "image", PackID: pack.ID, Weight: 1,
+	}); err != nil {
+		t.Fatalf("roomInState: insert room_pack: %v", err)
 	}
 	if state != "lobby" {
 		updated, err := q.SetRoomState(ctx, db.SetRoomStateParams{

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
@@ -125,9 +126,11 @@ func TestCreateRoom_ImagePackNoSupportedItems(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{
 		"game_type_id": gt.ID.String(),
-		"pack_id":      pack.ID.String(),
-		"mode":         "multiplayer",
-		"config":       json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
+		"packs": []map[string]any{
+			{"role": "image", "pack_id": pack.ID.String(), "weight": 1},
+		},
+		"mode":   "multiplayer",
+		"config": json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
 	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
@@ -161,9 +164,11 @@ func TestCreateRoom_ImagePackInsufficient(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{
 		"game_type_id": gt.ID.String(),
-		"pack_id":      pack.ID.String(),
-		"mode":         "multiplayer",
-		"config":       json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
+		"packs": []map[string]any{
+			{"role": "image", "pack_id": pack.ID.String(), "weight": 1},
+		},
+		"mode":   "multiplayer",
+		"config": json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
 	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
@@ -214,13 +219,17 @@ func seedLobbyRoom(t *testing.T, configJSON string) (*api.RoomHandler, *db.Queri
 	room, err := q.CreateRoom(ctx, db.CreateRoomParams{
 		Code:       code,
 		GameTypeID: gt.ID,
-		PackID:     pack.ID,
 		HostID:     pgtype.UUID{Bytes: user.ID, Valid: true},
 		Mode:       "multiplayer",
 		Config:     json.RawMessage(configJSON),
 	})
 	if err != nil {
 		t.Fatalf("seedLobbyRoom: create room: %v", err)
+	}
+	if err := q.InsertRoomPack(ctx, db.InsertRoomPackParams{
+		RoomID: room.ID, Role: "image", PackID: pack.ID, Weight: 1,
+	}); err != nil {
+		t.Fatalf("seedLobbyRoom: insert room_pack: %v", err)
 	}
 	return h, q, user, room
 }
@@ -341,9 +350,11 @@ func TestCreateRoom_DefaultsJokerCountAndAllowSkipVote(t *testing.T) {
 	// POST /api/rooms without specifying the two new fields.
 	body, _ := json.Marshal(map[string]any{
 		"game_type_id": gt.ID.String(),
-		"pack_id":      pack.ID.String(),
-		"mode":         "multiplayer",
-		"config":       json.RawMessage(`{"round_count":10,"round_duration_seconds":60,"voting_duration_seconds":30}`),
+		"packs": []map[string]any{
+			{"role": "image", "pack_id": pack.ID.String(), "weight": 1},
+		},
+		"mode":   "multiplayer",
+		"config": json.RawMessage(`{"round_count":10,"round_duration_seconds":60,"voting_duration_seconds":30}`),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
 	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
@@ -382,13 +393,17 @@ func TestGetRoom_ByCode_Found(t *testing.T) {
 	room, err := q.CreateRoom(ctx, db.CreateRoomParams{
 		Code:       code,
 		GameTypeID: gt.ID,
-		PackID:     pack.ID,
 		HostID:     pgtype.UUID{Bytes: user.ID, Valid: true},
 		Mode:       "multiplayer",
 		Config:     json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
 	})
 	if err != nil {
 		t.Fatalf("create room: %v", err)
+	}
+	if err := q.InsertRoomPack(ctx, db.InsertRoomPackParams{
+		RoomID: room.ID, Role: "image", PackID: pack.ID, Weight: 1,
+	}); err != nil {
+		t.Fatalf("insert room_pack: %v", err)
 	}
 
 	rctx := chi.NewRouteContext()
@@ -419,9 +434,11 @@ func TestCreateRoom_MemeVote_RequiresTextPack(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{
 		"game_type_id": gt.ID.String(),
-		"pack_id":      imgPack.ID.String(),
-		"mode":         "multiplayer",
-		"config":       json.RawMessage(`{"round_count":5,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5}`),
+		"packs": []map[string]any{
+			{"role": "image", "pack_id": imgPack.ID.String(), "weight": 1},
+		},
+		"mode":   "multiplayer",
+		"config": json.RawMessage(`{"round_count":5,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5}`),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
 	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
@@ -449,10 +466,12 @@ func TestCreateRoom_MemeCaption_RejectsTextPack(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{
 		"game_type_id": gt.ID.String(),
-		"pack_id":      imgPack.ID.String(),
-		"text_pack_id": textPack.ID.String(),
-		"mode":         "multiplayer",
-		"config":       json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
+		"packs": []map[string]any{
+			{"role": "image", "pack_id": imgPack.ID.String(), "weight": 1},
+			{"role": "text", "pack_id": textPack.ID.String(), "weight": 1},
+		},
+		"mode":   "multiplayer",
+		"config": json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
 	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
@@ -482,10 +501,12 @@ func TestCreateRoom_MemeVote_TextPackInsufficient(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{
 		"game_type_id": gt.ID.String(),
-		"pack_id":      imgPack.ID.String(),
-		"text_pack_id": textPack.ID.String(),
-		"mode":         "multiplayer",
-		"config":       json.RawMessage(`{"round_count":5,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5}`),
+		"packs": []map[string]any{
+			{"role": "image", "pack_id": imgPack.ID.String(), "weight": 1},
+			{"role": "text", "pack_id": textPack.ID.String(), "weight": 1},
+		},
+		"mode":   "multiplayer",
+		"config": json.RawMessage(`{"round_count":5,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5}`),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
 	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
@@ -519,10 +540,12 @@ func TestCreateRoom_MaxPlayers_FullCapRejects(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{
 		"game_type_id": gt.ID.String(),
-		"pack_id":      imgPack.ID.String(),
-		"text_pack_id": textPack.ID.String(),
-		"mode":         "multiplayer",
-		"config":       json.RawMessage(`{"round_count":4,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5,"max_players":12}`),
+		"packs": []map[string]any{
+			{"role": "image", "pack_id": imgPack.ID.String(), "weight": 1},
+			{"role": "text", "pack_id": textPack.ID.String(), "weight": 1},
+		},
+		"mode":   "multiplayer",
+		"config": json.RawMessage(`{"round_count":4,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5,"max_players":12}`),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
 	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
@@ -555,10 +578,12 @@ func TestCreateRoom_MaxPlayers_SmallCapAccepts(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{
 		"game_type_id": gt.ID.String(),
-		"pack_id":      imgPack.ID.String(),
-		"text_pack_id": textPack.ID.String(),
-		"mode":         "multiplayer",
-		"config":       json.RawMessage(`{"round_count":4,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5,"max_players":3}`),
+		"packs": []map[string]any{
+			{"role": "image", "pack_id": imgPack.ID.String(), "weight": 1},
+			{"role": "text", "pack_id": textPack.ID.String(), "weight": 1},
+		},
+		"mode":   "multiplayer",
+		"config": json.RawMessage(`{"round_count":4,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5,"max_players":3}`),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
 	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
@@ -584,10 +609,12 @@ func TestCreateRoom_MaxPlayers_RejectAboveCap(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{
 		"game_type_id": gt.ID.String(),
-		"pack_id":      imgPack.ID.String(),
-		"text_pack_id": textPack.ID.String(),
-		"mode":         "multiplayer",
-		"config":       json.RawMessage(`{"round_count":4,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5,"max_players":99}`),
+		"packs": []map[string]any{
+			{"role": "image", "pack_id": imgPack.ID.String(), "weight": 1},
+			{"role": "text", "pack_id": textPack.ID.String(), "weight": 1},
+		},
+		"mode":   "multiplayer",
+		"config": json.RawMessage(`{"round_count":4,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5,"max_players":99}`),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
 	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
@@ -615,10 +642,12 @@ func TestCreateRoom_MemeVote_Success(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]any{
 		"game_type_id": gt.ID.String(),
-		"pack_id":      imgPack.ID.String(),
-		"text_pack_id": textPack.ID.String(),
-		"mode":         "multiplayer",
-		"config":       json.RawMessage(`{"round_count":5,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5}`),
+		"packs": []map[string]any{
+			{"role": "image", "pack_id": imgPack.ID.String(), "weight": 1},
+			{"role": "text", "pack_id": textPack.ID.String(), "weight": 1},
+		},
+		"mode":   "multiplayer",
+		"config": json.RawMessage(`{"round_count":5,"round_duration_seconds":45,"voting_duration_seconds":30,"hand_size":5}`),
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
 	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
@@ -628,13 +657,109 @@ func TestCreateRoom_MemeVote_Success(t *testing.T) {
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("want 201, got %d — body: %s", rec.Code, rec.Body.String())
 	}
-	var resp struct {
-		TextPackID pgtype.UUID `json:"text_pack_id"`
-	}
-	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+	var room db.Room
+	if err := json.NewDecoder(rec.Body).Decode(&room); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if !resp.TextPackID.Valid || resp.TextPackID.Bytes != textPack.ID {
-		t.Errorf("text_pack_id not echoed: %+v (want %s)", resp.TextPackID, textPack.ID)
+	// room_packs is the new source of truth (ADR-016) — verify the text role
+	// landed in the join table with the expected pack id and weight.
+	rps, err := q.ListRoomPacks(ctx, room.ID)
+	if err != nil {
+		t.Fatalf("list room_packs: %v", err)
+	}
+	foundText := false
+	for _, rp := range rps {
+		if rp.Role == "text" && rp.PackID == textPack.ID {
+			foundText = true
+		}
+	}
+	if !foundText {
+		t.Errorf("text pack not persisted in room_packs: %+v (want %s)", rps, textPack.ID)
+	}
+}
+
+// TestCreateRoom_MultiPack_PoolModelAccepted exercises ADR-016 end-to-end:
+// two image packs in a 3:1 mix, with neither pack alone large enough but the
+// pool sum sufficient. Verifies (a) the room is created and (b) both rows
+// land in room_packs with the supplied weights.
+func TestCreateRoom_MultiPack_PoolModelAccepted(t *testing.T) {
+	h, q := newRoomHandler(t)
+	user := seedRoomUser(t, q)
+	ctx := context.Background()
+
+	gt, _ := q.GetGameTypeBySlug(ctx, "meme-freestyle")
+	// round_count=10. Each pack has 6 items — neither alone covers 10, the
+	// pool sum (12) does. Earlier single-pack validation would reject either.
+	packA := seedPackWithItems(t, q, ctx, "imgA", 1, 6)
+	packB := seedPackWithItems(t, q, ctx, "imgB", 1, 6)
+
+	body, _ := json.Marshal(map[string]any{
+		"game_type_id": gt.ID.String(),
+		"packs": []map[string]any{
+			{"role": "image", "pack_id": packA.ID.String(), "weight": 3},
+			{"role": "image", "pack_id": packB.ID.String(), "weight": 1},
+		},
+		"mode":   "multiplayer",
+		"config": json.RawMessage(`{"round_count":10,"round_duration_seconds":60,"voting_duration_seconds":30}`),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
+	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
+	rec := httptest.NewRecorder()
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("want 201 (pool sum covers MinItemsFn), got %d — body: %s", rec.Code, rec.Body.String())
+	}
+	var room db.Room
+	_ = json.NewDecoder(rec.Body).Decode(&room)
+
+	rps, err := q.ListRoomPacks(ctx, room.ID)
+	if err != nil {
+		t.Fatalf("list room_packs: %v", err)
+	}
+	weights := map[uuid.UUID]int32{}
+	for _, rp := range rps {
+		weights[rp.PackID] = rp.Weight
+	}
+	if weights[packA.ID] != 3 {
+		t.Errorf("packA weight = %d, want 3", weights[packA.ID])
+	}
+	if weights[packB.ID] != 1 {
+		t.Errorf("packB weight = %d, want 1", weights[packB.ID])
+	}
+}
+
+// TestCreateRoom_MultiPack_DuplicatePackRejected hits the validator's
+// per-role uniqueness rule: the same pack id listed twice for one role is
+// a config error.
+func TestCreateRoom_MultiPack_DuplicatePackRejected(t *testing.T) {
+	h, q := newRoomHandler(t)
+	user := seedRoomUser(t, q)
+	ctx := context.Background()
+
+	gt, _ := q.GetGameTypeBySlug(ctx, "meme-freestyle")
+	pack := seedPackWithItems(t, q, ctx, "img", 1, 10)
+
+	body, _ := json.Marshal(map[string]any{
+		"game_type_id": gt.ID.String(),
+		"packs": []map[string]any{
+			{"role": "image", "pack_id": pack.ID.String(), "weight": 1},
+			{"role": "image", "pack_id": pack.ID.String(), "weight": 2},
+		},
+		"mode":   "multiplayer",
+		"config": json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/rooms", bytes.NewReader(body))
+	req = withUser(req, user.ID.String(), user.Username, user.Email, user.Role)
+	rec := httptest.NewRecorder()
+	h.Create(rec, req)
+
+	if rec.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("want 422, got %d — body: %s", rec.Code, rec.Body.String())
+	}
+	var resp map[string]string
+	_ = json.NewDecoder(rec.Body).Decode(&resp)
+	if resp["code"] != "image_pack_invalid" {
+		t.Errorf("want image_pack_invalid, got %s", resp["code"])
 	}
 }

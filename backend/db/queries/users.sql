@@ -124,7 +124,14 @@ UPDATE votes SET voter_id = '00000000-0000-0000-0000-000000000001' WHERE voter_i
 SELECT
   r.code,
   gt.slug AS game_type_slug,
-  gp.name AS pack_name,
+  COALESCE((
+    SELECT gp.name
+    FROM room_packs rp_pk
+    JOIN game_packs gp ON rp_pk.pack_id = gp.id
+    WHERE rp_pk.room_id = r.id
+    ORDER BY rp_pk.weight DESC, rp_pk.pack_id
+    LIMIT 1
+  ), '')::text AS pack_name,
   r.created_at AS started_at,
   r.finished_at,
   rp.score,
@@ -134,7 +141,6 @@ SELECT
 FROM room_players rp
 JOIN rooms r ON rp.room_id = r.id
 JOIN game_types gt ON r.game_type_id = gt.id
-JOIN game_packs gp ON r.pack_id = gp.id
 WHERE rp.user_id = $1
   AND r.state = 'finished'
   AND EXISTS (

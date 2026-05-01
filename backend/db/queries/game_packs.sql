@@ -68,6 +68,22 @@ WHERE pack_id = ANY(sqlc.arg(ids)::uuid[])
   AND deleted_at IS NULL
 GROUP BY pack_id;
 
+-- name: CountItemsForPacksByVersion :one
+-- Pool counter used by ValidatePackRequirements when a role lists more than
+-- one pack: returns the SUM of payload-version-compatible items across the
+-- supplied pack ids. One round-trip per role regardless of pack count.
+SELECT COALESCE(SUM(item_count), 0)::bigint AS total
+FROM (
+  SELECT COUNT(*)::bigint AS item_count
+  FROM game_items gi
+  JOIN game_packs gp ON gi.pack_id = gp.id
+  WHERE gi.pack_id = ANY(sqlc.arg(ids)::uuid[])
+    AND gi.payload_version = ANY(sqlc.arg(versions)::int[])
+    AND gi.deleted_at IS NULL
+    AND gp.deleted_at IS NULL
+  GROUP BY gi.pack_id
+) per_pack;
+
 -- name: CountCompatibleItems :one
 -- Counts only live items in a live pack — `gi.deleted_at IS NULL` excludes
 -- soft-deleted items so room-creation validation can't be inflated by tombstones.

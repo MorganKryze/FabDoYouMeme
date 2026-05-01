@@ -1,8 +1,10 @@
 -- backend/db/queries/rooms.sql
 
 -- name: CreateRoom :one
-INSERT INTO rooms (code, game_type_id, pack_id, text_pack_id, host_id, mode, config, group_id)
-VALUES ($1, $2, $3, $4, $5, $6, $7, sqlc.narg(group_id))
+-- Pack references live in room_packs (see queries/room_packs.sql); the API
+-- handler inserts those rows in the same transaction as the room itself.
+INSERT INTO rooms (code, game_type_id, host_id, mode, config, group_id)
+VALUES ($1, $2, $3, $4, $5, sqlc.narg(group_id))
 RETURNING *;
 
 -- name: GetRoomByCode :one
@@ -176,6 +178,8 @@ LIMIT 1;
 -- Powers the "Recent rooms" strip on the new Home page. Scoped to the session
 -- user — never take a user_id parameter from the client. Participation is
 -- detected via room_players join so both hosts and non-host players qualify.
+-- pack_name is the heaviest primary-role pack for the room (per ADR-016 the
+-- mix can include multiple packs; the home strip surfaces a single label).
 SELECT
   r.id,
   r.code,
@@ -183,11 +187,17 @@ SELECT
   r.created_at,
   r.finished_at,
   gt.slug AS game_type_slug,
-  gp.name AS pack_name
+  (
+    SELECT gp.name
+    FROM room_packs rp2
+    JOIN game_packs gp ON rp2.pack_id = gp.id
+    WHERE rp2.room_id = r.id
+    ORDER BY rp2.weight DESC, rp2.pack_id
+    LIMIT 1
+  )::text AS pack_name
 FROM room_players rp
 JOIN rooms r ON rp.room_id = r.id
 JOIN game_types gt ON r.game_type_id = gt.id
-JOIN game_packs gp ON r.pack_id = gp.id
 WHERE rp.user_id = $1
   AND r.created_at > now() - interval '30 days'
 ORDER BY r.created_at DESC
@@ -223,8 +233,11 @@ SELECT EXISTS(
 );
 
 -- name: GetFinishedRoomByCode :one
--- Replay landing lookup. Returns public room metadata plus slug/pack names.
--- text_pack_name is the empty string when the game type has no text pack.
+-- Replay landing lookup. Returns public room metadata plus slug + a single
+-- label aggregating every pack the room used. Multi-pack rooms (per ADR-016)
+-- collapse to a comma-separated list ordered by weight then pack_id.
+-- text_pack_name stays in the response shape but is always empty now —
+-- frontend treats it as optional already.
 SELECT
   r.id,
   r.code,
@@ -233,14 +246,17 @@ SELECT
   r.config,
   r.created_at AS started_at,
   r.finished_at,
-  gt.slug::text                            AS game_type_slug,
-  gp.name::text                            AS pack_name,
-  COALESCE(tp.name, '')::text              AS text_pack_name,
+  gt.slug::text AS game_type_slug,
+  COALESCE((
+    SELECT string_agg(gp.name, ', ' ORDER BY rp2.weight DESC, rp2.pack_id)
+    FROM room_packs rp2
+    JOIN game_packs gp ON rp2.pack_id = gp.id
+    WHERE rp2.room_id = r.id
+  ), '')::text AS pack_name,
+  ''::text AS text_pack_name,
   (SELECT COUNT(*) FROM room_players rp WHERE rp.room_id = r.id)::bigint AS player_count
 FROM rooms r
 JOIN game_types gt ON r.game_type_id = gt.id
-JOIN game_packs gp ON r.pack_id = gp.id
-LEFT JOIN game_packs tp ON r.text_pack_id = tp.id
 WHERE r.code = $1 AND r.state = 'finished';
 
 -- name: IsUserRoomMember :one

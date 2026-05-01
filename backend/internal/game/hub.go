@@ -136,6 +136,13 @@ type Hub struct {
 	// "zero = fall back to handler.MaxPlayers()" contract.
 	effectiveMaxPlayers int
 
+	// packsByRole holds the room's weighted pack mix loaded once at hub init
+	// (manager.GetOrCreate / GetOrLoad). Read by the per-round primary pack
+	// pick (runRounds) and the hand-deck loader (initHandDeck). Falls back
+	// to a refresh from the DB on first access if empty — keeps tests that
+	// use the legacy GetOrCreate signature working.
+	packsByRole map[PackRole][]WeightedPackRef
+
 	registry *Registry
 	db       *db.Queries
 	cfg      *config.Config
@@ -268,6 +275,11 @@ type HubConfig struct {
 	// handler's manifest cap" — both for legacy rooms whose config row
 	// predates the field and for handlers that opted out of a hard cap.
 	EffectiveMaxPlayers int
+
+	// PacksByRole is the room's weighted pack mix (ADR-016). Nil/empty is
+	// permitted: the hub loads it lazily from room_packs on first access so
+	// the legacy GetOrCreate(...) test path can omit it.
+	PacksByRole map[PackRole][]WeightedPackRef
 }
 
 // NewHub creates a Hub but does not start it. Call hub.Run() in a goroutine.
@@ -282,6 +294,7 @@ func NewHub(hc HubConfig) *Hub {
 		gameTypeSlug:        hc.GameTypeSlug,
 		hostUserID:          hc.HostUserID,
 		effectiveMaxPlayers: hc.EffectiveMaxPlayers,
+		packsByRole:         hc.PacksByRole,
 		registry:            hc.Registry,
 		db:               hc.DB,
 		cfg:              hc.Cfg,
@@ -992,10 +1005,10 @@ func (h *Hub) runRounds(ctx context.Context) {
 		cfg.VotingDurationSeconds = 30
 	}
 
-	// The room's primary pack (rooms.pack_id) is whatever role the handler
-	// declares first in RequiredPacks(). For meme-* that's the image pack;
-	// for prompt-* it's the prompt pack. Pull the payload versions from the
-	// primary so GetRandomUnplayedItems filters correctly.
+	// The room's primary role is whatever role the handler declares first
+	// in RequiredPacks(). For meme-* that's image; for prompt-* it's prompt.
+	// Pull the payload versions from the primary so the per-round picker
+	// (pickPrimaryItem) and GetRandomUnplayedItems filter correctly.
 	handler, hasHandler := h.registry.Get(h.gameTypeSlug)
 	var versions []int32
 	if hasHandler {
@@ -1026,20 +1039,19 @@ func (h *Hub) runRounds(ctx context.Context) {
 		default:
 		}
 
-		// Fetch an unplayed item from the pack
-		items, err := h.db.GetRandomUnplayedItems(ctx, db.GetRandomUnplayedItemsParams{
-			PackID:   room.PackID,
-			Versions: versions,
-			RoomID:   h.roomID,
-		})
-		if err != nil || len(items) == 0 {
+		// Pick the next round's item using the room's weighted pack mix
+		// (ADR-016). The chosen pack is sampled with probability proportional
+		// to its weight; if it has no unplayed items left we fall back to the
+		// next-best pack so a heavy pack running dry doesn't end the room
+		// prematurely.
+		item, perr := h.pickPrimaryItem(ctx, versions)
+		if perr != nil {
 			if h.log != nil {
-				h.log.Error("runRounds: get items", "error", err)
+				h.log.Error("runRounds: get items", "error", perr)
 			}
 			h.sendRoundCtrl(ctx, roundCtrlEndGame{reason: "pack_exhausted"})
 			return
 		}
-		item := items[0]
 
 		dbRound, err := h.db.CreateRound(ctx, db.CreateRoundParams{
 			RoomID: h.roomID,

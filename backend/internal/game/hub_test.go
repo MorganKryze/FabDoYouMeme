@@ -185,13 +185,17 @@ func newHubEnvWith(t *testing.T, opts hubEnvOpts) *hubEnv {
 	room, err := q.CreateRoom(ctx, db.CreateRoomParams{
 		Code:       code,
 		GameTypeID: gt.ID,
-		PackID:     pack.ID,
 		HostID:     pgtype.UUID{Bytes: host.ID, Valid: true},
 		Mode:       "multiplayer",
 		Config:     json.RawMessage(roomConfig),
 	})
 	if err != nil {
 		t.Fatalf("newHubEnvWith: create room: %v", err)
+	}
+	if err := q.InsertRoomPack(ctx, db.InsertRoomPackParams{
+		RoomID: room.ID, Role: "image", PackID: pack.ID, Weight: 1,
+	}); err != nil {
+		t.Fatalf("newHubEnvWith: insert room_pack: %v", err)
 	}
 
 	// Short grace default keeps reconnect tests fast without flakiness.

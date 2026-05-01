@@ -185,7 +185,6 @@ type Room struct {
 	ID                     uuid.UUID          `json:"id"`
 	Code                   string             `json:"code"`
 	GameTypeID             uuid.UUID          `json:"game_type_id"`
-	PackID                 uuid.UUID          `json:"pack_id"`
 	HostID                 pgtype.UUID        `json:"host_id"`
 	Mode                   string             `json:"mode"`
 	State                  string             `json:"state"`
@@ -193,7 +192,6 @@ type Room struct {
 	CreatedAt              time.Time          `json:"created_at"`
 	FinishedAt             pgtype.Timestamptz `json:"finished_at"`
 	RematchWindowExpiresAt pgtype.Timestamptz `json:"rematch_window_expires_at"`
-	TextPackID             pgtype.UUID        `json:"text_pack_id"`
 	GroupID                pgtype.UUID        `json:"group_id"`
 }
 
@@ -204,6 +202,13 @@ type RoomBan struct {
 	GuestPlayerID pgtype.UUID `json:"guest_player_id"`
 	BannedBy      pgtype.UUID `json:"banned_by"`
 	BannedAt      time.Time   `json:"banned_at"`
+}
+
+type RoomPack struct {
+	RoomID uuid.UUID `json:"room_id"`
+	Role   string    `json:"role"`
+	PackID uuid.UUID `json:"pack_id"`
+	Weight int32     `json:"weight"`
 }
 
 type RoomPlayer struct {

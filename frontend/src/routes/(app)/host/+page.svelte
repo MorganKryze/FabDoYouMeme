@@ -17,10 +17,46 @@
   type Step = 'game' | 'pack';
 
   let selectedGameTypeId = $state(untrack(() => data.preselectedId));
-  // One selection per declared pack role. Role names mirror RequiredPack.role
-  // ('image', 'text', …). Empty string means "not yet picked" so the submit
-  // button can check with `selectedPacks[role]` without undefined juggling.
-  let selectedPacks = $state<Record<string, string>>({});
+  // ADR-016: each role accepts a list of (pack_id, weight) tuples. A single-
+  // pack pick is the common case (length 1, weight 1) and the form degrades
+  // to today's behaviour when the host doesn't add extras. Clicking a pack
+  // card toggles its presence in this list; the weight number input on the
+  // selected-row pill drives the relative mix.
+  type PackPick = { pack_id: string; weight: number };
+  let selectedPacks = $state<Record<string, PackPick[]>>({});
+
+  function packsForRoleSelected(role: string): PackPick[] {
+    return selectedPacks[role] ?? [];
+  }
+  function isPackPicked(role: string, packId: string): boolean {
+    return packsForRoleSelected(role).some((p) => p.pack_id === packId);
+  }
+  function togglePack(role: string, packId: string) {
+    const current = packsForRoleSelected(role);
+    const idx = current.findIndex((p) => p.pack_id === packId);
+    if (idx >= 0) {
+      selectedPacks[role] = current.filter((_, i) => i !== idx);
+    } else {
+      selectedPacks[role] = [...current, { pack_id: packId, weight: 1 }];
+    }
+  }
+  function setWeight(role: string, packId: string, weight: number) {
+    const w = Math.max(1, Math.floor(weight || 1));
+    selectedPacks[role] = packsForRoleSelected(role).map((p) =>
+      p.pack_id === packId ? { ...p, weight: w } : p
+    );
+  }
+  function removePackFromRole(role: string, packId: string) {
+    selectedPacks[role] = packsForRoleSelected(role).filter((p) => p.pack_id !== packId);
+  }
+  /** Renormalised percentages e.g. "60% / 20% / 20%" for a role's mix. */
+  function weightsHint(role: string): string {
+    const list = packsForRoleSelected(role);
+    if (list.length <= 1) return '';
+    const total = list.reduce((s, p) => s + p.weight, 0);
+    if (total <= 0) return '';
+    return list.map((p) => `${Math.round((p.weight / total) * 100)}%`).join(' / ');
+  }
   let isSolo = $state(false);
   // Phase 4 — group-scoped toggle. Empty string = Personal mode (today's
   // behaviour). Any non-empty value is a group id from data.groups. The
@@ -49,7 +85,19 @@
   );
 
   const allPacksPicked = $derived(
-    requiredPacks.length > 0 && requiredPacks.every((r) => !!selectedPacks[r.role])
+    requiredPacks.length > 0 &&
+      requiredPacks.every((r) => packsForRoleSelected(r.role).length > 0)
+  );
+
+  /** JSON payload sent to the server action — flattened across roles. */
+  const packsPayload = $derived(
+    requiredPacks.flatMap((req) =>
+      packsForRoleSelected(req.role).map((p) => ({
+        role: req.role,
+        pack_id: p.pack_id,
+        weight: p.weight
+      }))
+    )
   );
 
   const packAborts: Record<string, AbortController | null> = {};
@@ -112,9 +160,10 @@
       }
       const body: PaginatedResponse<Pack> = await res.json();
       packsByRole[role] = body.data ?? [];
-      // Clear any stale selection that is no longer in the filtered list.
-      if (selectedPacks[role] && !(body.data ?? []).some((p) => p.id === selectedPacks[role])) {
-        selectedPacks[role] = '';
+      // Drop any stale picks no longer in the filtered list.
+      const valid = new Set((body.data ?? []).map((p) => p.id));
+      if (selectedPacks[role]) {
+        selectedPacks[role] = selectedPacks[role].filter((p) => valid.has(p.pack_id));
       }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') packsByRole[role] = [];
@@ -149,17 +198,19 @@
   // this, flipping the scope selector could leave a ghost selection the
   // picker UI isn't even showing.
   $effect(() => {
-    // Track selectedGroupID so the effect reruns when scope changes.
+    // Track selectedGroupID so the effect reruns when scope changes. Drop
+    // any picked packs that don't belong to the now-current scope.
     const scope = selectedGroupID;
     for (const role of Object.keys(selectedPacks)) {
-      const id = selectedPacks[role];
-      if (!id) continue;
-      const pack = packsByRole[role]?.find((p) => p.id === id);
-      if (!pack) continue;
-      const validForScope = scope
-        ? pack.is_system || pack.group_id === scope
-        : !pack.group_id;
-      if (!validForScope) selectedPacks[role] = '';
+      const list = selectedPacks[role] ?? [];
+      const filtered = list.filter((p) => {
+        const pack = packsByRole[role]?.find((cand) => cand.id === p.pack_id);
+        if (!pack) return false;
+        return scope
+          ? pack.is_system || pack.group_id === scope
+          : !pack.group_id;
+      });
+      if (filtered.length !== list.length) selectedPacks[role] = filtered;
     }
   });
 
@@ -287,20 +338,10 @@
     {:else}
       <form method="POST" action="?/createRoom" use:enhance class="flex flex-col gap-5">
         <input type="hidden" name="game_type_id" value={selectedGameTypeId} />
-        <!-- pack_id is the primary pack (whatever role the handler declares
-             first); text_pack_id is the secondary, if any. The role each one
-             fills is per-game-type — the backend resolves it from the
-             handler's RequiredPacks() so we just send positional ids here. -->
-        <input
-          type="hidden"
-          name="pack_id"
-          value={requiredPacks[0] ? selectedPacks[requiredPacks[0].role] ?? '' : ''}
-        />
-        <input
-          type="hidden"
-          name="text_pack_id"
-          value={requiredPacks[1] ? selectedPacks[requiredPacks[1].role] ?? '' : ''}
-        />
+        <!-- ADR-016: weighted multi-pack rooms. The form serialises every
+             selected pack across every role into one JSON blob; the server
+             action forwards it verbatim to POST /api/rooms. -->
+        <input type="hidden" name="packs" value={JSON.stringify(packsPayload)} />
         <input type="hidden" name="is_solo" value={String(isSolo)} />
         <input type="hidden" name="group_id" value={selectedGroupID} />
         <input
@@ -356,7 +397,8 @@
           {#if requiredPacks.length > 0}
             <div class="flex flex-wrap gap-2 mt-1">
               {#each requiredPacks as req, idx (req.role)}
-                {@const picked = !!selectedPacks[req.role]}
+                {@const count = packsForRoleSelected(req.role).length}
+                {@const picked = count > 0}
                 <span
                   class="inline-flex items-center gap-2 rounded-full border-[2.5px] border-brand-border-heavy pl-1.5 pr-3 py-1 text-xs font-bold uppercase tracking-[0.18em] transition-colors {picked
                     ? 'bg-brand-text text-brand-white'
@@ -374,6 +416,9 @@
                   {roleShort(req.role)}
                   {#if picked}
                     <Check size={12} strokeWidth={3} />
+                    {#if count > 1}
+                      <span class="text-[10px] tabular-nums opacity-80">×{count}</span>
+                    {/if}
                   {:else}
                     <span class="h-2.5 w-2.5 rounded-full border-[2px] border-current" aria-hidden="true"></span>
                   {/if}
@@ -384,12 +429,12 @@
         </div>
 
         {#snippet packCard(p: Pack, role: string, i: number)}
-          {@const selected = selectedPacks[role] === p.id}
+          {@const selected = isPackPicked(role, p.id)}
           <button
             type="button"
             use:reveal={{ delay: i + 1 }}
             use:physCard
-            onclick={() => (selectedPacks[role] = selectedPacks[role] === p.id ? '' : p.id)}
+            onclick={() => togglePack(role, p.id)}
             aria-pressed={selected}
             class="relative text-left rounded-[22px] border-[2.5px] p-3 sm:p-5 flex flex-col gap-2 cursor-pointer transition-all
                    {selected
@@ -458,6 +503,46 @@
                 {/if}
               </div>
             </div>
+
+            <!-- Weights bar — only visible when more than one pack is picked
+                 for this role. Each row exposes a weight number input and a
+                 remove button; the renormalised percentages render to the
+                 right so the host sees the effective mix at a glance. -->
+            {#if packsForRoleSelected(req.role).length > 1}
+              <div
+                class="rounded-[18px] border-[2.5px] border-brand-border-heavy bg-brand-surface p-3 flex flex-col gap-2"
+                style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
+              >
+                <p class="text-[0.6rem] font-bold uppercase tracking-[0.15em] text-brand-text-muted m-0">
+                  {m.host_pack_weights_label()}
+                  <span class="ml-2 normal-case tracking-normal font-semibold text-brand-text">{weightsHint(req.role)}</span>
+                </p>
+                {#each packsForRoleSelected(req.role) as pick (pick.pack_id)}
+                  {@const pack = (packsByRole[req.role] ?? []).find((cand) => cand.id === pick.pack_id)}
+                  <div class="flex items-center gap-2">
+                    <span class="flex-1 truncate text-sm font-semibold">{pack?.name ?? pick.pack_id}</span>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={pick.weight}
+                      oninput={(e) => setWeight(req.role, pick.pack_id, Number((e.target as HTMLInputElement).value))}
+                      class="h-8 w-16 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-2 text-sm font-semibold text-center"
+                      aria-label={m.host_pack_weight_aria()}
+                    />
+                    <button
+                      type="button"
+                      onclick={() => removePackFromRole(req.role, pick.pack_id)}
+                      class="h-8 w-8 inline-flex items-center justify-center rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-brand-text-muted hover:text-red-600"
+                      aria-label={m.host_pack_remove_aria()}
+                    >
+                      ×
+                    </button>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+
             {#if loadingRoles[req.role]}
               <p class="text-sm font-semibold text-brand-text-muted">{m.host_packs_loading()}</p>
             {:else if packsForRole(req.role).length === 0}

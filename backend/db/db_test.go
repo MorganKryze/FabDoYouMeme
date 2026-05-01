@@ -153,17 +153,21 @@ func TestHardDeleteUser_ReplacesSubmissionsWithSentinel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create pack: %v", err)
 	}
-	// No items needed for room; room just references pack_id.
+	// No items needed for room; pack reference lives in room_packs.
 	room, err := q.CreateRoom(ctx, db.CreateRoomParams{
 		Code:       slug[:4],
 		GameTypeID: gt.ID,
-		PackID:     pack.ID,
 		HostID:     pgtype.UUID{Bytes: user.ID, Valid: true},
 		Mode:       "multiplayer",
 		Config:     json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
 	})
 	if err != nil {
 		t.Fatalf("create room: %v", err)
+	}
+	if err := q.InsertRoomPack(ctx, db.InsertRoomPackParams{
+		RoomID: room.ID, Role: "image", PackID: pack.ID, Weight: 1,
+	}); err != nil {
+		t.Fatalf("insert room_pack: %v", err)
 	}
 	// Need at least one item to create a round (item_id FK).
 	item, err := q.CreateItem(ctx, db.CreateItemParams{
@@ -429,13 +433,17 @@ func TestStartupCleanup_MarksPlayingAsFinished(t *testing.T) {
 		room, err := q.CreateRoom(ctx, db.CreateRoomParams{
 			Code:       slug[:4],
 			GameTypeID: gt.ID,
-			PackID:     pack.ID,
 			HostID:     pgtype.UUID{Bytes: user.ID, Valid: true},
 			Mode:       "multiplayer",
 			Config:     json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
 		})
 		if err != nil {
 			t.Fatalf("CreateRoom: %v", err)
+		}
+		if err := q.InsertRoomPack(ctx, db.InsertRoomPackParams{
+			RoomID: room.ID, Role: "image", PackID: pack.ID, Weight: 1,
+		}); err != nil {
+			t.Fatalf("InsertRoomPack: %v", err)
 		}
 
 		// Put room into playing state.
@@ -487,13 +495,17 @@ func TestStartupCleanup_ClosesStaleLobbies(t *testing.T) {
 	room, err := q.CreateRoom(ctx, db.CreateRoomParams{
 		Code:       slug[:4],
 		GameTypeID: gt.ID,
-		PackID:     pack.ID,
 		HostID:     pgtype.UUID{Bytes: user.ID, Valid: true},
 		Mode:       "multiplayer",
 		Config:     json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
 	})
 	if err != nil {
 		t.Fatalf("create room: %v", err)
+	}
+	if err := q.InsertRoomPack(ctx, db.InsertRoomPackParams{
+		RoomID: room.ID, Role: "image", PackID: pack.ID, Weight: 1,
+	}); err != nil {
+		t.Fatalf("InsertRoomPack: %v", err)
 	}
 
 	t.Cleanup(func() {
@@ -532,11 +544,15 @@ func TestCreateRoom_StateIsLobby(t *testing.T) {
 		room, err := q.CreateRoom(ctx, db.CreateRoomParams{
 			Code:       slug[:4],
 			GameTypeID: gt.ID,
-			PackID:     pack.ID,
 			HostID:     pgtype.UUID{Bytes: user.ID, Valid: true},
 			Mode:       "multiplayer",
 			Config:     json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
 		})
+		if err == nil {
+			_ = q.InsertRoomPack(ctx, db.InsertRoomPackParams{
+				RoomID: room.ID, Role: "image", PackID: pack.ID, Weight: 1,
+			})
+		}
 		if err != nil {
 			t.Fatalf("CreateRoom: %v", err)
 		}

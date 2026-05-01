@@ -169,13 +169,23 @@ func MakeRoom(t *testing.T, host db.User, pack db.GamePack, gameTypeSlug string)
 	room, err := q.CreateRoom(context.Background(), db.CreateRoomParams{
 		Code:       code,
 		GameTypeID: gt.ID,
-		PackID:     pack.ID,
 		HostID:     pgtype.UUID{Bytes: host.ID, Valid: true},
 		Mode:       "standard",
 		Config:     json.RawMessage(`{"round_count":3,"round_duration_seconds":30,"voting_duration_seconds":15}`),
 	})
 	if err != nil {
 		t.Fatalf("MakeRoom: %v", err)
+	}
+	// Persist a single-pack room mix so the hub finds the pack via room_packs
+	// when it boots. Tests that need multi-pack mixes call InsertRoomPack
+	// directly on top of this baseline.
+	if err := q.InsertRoomPack(context.Background(), db.InsertRoomPackParams{
+		RoomID: room.ID,
+		Role:   "image",
+		PackID: pack.ID,
+		Weight: 1,
+	}); err != nil {
+		t.Fatalf("MakeRoom: insert room_pack: %v", err)
 	}
 	return room
 }

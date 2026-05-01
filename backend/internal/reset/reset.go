@@ -101,10 +101,11 @@ func WipeSessions(ctx context.Context, tx pgx.Tx, excludeUserID uuid.UUID) (Repo
 // and versions), every admin_notification, AND all game history that
 // depends on those packs. Finally it empties the entire S3 bucket.
 //
-// Game history is wiped first because rooms.pack_id references
+// Game history is wiped first because room_packs.pack_id references
 // game_packs.id with NO ACTION (restrict) — you cannot delete a pack
 // referenced by a live room. This composition is a DB constraint, not
-// a UX choice.
+// a UX choice. (Pre-ADR-016 the reference lived on rooms.pack_id; the
+// restriction moved to room_packs but the cascade order is the same.)
 //
 // The S3 purge uses empty prefix "" to sweep every object, including
 // orphans from previous failed uploads or interrupted wipes. It runs

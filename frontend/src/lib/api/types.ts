@@ -65,14 +65,22 @@ export interface Room {
   game_type_id: string;
   game_type_slug: string;
   game_type?: GameType | null;
-  pack_id: string;
-  text_pack_id: string | null;
   host_id: string;
   mode: 'multiplayer' | 'solo';
   state: 'lobby' | 'playing' | 'finished';
   config: RoomConfig;
   created_at: string;
   finished_at: string | null;
+  /** ADR-016: per-room weighted pack mix. Hydrated by GET /api/rooms/{code}
+   *  endpoints that join room_packs; not present on the bare CreateRoom
+   *  response (which echoes the rooms row only). */
+  packs?: RoomPackChoice[];
+}
+
+export interface RoomPackChoice {
+  role: 'image' | 'text' | 'prompt' | 'filler';
+  pack_id: string;
+  weight: number;
 }
 
 export interface RoomConfig {

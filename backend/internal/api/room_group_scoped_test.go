@@ -88,7 +88,9 @@ func TestCreateRoom_GroupScopedHappyPath(t *testing.T) {
 	gt, _ := q.GetGameTypeBySlug(context.Background(), "meme-freestyle")
 	body, _ := json.Marshal(map[string]any{
 		"game_type_id": gt.ID.String(),
-		"pack_id":      pack.ID.String(),
+		"packs": []map[string]any{
+			{"role": "image", "pack_id": pack.ID.String(), "weight": 1},
+		},
 		"group_id":     group.ID.String(),
 		"mode":         "multiplayer",
 		"config":       json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
@@ -126,7 +128,9 @@ func TestCreateRoom_GroupScoped_NonMemberForbidden(t *testing.T) {
 	gt, _ := q.GetGameTypeBySlug(context.Background(), "meme-freestyle")
 	body, _ := json.Marshal(map[string]any{
 		"game_type_id": gt.ID.String(),
-		"pack_id":      pack.ID.String(),
+		"packs": []map[string]any{
+			{"role": "image", "pack_id": pack.ID.String(), "weight": 1},
+		},
 		"group_id":     group.ID.String(),
 		"mode":         "multiplayer",
 		"config":       json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),
@@ -151,7 +155,9 @@ func TestCreateRoom_GroupScoped_PackFromOtherGroupRejected(t *testing.T) {
 	gt, _ := q.GetGameTypeBySlug(context.Background(), "meme-freestyle")
 	body, _ := json.Marshal(map[string]any{
 		"game_type_id": gt.ID.String(),
-		"pack_id":      pack.ID.String(),
+		"packs": []map[string]any{
+			{"role": "image", "pack_id": pack.ID.String(), "weight": 1},
+		},
 		"group_id":     g1.ID.String(),
 		"mode":         "multiplayer",
 		"config":       json.RawMessage(`{"round_count":3,"round_duration_seconds":60,"voting_duration_seconds":30}`),

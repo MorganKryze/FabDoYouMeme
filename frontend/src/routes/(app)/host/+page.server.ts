@@ -44,12 +44,18 @@ export const actions: Actions = {
   createRoom: async ({ request, fetch }) => {
     const data = await request.formData();
     const game_type_id = data.get('game_type_id') as string;
-    const pack_id = data.get('pack_id') as string;
-    const text_pack_id = (data.get('text_pack_id') as string | null) || '';
+    const packsRaw = (data.get('packs') as string | null) || '[]';
     const is_solo = data.get('is_solo') === 'true';
     const group_id = (data.get('group_id') as string | null) || '';
     const max_players_raw = (data.get('max_players') as string | null) || '';
     const max_players = max_players_raw ? Number.parseInt(max_players_raw, 10) : NaN;
+
+    let packs: Array<{ role: string; pack_id: string; weight: number }> = [];
+    try {
+      packs = JSON.parse(packsRaw);
+    } catch {
+      return fail(400, { error: 'Could not create room. Try again.' });
+    }
 
     // Defaults only — host tunes rounds/durations/host_paced inside the
     // room's staging area (WaitingStage) via PATCH /api/rooms/{code}/config.
@@ -64,11 +70,10 @@ export const actions: Actions = {
     }
     const payload: Record<string, unknown> = {
       game_type_id,
-      pack_id,
+      packs,
       is_solo,
       config
     };
-    if (text_pack_id) payload.text_pack_id = text_pack_id;
     if (group_id) payload.group_id = group_id;
     const res = await fetch(`${API_BASE}/api/rooms`, {
       method: 'POST',
@@ -115,6 +120,15 @@ export const actions: Actions = {
         filler_pack_required: 'This game type requires a filler pack.',
         filler_pack_not_applicable:
           'This game type does not use a filler pack.',
+        // ADR-016 weight/dup misconfig per role.
+        image_pack_invalid:
+          'Image pack mix is invalid — check that every weight is at least 1 and no pack appears twice.',
+        text_pack_invalid:
+          'Text pack mix is invalid — check that every weight is at least 1 and no pack appears twice.',
+        prompt_pack_invalid:
+          'Prompt pack mix is invalid — check that every weight is at least 1 and no pack appears twice.',
+        filler_pack_invalid:
+          'Filler pack mix is invalid — check that every weight is at least 1 and no pack appears twice.',
         invalid_game_type: 'Invalid game type selected.',
         already_in_active_room:
           "You're already in a room — return to it or leave it first.",

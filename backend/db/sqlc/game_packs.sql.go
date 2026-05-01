@@ -150,6 +150,35 @@ func (q *Queries) CountItemsForPacks(ctx context.Context, ids []uuid.UUID) ([]Co
 	return items, nil
 }
 
+const countItemsForPacksByVersion = `-- name: CountItemsForPacksByVersion :one
+SELECT COALESCE(SUM(item_count), 0)::bigint AS total
+FROM (
+  SELECT COUNT(*)::bigint AS item_count
+  FROM game_items gi
+  JOIN game_packs gp ON gi.pack_id = gp.id
+  WHERE gi.pack_id = ANY($1::uuid[])
+    AND gi.payload_version = ANY($2::int[])
+    AND gi.deleted_at IS NULL
+    AND gp.deleted_at IS NULL
+  GROUP BY gi.pack_id
+) per_pack
+`
+
+type CountItemsForPacksByVersionParams struct {
+	Ids      []uuid.UUID `json:"ids"`
+	Versions []int32     `json:"versions"`
+}
+
+// Pool counter used by ValidatePackRequirements when a role lists more than
+// one pack: returns the SUM of payload-version-compatible items across the
+// supplied pack ids. One round-trip per role regardless of pack count.
+func (q *Queries) CountItemsForPacksByVersion(ctx context.Context, arg CountItemsForPacksByVersionParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countItemsForPacksByVersion, arg.Ids, arg.Versions)
+	var total int64
+	err := row.Scan(&total)
+	return total, err
+}
+
 const createPack = `-- name: CreatePack :one
 
 INSERT INTO game_packs (name, description, owner_id, is_official, visibility, language)

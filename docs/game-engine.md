@@ -435,7 +435,7 @@ Two pack roles are required per room:
 
 Packs are game-type-agnostic at the item-payload level — item payloads are versioned JSONB and compatibility is decided per item by `payload_version`. A game type declares one or more **pack roles** it consumes via `GameTypeHandler.RequiredPacks()`. Each requirement names a role (`image`, `text`, `prompt`, `filler`, …) and the `payload_version` set it accepts.
 
-The room references packs **positionally**: `rooms.pack_id` (NOT NULL) is the *primary* pack — whatever role the handler declares first in `RequiredPacks()` — and `rooms.text_pack_id` (nullable) is the *secondary* pack — whatever role the handler declares second, if any. The columns are role-agnostic; the role each one fills is decided per game type via the handler's declaration order. (The `text_pack_id` name is a historical artefact from when only meme-* games existed; renaming the column would force a wide-blast-radius migration with no behavioural benefit.)
+A room references its content via the `room_packs(room_id, role, pack_id, weight)` join table (ADR-016). Each role accepts one or more packs with positive-integer relative weights — the host's "60% pack A + 30% pack B + 10% pack C" choice. Per-round primary picks are weighted at sample time (`-ln(rand)/weight`, fall back to the next pack if the chosen one is exhausted of unplayed items); secondary-role hand-decks are seeded with the same weighted-key shuffle so the dealt hand's marginal distribution matches the weights.
 
 At creation, the API counts compatible items per role and rejects the room if any pack is missing, empty of compatible items, or smaller than the role's `MinItemsFn` sizing.
 
