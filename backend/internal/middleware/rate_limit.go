@@ -119,11 +119,13 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 }
 
 // PerUserMiddleware keys the rate-limit bucket by authenticated user ID
-// rather than by client IP. Use it on expensive authenticated endpoints
-// where an IP-level bucket is too coarse (e.g. GDPR export — finding 5.H
-// in the 2026-04-10 review). Must be layered AFTER a handler that
-// populates the session user (RequireAuth); unauthenticated requests fall
-// back to the IP bucket so the middleware can never be silently bypassed.
+// rather than by client IP. Prefer this over Middleware on any handler
+// that runs after the session middleware: in the prod reverse-proxy →
+// SvelteKit → backend topology, SSR-side fetches (proxyToBackend,
+// hydrateSession, apiFetch) all originate from the SvelteKit container's
+// docker IP, so IP keying collapses every logged-in user into one shared
+// bucket. Unauthenticated requests fall back to the IP bucket so the
+// middleware can never be silently bypassed.
 func (rl *RateLimiter) PerUserMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var key string
@@ -138,6 +140,29 @@ func (rl *RateLimiter) PerUserMiddleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// PerKeyMiddleware lets the caller pick the bucket key (e.g. by URL param
+// or any request-derived value). Use it when neither IP nor user identity
+// is the right axis — most notably the unauthenticated guest-join, which
+// must rate-limit per *room* so a single shared SvelteKit container IP
+// (or operator-misconfigured TRUSTED_PROXIES) cannot ceiling the whole
+// platform's guest onboarding. An empty key falls back to the IP bucket
+// so the middleware can never be silently bypassed.
+func (rl *RateLimiter) PerKeyMiddleware(keyFn func(*http.Request) string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			key := keyFn(r)
+			if key == "" {
+				key = "ip:" + ClientIP(r, rl.trustedProxies)
+			}
+			if !rl.getLimiter(key).Allow() {
+				writeRateLimited(w)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func writeRateLimited(w http.ResponseWriter) {

@@ -262,3 +262,15 @@ Every invocation is written to the admin audit log with the action name, the act
 | frontend | ✓                | ✓                   |
 
 PostgreSQL and the backend are not reachable outside the Docker internal network. The frontend sits on the `pangolin` external network so the reverse proxy can route traffic to it. RustFS lives in a separate Docker stack on the same `pangolin` network; the backend reaches it via `RUSTFS_ENDPOINT`.
+
+### Trusted proxies and rate limiting
+
+The backend's IP-keyed rate limiters (and any future IP-based logging) read the client IP via `ClientIP`, which walks `X-Forwarded-For` only when the immediate hop is in `TRUSTED_PROXIES`. Without it, every request from the SvelteKit container — including SSR-side `apiFetch`, `hydrateSession`, and the `/api/*` proxy — looks like the same IP, and shared anonymous traffic (guest joins, public-room reads, media fetches) collapses into one bucket.
+
+Set `TRUSTED_PROXIES` to the CIDR of your project's internal Docker network (the bridge created by Compose for `project_network`). On a default install that's typically `172.16.0.0/12` or the narrower subnet `docker network inspect <project>_project_network` reports. Comma-separated, CIDRs or bare IPs:
+
+```env
+TRUSTED_PROXIES=172.18.0.0/16
+```
+
+The SvelteKit `hooks.server.ts` always stamps `X-Forwarded-For` with the real client IP on its way to the backend, so once `TRUSTED_PROXIES` is set the backend resolves rate-limit buckets per actual user — not per shared container. Authenticated paths are additionally keyed per user ID and the guest-join endpoint per room code, so the platform stays usable even if `TRUSTED_PROXIES` is left empty; configuring it just restores per-IP precision for the few remaining anonymous paths.

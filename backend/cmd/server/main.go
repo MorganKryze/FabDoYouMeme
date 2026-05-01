@@ -197,7 +197,14 @@ func main() {
 	r.Use(mw.Logger(logger))
 	r.Use(mw.Session(authHandler.SessionLookupFn, logger))
 	r.Use(mw.Metrics)
-	r.Use(globalLimiter.Middleware)
+	// PerUserMiddleware (not Middleware) so authenticated traffic is keyed
+	// by user ID. Behind the prod reverse-proxy → SvelteKit → backend
+	// topology, every SSR-side fetch (proxyToBackend, hydrateSession,
+	// apiFetch) originates from the SvelteKit container's docker IP — so
+	// IP keying collapses every logged-in user into one shared bucket.
+	// Anonymous traffic falls back to the IP bucket (documented behaviour
+	// of PerUserMiddleware) so the gate can never be silently bypassed.
+	r.Use(globalLimiter.PerUserMiddleware)
 
 	// Health (no auth)
 	r.Get("/api/health", healthHandler.Liveness)
@@ -322,15 +329,18 @@ func main() {
 
 		r.Group(func(r chi.Router) {
 			r.Use(mw.RequireAuth)
-			r.With(uploadLimiter.Middleware).Post("/upload-url", assetHandler.UploadURL)
-			r.With(uploadLimiter.Middleware).Post("/upload", assetHandler.UploadDirect)
+			// Per-user keying: SSR-side asset uploads originate from the
+			// SvelteKit container, so IP keying would pool every uploader
+			// into one bucket (see globalLimiter comment above).
+			r.With(uploadLimiter.PerUserMiddleware).Post("/upload-url", assetHandler.UploadURL)
+			r.With(uploadLimiter.PerUserMiddleware).Post("/upload", assetHandler.UploadDirect)
 			r.Post("/download-url", assetHandler.DownloadURL)
 		})
 	})
 
 	// Rooms
 	r.Route("/api/rooms", func(r chi.Router) {
-		r.With(mw.RequireAuth, roomLimiter.Middleware).Post("/", roomHandler.Create)
+		r.With(mw.RequireAuth, roomLimiter.PerUserMiddleware).Post("/", roomHandler.Create)
 
 		// Pre-auth reads: the layout load for /rooms/{code}?as=guest runs
 		// server-side during SSR and has no guest token to forward (the token
@@ -342,11 +352,19 @@ func main() {
 		r.Get("/{code}", roomHandler.GetByCode)
 
 		// Pre-auth guest join — visitors without an account can join a room
-		// via a shared code. Rate limited with the existing room bucket to
-		// prevent enumeration. The WS handshake verifies the returned guest
-		// token against the room, so a successful call here does not yet
-		// grant access — it must be paired with a matching WS upgrade.
-		r.With(roomLimiter.Middleware).Post("/{code}/guest-join", roomHandler.GuestJoin)
+		// via a shared code. Keyed per *room code* (not IP) so a single
+		// shared SvelteKit container IP, or a misconfigured TRUSTED_PROXIES,
+		// cannot ceiling the whole platform's guest onboarding. The cap
+		// still defends against enumeration of any one code at 10/hour.
+		// The WS handshake verifies the returned guest token against the
+		// room, so a successful call here does not yet grant access — it
+		// must be paired with a matching WS upgrade.
+		r.With(roomLimiter.PerKeyMiddleware(func(r *http.Request) string {
+			if code := chi.URLParam(r, "code"); code != "" {
+				return "room:" + code
+			}
+			return "" // empty → middleware falls back to IP bucket
+		})).Post("/{code}/guest-join", roomHandler.GuestJoin)
 
 		r.Group(func(r chi.Router) {
 			r.Use(mw.RequireAuth)

@@ -27,9 +27,17 @@ const HOP_BY_HOP = [
 // `/api/packs` even though the backend container port is never published
 // to the host. WebSocket upgrades on /api/ws/* are not handled here —
 // SvelteKit's `handle` hook only sees fully-parsed HTTP requests.
+//
+// We also stamp X-Forwarded-For with the real client IP. Without this the
+// backend's ClientIP resolves to the SvelteKit container's docker IP, so
+// every guest/anonymous caller shares one rate-limit bucket — the
+// platform-wide ceiling that masquerades as "rate limit too low".
+// Operators must list the SvelteKit container's network in the backend's
+// TRUSTED_PROXIES for the header to be honoured (see docs/self-hosting.md).
 async function proxyToBackend(event: RequestEvent): Promise<Response> {
   const reqHeaders = new Headers(event.request.headers);
   for (const h of HOP_BY_HOP) reqHeaders.delete(h);
+  appendForwardedFor(reqHeaders, event);
 
   const method = event.request.method;
   const body =
@@ -55,6 +63,24 @@ async function proxyToBackend(event: RequestEvent): Promise<Response> {
   });
 }
 
+// Append the client IP to X-Forwarded-For. Preserves anything Pangolin
+// (or any upstream proxy) already set, so the backend can walk the chain
+// when TRUSTED_PROXIES is configured to include the SvelteKit hop.
+// `event.getClientAddress()` honours adapter-node's ADDRESS_HEADER /
+// XFF_DEPTH config; if those aren't set it falls back to the immediate
+// peer, which in practice is the reverse proxy.
+function appendForwardedFor(headers: Headers, event: RequestEvent): void {
+  let client: string;
+  try {
+    client = event.getClientAddress();
+  } catch {
+    return; // adapter doesn't expose it (e.g. some test harnesses) — skip
+  }
+  if (!client) return;
+  const existing = headers.get('x-forwarded-for');
+  headers.set('x-forwarded-for', existing ? `${existing}, ${client}` : client);
+}
+
 async function hydrateSession(event: RequestEvent) {
   // Load session from backend (session cookie is HttpOnly — forwarded automatically).
   //
@@ -67,9 +93,9 @@ async function hydrateSession(event: RequestEvent) {
   //                    but operators need to see this so it can be fixed.
   //   - network fail → same as transient — log, treat as logged out.
   try {
-    const res = await fetch(`${API_BASE}/api/auth/me`, {
-      headers: { cookie: event.request.headers.get('cookie') ?? '' }
-    });
+    const meHeaders = new Headers({ cookie: event.request.headers.get('cookie') ?? '' });
+    appendForwardedFor(meHeaders, event);
+    const res = await fetch(`${API_BASE}/api/auth/me`, { headers: meHeaders });
     if (res.ok) {
       event.locals.user = await res.json();
     } else {
@@ -164,15 +190,19 @@ export const handle: Handle = async ({ event, resolve }) => {
   );
 };
 
-// Forward the browser's session cookie on every server-side `event.fetch`
-// call to the backend. SvelteKit's default only forwards cookies to the app's
-// own origin or subdomains of it; our Dockerised backend (`http://backend:8080`)
-// is neither, so without this hook every authenticated server load silently
-// becomes a 401.
+// Forward the browser's session cookie *and* X-Forwarded-For on every
+// server-side `event.fetch` call to the backend. SvelteKit's default only
+// forwards cookies to the app's own origin or subdomains of it; our
+// Dockerised backend (`http://backend:8080`) is neither, so without this
+// hook every authenticated server load silently becomes a 401. The XFF
+// stamp lets the backend's rate limiter see the real client IP rather
+// than the SvelteKit container — see proxyToBackend for the same
+// reasoning on the browser-→-backend proxy path.
 export const handleFetch: HandleFetch = async ({ event, request, fetch }) => {
   if (request.url.startsWith(API_BASE)) {
     const cookie = event.request.headers.get('cookie');
     if (cookie) request.headers.set('cookie', cookie);
+    appendForwardedFor(request.headers, event);
   }
   return fetch(request);
 };
