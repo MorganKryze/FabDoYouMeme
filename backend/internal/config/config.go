@@ -82,6 +82,14 @@ type Config struct {
 	// phase 5 once the surface stabilised.
 	MaxGroupsPerUser           int
 	MaxGroupMembershipsPerUser int
+
+	// Default platform+group invite quota for makers who have never had
+	// a row explicitly set by a platform admin. The mint handler lazily
+	// upserts a row at this allocation on first attempt — admins can still
+	// override per-user up or down via /admin/user-invite-quotas. Set to
+	// 0 to require explicit allocation for every maker (the pre-default
+	// behaviour).
+	DefaultPlatformPlusQuota int
 }
 
 func Load() (*Config, error) {
@@ -188,6 +196,9 @@ func Load() (*Config, error) {
 	if cfg.MaxGroupMembershipsPerUser, err = getEnvInt("MAX_GROUP_MEMBERSHIPS_PER_USER", 20); err != nil {
 		return nil, fmt.Errorf("MAX_GROUP_MEMBERSHIPS_PER_USER: %w", err)
 	}
+	if cfg.DefaultPlatformPlusQuota, err = getEnvInt("DEFAULT_PLATFORM_PLUS_QUOTA", 5); err != nil {
+		return nil, fmt.Errorf("DEFAULT_PLATFORM_PLUS_QUOTA: %w", err)
+	}
 
 	// TRUSTED_PROXIES is comma-separated CIDR ranges or bare IPs (the latter
 	// are promoted to /32 or /128). Required only when running behind a
@@ -246,6 +257,7 @@ func (cfg *Config) validateBounds() error {
 		intBound("RATE_LIMIT_GLOBAL_RPM", cfg.RateLimitGlobalRPM, 1, 100000),
 		intBound("MAX_GROUPS_PER_USER", cfg.MaxGroupsPerUser, 1, 10000),
 		intBound("MAX_GROUP_MEMBERSHIPS_PER_USER", cfg.MaxGroupMembershipsPerUser, 1, 10000),
+		intBound("DEFAULT_PLATFORM_PLUS_QUOTA", cfg.DefaultPlatformPlusQuota, 0, 10000),
 
 		int64Bound("WS_READ_LIMIT_BYTES", cfg.WSReadLimitBytes, 64, 1_048_576),
 		int64Bound("MAX_UPLOAD_SIZE_BYTES", cfg.MaxUploadSizeBytes, 1, 104_857_600),

@@ -205,8 +205,10 @@ func (h *GroupInviteHandler) MintGroupJoin(w http.ResponseWriter, r *http.Reques
 
 // MintPlatformPlus handles POST /api/groups/{id}/invites/platform_plus —
 // mints a code that registers a new platform user AND enrols them into the
-// group in one /auth/register call. The actor's user_invite_quotas.used is
-// debited atomically; insufficient quota → 409.
+// group in one /auth/register call. For non-admin makers the actor's
+// user_invite_quotas.used is debited atomically by max_uses; insufficient
+// quota → 409. Platform admins bypass the quota check (they already have
+// unlimited platform-invite minting via /admin/invites).
 func (h *GroupInviteHandler) MintPlatformPlus(w http.ResponseWriter, r *http.Request) {
 	actorID, gid, ok := h.requireAuthGroupAdmin(w, r)
 	if !ok {
@@ -232,6 +234,16 @@ func (h *GroupInviteHandler) MintPlatformPlus(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Platform admins bypass the per-user invite quota entirely — they
+	// already mint unlimited /admin/invites codes and there is no
+	// operational reason to rate-limit them on this slower path. The cap
+	// exists to throttle non-admin makers' ability to bring new accounts
+	// onto the platform; staff don't have that constraint. Group-admin
+	// role on the target group is still required (already checked in
+	// requireAuthGroupAdmin above).
+	sessionUser, _ := middleware.GetSessionUser(r)
+	isPlatformAdmin := sessionUser.Role == "admin"
+
 	// Quota debit + invite insert in one transaction so a failed insert does
 	// not consume slots the admin couldn't actually use. Multi-use codes
 	// debit max_uses slots upfront — we cannot defer per-redemption because
@@ -245,17 +257,35 @@ func (h *GroupInviteHandler) MintPlatformPlus(w http.ResponseWriter, r *http.Req
 	defer tx.Rollback(r.Context()) //nolint:errcheck
 	qtx := h.db.WithTx(tx)
 
-	if _, err := qtx.ConsumeUserInviteQuotaN(r.Context(), db.ConsumeUserInviteQuotaNParams{
-		UserID: actorID,
-		Amount: maxUses,
-	}); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeError(w, r, http.StatusConflict, "platform_plus_quota_exhausted",
-				"You do not have enough remaining platform-registration invite slots for this many uses. Ask the platform admin to allocate more.")
+	if !isPlatformAdmin {
+		// Lazy first-touch: makers who never had a row explicitly set by a
+		// platform admin get one created at DEFAULT_PLATFORM_PLUS_QUOTA on
+		// their first attempt. ON CONFLICT DO NOTHING preserves any
+		// admin-set allocation, so this never overwrites a row the operator
+		// has already tuned. Operators who want explicit allocation only
+		// can set DEFAULT_PLATFORM_PLUS_QUOTA=0 (the consume below will then
+		// reject with 409 unless the admin has UPSERT'd the row).
+		if h.cfg.DefaultPlatformPlusQuota > 0 {
+			if err := qtx.EnsureUserInviteQuotaRow(r.Context(), db.EnsureUserInviteQuotaRowParams{
+				UserID:    actorID,
+				Allocated: int32(h.cfg.DefaultPlatformPlusQuota),
+			}); err != nil {
+				writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to ensure invite quota row")
+				return
+			}
+		}
+		if _, err := qtx.ConsumeUserInviteQuotaN(r.Context(), db.ConsumeUserInviteQuotaNParams{
+			UserID: actorID,
+			Amount: maxUses,
+		}); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				writeError(w, r, http.StatusConflict, "platform_plus_quota_exhausted",
+					"You do not have enough remaining platform-registration invite slots for this many uses. Ask the platform admin to allocate more.")
+				return
+			}
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to consume invite quota")
 			return
 		}
-		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to consume invite quota")
-		return
 	}
 
 	token, err := auth.GenerateRawToken()

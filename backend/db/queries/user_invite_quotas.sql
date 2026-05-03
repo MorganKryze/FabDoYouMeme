@@ -43,3 +43,14 @@ UPDATE user_invite_quotas
 SET used = used + sqlc.arg(amount)::int, updated_at = now()
 WHERE user_id = sqlc.arg(user_id)::uuid AND used + sqlc.arg(amount)::int <= allocated
 RETURNING *;
+
+-- name: EnsureUserInviteQuotaRow :exec
+-- Idempotent first-touch row insert used by the lazy-default flow: if the
+-- maker has never had quota explicitly set by a platform admin, the mint
+-- handler creates a row at DEFAULT_PLATFORM_PLUS_QUOTA on their first
+-- attempt so non-admins can self-serve a small allowance without operator
+-- intervention. ON CONFLICT DO NOTHING preserves any admin-set allocation —
+-- this never overwrites a row the admin had already tuned up or down.
+INSERT INTO user_invite_quotas (user_id, allocated, used)
+VALUES ($1, $2, 0)
+ON CONFLICT (user_id) DO NOTHING;

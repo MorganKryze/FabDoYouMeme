@@ -22,7 +22,23 @@ import (
 func newGroupInviteHandler(t *testing.T) (*api.GroupInviteHandler, *db.Queries) {
 	t.Helper()
 	pool := testutil.Pool()
+	// DefaultPlatformPlusQuota=0 keeps the existing test corpus pinned to
+	// the explicit-allocation contract: no auto-row is created when missing,
+	// so TestMintPlatformPlus_NoQuotaRejected still exercises the 409 path.
+	// Tests that need the lazy-default behaviour build their own handler
+	// with DefaultPlatformPlusQuota set explicitly.
 	cfg := &config.Config{MaxGroupsPerUser: 50, MaxGroupMembershipsPerUser: 50}
+	return api.NewGroupInviteHandler(pool, cfg), db.New(pool)
+}
+
+func newGroupInviteHandlerWithDefaultQuota(t *testing.T, def int) (*api.GroupInviteHandler, *db.Queries) {
+	t.Helper()
+	pool := testutil.Pool()
+	cfg := &config.Config{
+		MaxGroupsPerUser:           50,
+		MaxGroupMembershipsPerUser: 50,
+		DefaultPlatformPlusQuota:   def,
+	}
 	return api.NewGroupInviteHandler(pool, cfg), db.New(pool)
 }
 
@@ -369,6 +385,115 @@ func TestMintPlatformPlus_MultiUseExceedsQuotaRejected(t *testing.T) {
 	}
 	if row.Used != 0 {
 		t.Fatalf("want quota untouched (used=0), got %d", row.Used)
+	}
+}
+
+// TestMintPlatformPlus_LazyDefaultQuota_FirstUseSucceeds: with
+// DEFAULT_PLATFORM_PLUS_QUOTA=5, a maker who has no quota row yet can mint
+// without any operator pre-allocation. The mint creates a row at the
+// default and debits the requested slots in one transaction.
+func TestMintPlatformPlus_LazyDefaultQuota_FirstUseSucceeds(t *testing.T) {
+	h, q := newGroupInviteHandlerWithDefaultQuota(t, 5)
+	a, g := seedGroupWithAdmin(t, q, "mpp_lazy_first")
+	body, _ := json.Marshal(map[string]any{"max_uses": 2})
+	applyCtx := newChiCtx("id", g.ID.String())
+	req := applyCtx(httptest.NewRequest(http.MethodPost, "/api/groups/"+g.ID.String()+"/invites/platform_plus", bytes.NewBuffer(body)))
+	req = withUser(req, a.ID.String(), a.Username, a.Email, a.Role) // role=player
+	rec := httptest.NewRecorder()
+	h.MintPlatformPlus(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("want 201 (lazy default), got %d — body: %s", rec.Code, rec.Body.String())
+	}
+	row, err := q.GetUserInviteQuota(context.Background(), a.ID)
+	if err != nil {
+		t.Fatalf("read quota: %v", err)
+	}
+	if row.Allocated != 5 {
+		t.Errorf("want allocated=5 (lazy default), got %d", row.Allocated)
+	}
+	if row.Used != 2 {
+		t.Errorf("want used=2 after debit, got %d", row.Used)
+	}
+}
+
+// TestMintPlatformPlus_LazyDefaultQuota_OverDefaultRejected: with the
+// default at 5, asking for 7 still 409s — the lazy upsert creates the row
+// but the consume step rejects because the request exceeds the allocation.
+func TestMintPlatformPlus_LazyDefaultQuota_OverDefaultRejected(t *testing.T) {
+	h, q := newGroupInviteHandlerWithDefaultQuota(t, 5)
+	a, g := seedGroupWithAdmin(t, q, "mpp_lazy_over")
+	body, _ := json.Marshal(map[string]any{"max_uses": 7})
+	applyCtx := newChiCtx("id", g.ID.String())
+	req := applyCtx(httptest.NewRequest(http.MethodPost, "/api/groups/"+g.ID.String()+"/invites/platform_plus", bytes.NewBuffer(body)))
+	req = withUser(req, a.ID.String(), a.Username, a.Email, a.Role)
+	rec := httptest.NewRecorder()
+	h.MintPlatformPlus(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("want 409, got %d — body: %s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestMintPlatformPlus_LazyDefaultQuota_RespectsAdminAllocation: when an
+// admin has explicitly set a custom allocation (above OR below the default),
+// the lazy upsert is a no-op via ON CONFLICT DO NOTHING, so the admin-set
+// value wins.
+func TestMintPlatformPlus_LazyDefaultQuota_RespectsAdminAllocation(t *testing.T) {
+	h, q := newGroupInviteHandlerWithDefaultQuota(t, 5)
+	a, g := seedGroupWithAdmin(t, q, "mpp_lazy_admin")
+	// Admin explicitly clamps this user to 2 — below the default of 5.
+	if _, err := q.UpsertUserInviteQuota(context.Background(), db.UpsertUserInviteQuotaParams{
+		UserID: a.ID, Allocated: 2,
+	}); err != nil {
+		t.Fatalf("seed quota: %v", err)
+	}
+	// max_uses=3 must be rejected: the admin-set cap is 2, the lazy default
+	// must not silently raise it.
+	body, _ := json.Marshal(map[string]any{"max_uses": 3})
+	applyCtx := newChiCtx("id", g.ID.String())
+	req := applyCtx(httptest.NewRequest(http.MethodPost, "/api/groups/"+g.ID.String()+"/invites/platform_plus", bytes.NewBuffer(body)))
+	req = withUser(req, a.ID.String(), a.Username, a.Email, a.Role)
+	rec := httptest.NewRecorder()
+	h.MintPlatformPlus(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("want 409 (admin cap of 2 wins over default of 5), got %d", rec.Code)
+	}
+	row, err := q.GetUserInviteQuota(context.Background(), a.ID)
+	if err != nil {
+		t.Fatalf("read quota: %v", err)
+	}
+	if row.Allocated != 2 {
+		t.Errorf("admin-set allocation should be untouched, got %d", row.Allocated)
+	}
+	if row.Used != 0 {
+		t.Errorf("rejected mint must not debit, got used=%d", row.Used)
+	}
+}
+
+// TestMintPlatformPlus_PlatformAdminBypassesQuota: platform admins (role=admin
+// in the session) can mint platform+group invites with no row in
+// user_invite_quotas at all. Mirrors the implicit unlimited-minting
+// privilege admins already have on /api/admin/invites — the per-user quota
+// only constrains regular makers.
+func TestMintPlatformPlus_PlatformAdminBypassesQuota(t *testing.T) {
+	h, q := newGroupInviteHandler(t)
+	a, g := seedGroupWithAdmin(t, q, "mpp_admin_bypass")
+	// No UpsertUserInviteQuota call — the user has zero allocated slots.
+	body, _ := json.Marshal(map[string]any{"max_uses": 7})
+	applyCtx := newChiCtx("id", g.ID.String())
+	req := applyCtx(httptest.NewRequest(http.MethodPost, "/api/groups/"+g.ID.String()+"/invites/platform_plus", bytes.NewBuffer(body)))
+	// Pass role="admin" in the session — the handler reads from the
+	// session context, not from the DB user row.
+	req = withUser(req, a.ID.String(), a.Username, a.Email, "admin")
+	rec := httptest.NewRecorder()
+	h.MintPlatformPlus(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("want 201 (admin bypass), got %d — body: %s", rec.Code, rec.Body.String())
+	}
+	// Quota row must NOT have been auto-created — the bypass leaves the
+	// table untouched so admin minting never pollutes the makers' quota
+	// view.
+	if _, err := q.GetUserInviteQuota(context.Background(), a.ID); err == nil {
+		t.Fatalf("admin bypass should not create a quota row, but one exists")
 	}
 }
 

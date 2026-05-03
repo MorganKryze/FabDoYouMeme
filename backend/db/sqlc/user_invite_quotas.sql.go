@@ -63,6 +63,28 @@ func (q *Queries) ConsumeUserInviteQuotaN(ctx context.Context, arg ConsumeUserIn
 	return i, err
 }
 
+const ensureUserInviteQuotaRow = `-- name: EnsureUserInviteQuotaRow :exec
+INSERT INTO user_invite_quotas (user_id, allocated, used)
+VALUES ($1, $2, 0)
+ON CONFLICT (user_id) DO NOTHING
+`
+
+type EnsureUserInviteQuotaRowParams struct {
+	UserID    uuid.UUID `json:"user_id"`
+	Allocated int32     `json:"allocated"`
+}
+
+// Idempotent first-touch row insert used by the lazy-default flow: if the
+// maker has never had quota explicitly set by a platform admin, the mint
+// handler creates a row at DEFAULT_PLATFORM_PLUS_QUOTA on their first
+// attempt so non-admins can self-serve a small allowance without operator
+// intervention. ON CONFLICT DO NOTHING preserves any admin-set allocation —
+// this never overwrites a row the admin had already tuned up or down.
+func (q *Queries) EnsureUserInviteQuotaRow(ctx context.Context, arg EnsureUserInviteQuotaRowParams) error {
+	_, err := q.db.Exec(ctx, ensureUserInviteQuotaRow, arg.UserID, arg.Allocated)
+	return err
+}
+
 const getUserInviteQuota = `-- name: GetUserInviteQuota :one
 SELECT user_id, allocated, used, updated_at FROM user_invite_quotas WHERE user_id = $1
 `

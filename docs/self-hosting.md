@@ -192,6 +192,7 @@ The groups paradigm is always-on as of phase 5 — the former `FEATURE_GROUPS` /
 | --------------------------------- | -------- | ------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `MAX_GROUPS_PER_USER`             | no       | `5`     | How many live groups a single user can have created. Soft cap; raise per-deployment.                                         |
 | `MAX_GROUP_MEMBERSHIPS_PER_USER`  | no       | `20`    | How many groups a single user can belong to concurrently.                                                                    |
+| `DEFAULT_PLATFORM_PLUS_QUOTA`     | no       | `5`     | Lazy default for platform+group invite quota. The first time a non-admin maker mints a platform+group code, a row is created in `user_invite_quotas` with this allocation. Admins can still override per-user up or down via `/admin/user-invite-quotas`. Set to `0` to require explicit per-user allocation for every maker (the pre-default behaviour). Platform admins (`role=admin`) bypass this entirely. |
 
 ### Legal / privacy policy
 
