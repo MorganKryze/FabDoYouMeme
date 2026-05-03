@@ -55,7 +55,17 @@
       await load();
       toast.show(m.groups_invite_minted(), 'success');
     } catch (e) {
-      toast.show((e as Error).message, 'error');
+      // Surface the API error code + status + message so a "just returns
+      // error: true" report stops being a black box. ApiError carries
+      // status/code/message; anything else (network, type error) gets a
+      // console.error trail with the raw value for further triage.
+      console.error('[groups] mint invite failed:', e);
+      const err = e as { status?: number; code?: string; message?: string };
+      const msg = err?.message && err.message !== 'undefined' ? err.message
+        : err?.code ? err.code
+        : err?.status ? `HTTP ${err.status}`
+        : 'unknown error — see browser console';
+      toast.show(msg, 'error');
     } finally {
       busy = null;
     }
