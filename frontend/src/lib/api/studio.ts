@@ -409,12 +409,18 @@ async function uploadOneBulkChunk(
       continue;
     }
     if (!res.ok) {
-      let message = res.statusText;
+      // Read the response as text first, then try to parse as JSON. The
+      // SvelteKit adapter-node 413 returns a plain-text body
+      // ("Content-length of … exceeds limit of … bytes") that earlier
+      // versions of this code threw away by going through res.json()
+      // directly, leaving the toast with only "Payload Too Large".
+      const raw = await res.text().catch(() => '');
+      let detail = raw;
       try {
-        const body = await res.json();
-        message = body.error ?? message;
+        const parsed = JSON.parse(raw);
+        if (parsed?.error) detail = parsed.error;
       } catch {}
-      return { error: message };
+      return { error: `${res.status} ${res.statusText}${detail ? ` — ${detail}` : ''}` };
     }
     return (await res.json()) as { results: BulkServerResult[] };
   }
@@ -542,12 +548,13 @@ async function uploadOneTextChunk(
       continue;
     }
     if (!res.ok) {
-      let message = res.statusText;
+      const raw = await res.text().catch(() => '');
+      let detail = raw;
       try {
-        const body = await res.json();
-        message = body.error ?? message;
+        const parsed = JSON.parse(raw);
+        if (parsed?.error) detail = parsed.error;
       } catch {}
-      return { error: message };
+      return { error: `${res.status} ${res.statusText}${detail ? ` — ${detail}` : ''}` };
     }
     return (await res.json()) as { results: BulkTextServerResult[] };
   }
