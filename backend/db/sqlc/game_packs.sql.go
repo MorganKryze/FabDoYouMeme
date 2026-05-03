@@ -16,8 +16,9 @@ const canGuestDownloadMedia = `-- name: CanGuestDownloadMedia :one
 SELECT EXISTS (
   SELECT 1
   FROM game_item_versions giv
-  JOIN rounds rd ON rd.item_id = giv.item_id
-  JOIN room_players rp ON rp.room_id = rd.room_id
+  JOIN game_items gi ON gi.id = giv.item_id
+  JOIN room_packs rpk ON rpk.pack_id = gi.pack_id
+  JOIN room_players rp ON rp.room_id = rpk.room_id
   WHERE giv.media_key = $1
     AND giv.deleted_at IS NULL
     AND rp.guest_player_id = $2::uuid
@@ -29,13 +30,15 @@ type CanGuestDownloadMediaParams struct {
 	GuestPlayerID uuid.UUID `json:"guest_player_id"`
 }
 
-// Authorization predicate for guest reads of /api/assets/media. Guests have no
-// session and cannot own packs, so the user-side rules in CanUserDownloadMedia
-// don't apply. Instead we scope visibility to "items the guest could plausibly
-// have seen in the room they joined" — a version is readable iff it belongs to
-// an item that was actually used in a round of a room the guest is currently a
-// player of. Narrower than "any media in the pack backing the room" so a guest
-// can't enumerate unshown items via media_key guessing.
+// Authorization predicate for guest reads of /api/assets/media. Scope is
+// the same shape as the room-participant branch in CanUserDownloadMedia:
+// the guest is allowed to read any media inside any pack assigned (via
+// room_packs) to a room they are currently a player of. We previously
+// restricted to items already shown in a round, but that 403'd every
+// dealt hand-card in meme-showdown before it landed on the table.
+// Enumeration risk is limited because (a) the guest has to know the
+// exact media_key to query, and (b) only packs explicitly bound to
+// their room are in scope.
 func (q *Queries) CanGuestDownloadMedia(ctx context.Context, arg CanGuestDownloadMediaParams) (bool, error) {
 	row := q.db.QueryRow(ctx, canGuestDownloadMedia, arg.MediaKey, arg.GuestPlayerID)
 	var allowed bool
@@ -55,6 +58,17 @@ SELECT EXISTS (
     AND (
       gp.owner_id = $2::uuid
       OR (gp.visibility = 'public' AND gp.status = 'active')
+      OR EXISTS (
+        SELECT 1 FROM group_memberships gm
+        WHERE gm.group_id = gp.group_id
+          AND gm.user_id = $2::uuid
+      )
+      OR EXISTS (
+        SELECT 1 FROM room_packs rpk
+        JOIN room_players rp ON rp.room_id = rpk.room_id
+        WHERE rpk.pack_id = gp.id
+          AND rp.user_id = $2::uuid
+      )
     )
 ) AS allowed
 `
@@ -64,12 +78,24 @@ type CanUserDownloadMediaParams struct {
 	UserID   uuid.UUID `json:"user_id"`
 }
 
-// Authorization predicate for /api/assets/download-url. Returns true when the
-// given user_id is allowed to download the media at media_key, which holds
-// iff the media belongs to a non-soft-deleted version inside a non-soft-
-// deleted pack that EITHER the user owns OR is public+active. Admin callers
-// bypass this query entirely in the handler — encoding the role lookup in SQL
-// would force a second join on users for every download.
+// Authorization predicate for /api/assets/media (and download-url). The
+// caller is allowed when the media belongs to a non-soft-deleted version
+// inside a non-soft-deleted pack that satisfies ANY of:
+//
+//  1. They own the pack (personal-pack maker).
+//  2. The pack is public+active (browsable to anyone signed in).
+//  3. They are a member of the pack's owning group (group packs are
+//     private by spec; without this branch, group members previewing a
+//     pack outside of a live room saw 403s for every thumbnail).
+//  4. They are a player in a room that has this pack assigned via
+//     room_packs. We deliberately scope by room_packs rather than by
+//     "items already shown in a round" so hand-deal flows
+//     (meme-showdown reveals a hand of cards to each player before any
+//     round has played them) are covered. Restricting to past rounds
+//     would 403 every dealt card until it landed on the table.
+//
+// Admin callers bypass this query entirely in the handler — encoding the
+// role lookup in SQL would force a second join on users for every download.
 func (q *Queries) CanUserDownloadMedia(ctx context.Context, arg CanUserDownloadMediaParams) (bool, error) {
 	row := q.db.QueryRow(ctx, canUserDownloadMedia, arg.MediaKey, arg.UserID)
 	var allowed bool

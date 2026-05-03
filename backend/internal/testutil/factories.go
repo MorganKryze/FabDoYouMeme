@@ -170,7 +170,7 @@ func MakeRoom(t *testing.T, host db.User, pack db.GamePack, gameTypeSlug string)
 		Code:       code,
 		GameTypeID: gt.ID,
 		HostID:     pgtype.UUID{Bytes: host.ID, Valid: true},
-		Mode:       "standard",
+		Mode:       "multiplayer",
 		Config:     json.RawMessage(`{"round_count":3,"round_duration_seconds":30,"voting_duration_seconds":15}`),
 	})
 	if err != nil {

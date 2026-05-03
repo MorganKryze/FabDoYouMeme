@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
 	db "github.com/MorganKryze/FabDoYouMeme/backend/db/sqlc"
@@ -212,6 +213,159 @@ func TestAPI_DownloadURLAuthzMatrix(t *testing.T) {
 				t.Errorf("want %d, got %d — body: %s", c.want, rec.Code, rec.Body.String())
 			}
 		})
+	}
+}
+
+// TestCanDownloadMedia_GroupMember covers the new authz branch added when
+// the studio reported "players can't see images during gameplay" for
+// rooms backed by a group-owned pack. The pack belongs to a group whose
+// members must be allowed to download the media even though the pack is
+// private and not their personal property.
+func TestCanDownloadMedia_GroupMember(t *testing.T) {
+	q := db.New(testutil.Pool())
+	ctx := context.Background()
+
+	owner := testutil.MakeUser(t, "player")  // group admin who minted the pack
+	member := testutil.MakeUser(t, "player") // joined the group later
+	stranger := testutil.MakeUser(t, "player")
+
+	grp, err := q.CreateGroup(ctx, db.CreateGroupParams{
+		Name:           "g_" + testutil.SeedName(t),
+		Description:    "auth coverage",
+		Language:       "en",
+		Classification: "sfw",
+		QuotaBytes:     500 * 1024 * 1024,
+		MemberCap:      100,
+		CreatedBy:      pgtype.UUID{Bytes: owner.ID, Valid: true},
+	})
+	if err != nil {
+		t.Fatalf("create group: %v", err)
+	}
+	for _, m := range []struct {
+		uid  uuid.UUID
+		role string
+	}{{owner.ID, "admin"}, {member.ID, "member"}} {
+		if _, err := q.CreateMembership(ctx, db.CreateMembershipParams{
+			GroupID: grp.ID, UserID: m.uid, Role: m.role,
+		}); err != nil {
+			t.Fatalf("create membership %s: %v", m.role, err)
+		}
+	}
+
+	// Group pack: insert directly so we can set group_id with no owner_id.
+	// The duplication endpoint is the production path for creating these,
+	// but its full surface (ratio, classification, source pack) is
+	// orthogonal to the authz predicate under test.
+	pack, err := q.CreatePack(ctx, db.CreatePackParams{
+		Name:       "p_" + testutil.SeedName(t),
+		Visibility: "private",
+		Language:   "en",
+	})
+	if err != nil {
+		t.Fatalf("create base pack: %v", err)
+	}
+	if _, err := testutil.Pool().Exec(ctx,
+		"UPDATE game_packs SET group_id = $1, owner_id = NULL WHERE id = $2",
+		grp.ID, pack.ID); err != nil {
+		t.Fatalf("re-attribute pack to group: %v", err)
+	}
+	item, err := q.CreateItem(ctx, db.CreateItemParams{
+		PackID: pack.ID, Name: "x", PayloadVersion: 1,
+	})
+	if err != nil {
+		t.Fatalf("create item: %v", err)
+	}
+	mediaKey := fmt.Sprintf("media/%s.png", item.ID)
+	if _, err := q.CreateItemVersion(ctx, db.CreateItemVersionParams{
+		ItemID: item.ID, MediaKey: &mediaKey, Payload: json.RawMessage(`{}`),
+	}); err != nil {
+		t.Fatalf("create version: %v", err)
+	}
+
+	cases := []struct {
+		name string
+		uid  uuid.UUID
+		want bool
+	}{
+		{"group admin (member by membership)", owner.ID, true},
+		{"regular group member", member.ID, true},
+		{"stranger outside the group", stranger.ID, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			mk := mediaKey
+			ok, err := q.CanUserDownloadMedia(ctx, db.CanUserDownloadMediaParams{
+				MediaKey: &mk,
+				UserID:   c.uid,
+			})
+			if err != nil {
+				t.Fatalf("CanUserDownloadMedia: %v", err)
+			}
+			if ok != c.want {
+				t.Errorf("want %v, got %v", c.want, ok)
+			}
+		})
+	}
+}
+
+// TestCanDownloadMedia_RoomParticipant: any player in the room can read
+// every media in any pack assigned to that room — even items not yet
+// played in a round (covers hand-deal flows like meme-showdown where each
+// player sees their dealt cards before they land). Stranger with no
+// relationship to the room or pack remains 403'd.
+func TestCanDownloadMedia_RoomParticipant(t *testing.T) {
+	q := db.New(testutil.Pool())
+	ctx := context.Background()
+
+	host := testutil.MakeUser(t, "player")
+	guest := testutil.MakeUser(t, "player") // joined the room, no other relationship
+	pack := testutil.MakePack(t, host, 1)
+	// Lock the pack down so only the room-participant branch can grant access.
+	if _, err := q.UpdatePack(ctx, db.UpdatePackParams{
+		ID: pack.ID, Name: pack.Name, Description: pack.Description,
+		Visibility: "private", Language: pack.Language,
+	}); err != nil {
+		t.Fatalf("private update: %v", err)
+	}
+
+	room := testutil.MakeRoom(t, host, pack, "")
+	if _, err := q.AddRoomPlayer(ctx, db.AddRoomPlayerParams{
+		RoomID: room.ID, UserID: pgtype.UUID{Bytes: guest.ID, Valid: true},
+	}); err != nil {
+		t.Fatalf("add room player: %v", err)
+	}
+	// Read the seeded version directly — MakePack leaves current_version_id
+	// unpromoted, which makes the public list return NULL media_key.
+	var mk string
+	if err := testutil.Pool().QueryRow(ctx,
+		`SELECT giv.media_key
+		 FROM game_item_versions giv JOIN game_items gi ON gi.id = giv.item_id
+		 WHERE gi.pack_id = $1 LIMIT 1`, pack.ID).Scan(&mk); err != nil {
+		t.Fatalf("read seeded version: %v", err)
+	}
+
+	// No round yet — the broader room_packs scope must still allow the
+	// participant. This is the regression guard for "all people in the
+	// game room should have access" including hand-deal previews.
+	ok, err := q.CanUserDownloadMedia(ctx, db.CanUserDownloadMediaParams{
+		MediaKey: &mk, UserID: guest.ID,
+	})
+	if err != nil {
+		t.Fatalf("CanUserDownloadMedia (participant): %v", err)
+	}
+	if !ok {
+		t.Errorf("room participant should be allowed to download any media in the room's pack — even before any round has played it")
+	}
+
+	stranger := testutil.MakeUser(t, "player")
+	ok, err = q.CanUserDownloadMedia(ctx, db.CanUserDownloadMediaParams{
+		MediaKey: &mk, UserID: stranger.ID,
+	})
+	if err != nil {
+		t.Fatalf("CanUserDownloadMedia (stranger): %v", err)
+	}
+	if ok {
+		t.Errorf("stranger with no room or group link should be denied")
 	}
 }
 
