@@ -229,7 +229,10 @@
     .hand-card {
       flex: 0 0 200px;
       height: 286px;
-      margin-left: -92px;
+      /* Adaptive overlap: hands of 5 keep the original -92px stride;
+         6+ tighten so the fan's natural width never exceeds the n=5
+         baseline (632px) and stops bleeding past the parent card. */
+      margin-left: calc(min(108px, 432px / max(1, var(--card-count, 5) - 1)) - 200px);
       transform-origin: 50% calc(100% + 120px);
       transform: rotate(var(--rot, 0deg)) translateY(var(--lift, 0px));
     }

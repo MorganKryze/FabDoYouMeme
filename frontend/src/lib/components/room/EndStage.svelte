@@ -102,7 +102,7 @@
     return order.map((r) => {
       const entry = room.leaderboard[r - 1];
       if (!entry) return null;
-      const heightClass = r === 1 ? 'h-44' : r === 2 ? 'h-32' : 'h-24';
+      const heightClass = r === 1 ? 'min-h-44' : r === 2 ? 'min-h-32' : 'min-h-28';
       const medal = r === 1 ? '\u{1F947}' : r === 2 ? '\u{1F948}' : '\u{1F949}';
       return { entry, rank: r, heightClass, medal };
     });
@@ -131,24 +131,26 @@
        HEADER — reason chip + winner hero.
        ═══════════════════════════════════════════════════════════════ -->
   <div class="flex flex-col items-center gap-3 text-center relative z-[1]">
-    <span
-      class="inline-flex items-center gap-2 h-9 px-4 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-[0.65rem] font-bold uppercase tracking-[0.2em]"
-      style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
-    >
-      <PartyPopper size={14} strokeWidth={2.5} />
-      {endInfo.headline}
-    </span>
+    {#if !winner}
+      <span
+        class="inline-flex items-center gap-2 h-9 px-4 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white text-[0.65rem] font-bold uppercase tracking-[0.2em]"
+        style="box-shadow: 0 3px 0 rgba(0,0,0,0.06);"
+      >
+        <PartyPopper size={14} strokeWidth={2.5} />
+        {endInfo.headline}
+      </span>
 
-    {#if endInfo.subtext}
-      <p class="text-xs text-brand-text-muted max-w-xs">{endInfo.subtext}</p>
+      {#if endInfo.subtext}
+        <p class="text-xs text-brand-text-muted max-w-xs">{endInfo.subtext}</p>
+      {/if}
     {/if}
 
     {#if winner}
       <h1
         class="inline-flex flex-wrap items-baseline justify-center gap-x-3 text-brand-text text-3xl sm:text-7xl md:text-8xl font-extrabold leading-none tracking-tight"
       >
-        <span>{winner.display_name}</span>
-        <span class="wins-gradient">{m.room_wins_suffix()}</span>
+        <span class="winner-chip">{winner.display_name}</span>
+        <span>{m.room_wins_suffix()}</span>
       </h1>
       <p class="text-sm font-semibold text-brand-text-muted">
         {m.room_wins_score({ score: winner.score })}
@@ -311,11 +313,17 @@
     100% { transform: translate3d(var(--drift, 0), 110vh, 0) rotate(720deg); opacity: 0; }
   }
 
-  /* "wins!" — gradient text tied to the live time-of-day palette.
-     `paint-order: stroke fill` draws the dark outline first so the
-     gradient fill sits on top; the stepped drop-shadow mirrors the
-     `box-shadow: 0 5px 0` language used across the stage. */
-  .wins-gradient {
+  /* Winner name — gradient highlight chip behind solid dark text.
+     The font's counters (a, e, g) are too narrow at extrabold to
+     survive any centered text-stroke or shadow-ring, so the outline
+     moves from the glyphs onto a chip around them. Border + stepped
+     drop-shadow match the brand's button / badge language. */
+  .winner-chip {
+    display: inline-block;
+    padding: 0.18em 0.3em 0.22em;
+    margin: 0 0.04em;
+    line-height: 1;
+    color: var(--brand-text);
     background: linear-gradient(
       135deg,
       var(--brand-grad-2),
@@ -324,12 +332,11 @@
       var(--brand-grad-2)
     );
     background-size: 200% 200%;
-    background-clip: text;
-    -webkit-background-clip: text;
-    color: transparent;
-    -webkit-text-stroke: 3px var(--brand-text);
-    paint-order: stroke fill;
-    filter: drop-shadow(0 4px 0 rgba(0, 0, 0, 0.22));
+    border: 3px solid var(--brand-text);
+    border-radius: 0.32em;
+    box-shadow: 0 6px 0 rgba(0, 0, 0, 0.22);
+    transform: rotate(-1.5deg);
+    transform-origin: center;
     animation: winsFlow 4s ease-in-out infinite;
   }
   @keyframes winsFlow {
