@@ -14,12 +14,12 @@
      panel hid both the panel content (overlap) and the form they were
      trying to fill. Bottom-left rests over the navigator's empty space. -->
 <script lang="ts">
-  import { Loader2, CheckCircle, XCircle, X, Ban } from '$lib/icons';
+  import { Loader2, CheckCircle, XCircle, X, Ban, Shuffle } from '$lib/icons';
   import * as m from '$lib/paraglide/messages';
 
   export interface BulkUploadEntry {
     filename: string;
-    status: 'pending' | 'success' | 'failed' | 'cancelled';
+    status: 'pending' | 'success' | 'failed' | 'cancelled' | 'skipped';
     reason?: string;
   }
 
@@ -39,7 +39,10 @@
   const ok = $derived(entries.filter((e) => e.status === 'success').length);
   const ko = $derived(entries.filter((e) => e.status === 'failed').length);
   const cancelled = $derived(entries.filter((e) => e.status === 'cancelled').length);
-  const done = $derived(ok + ko + cancelled);
+  const skipped = $derived(entries.filter((e) => e.status === 'skipped').length);
+  // Skipped + cancelled rows count as "done" for progress accounting since
+  // they will not transition to anything else; only `pending` is in flight.
+  const done = $derived(ok + ko + cancelled + skipped);
   const percent = $derived(total === 0 ? 0 : Math.round((done / total) * 100));
 </script>
 
@@ -106,14 +109,18 @@
             <CheckCircle size={14} strokeWidth={2.5} class="text-emerald-600" />
           {:else if entry.status === 'cancelled'}
             <Ban size={14} strokeWidth={2.5} class="text-brand-text-muted" />
+          {:else if entry.status === 'skipped'}
+            <Shuffle size={14} strokeWidth={2.5} class="text-brand-text-muted" />
           {:else}
             <XCircle size={14} strokeWidth={2.5} class="text-red-600" />
           {/if}
         </span>
         <div class="flex-1 min-w-0">
-          <p class="truncate font-medium" title={entry.filename}>{entry.filename}</p>
+          <p class="truncate font-medium" class:opacity-60={entry.status === 'skipped' || entry.status === 'cancelled'} title={entry.filename}>{entry.filename}</p>
           {#if entry.status === 'cancelled'}
             <p class="text-[11px] text-brand-text-muted mt-0.5">{m.studio_bulk_panel_status_cancelled()}</p>
+          {:else if entry.status === 'skipped'}
+            <p class="text-[11px] text-brand-text-muted mt-0.5">{entry.reason ?? m.studio_bulk_panel_status_skipped()}</p>
           {:else if entry.reason}
             <p class="text-[11px] text-red-600 dark:text-red-400 mt-0.5 break-words" title={entry.reason}>
               {entry.reason}

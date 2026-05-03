@@ -1175,6 +1175,7 @@
 	"studio_bulk_panel_close_aria": "Fermer le panneau de progression",
 	"studio_bulk_panel_close_blocked_title": "Attendez la fin de l’import avant de fermer.",
 	"studio_bulk_panel_status_cancelled": "Annulé.",
+	"studio_bulk_panel_status_skipped": "Ignoré — déjà dans le pack.",
 	"studio_bulk_panel_title_done": "Import terminé : {ok} ajoutés, {ko} en échec",
 	"studio_bulk_panel_title_running": "Import en cours… {done}/{total}",
 	"studio_toast_items_all_failed_one": "Import en échec ({count} item).",

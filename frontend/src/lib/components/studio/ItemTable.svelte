@@ -12,6 +12,7 @@
     listVersions,
     BULK_ABORTED_REASON
   } from '$lib/api/studio';
+  import { compressImage } from '$lib/api/imageCompress';
   import { reveal } from '$lib/actions/reveal';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { Upload, Trash2, ImageIcon, FileText } from '$lib/icons';
@@ -126,30 +127,39 @@
   }
 
   async function bulkUploadImages(files: File[]) {
-    // Pre-filter so rejected files appear in the same summary as network failures.
+    // Three-bucket pre-filter (in display order in the panel):
+    //   rejected: failed client-side validation (MIME / >10 MiB)
+    //   skipped:  filename already exists in the pack — re-dropping the
+    //             same folder thus retries only what's missing
+    //   accepted: actually goes to the network
     const rejected: { filename: string; reason: string }[] = [];
+    const skipped: { filename: string }[] = [];
     const accepted: File[] = [];
+    const existingNames = new Set(studio.items.map((i) => i.name));
+    const stripExt = (n: string) => n.replace(/\.[^.]+$/, '');
     for (const f of files) {
       const err = validateImageFile(f);
-      if (err) rejected.push({ filename: f.name, reason: err });
-      else accepted.push(f);
+      if (err) { rejected.push({ filename: f.name, reason: err }); continue; }
+      if (existingNames.has(stripExt(f.name))) { skipped.push({ filename: f.name }); continue; }
+      accepted.push(f);
     }
 
-    if (accepted.length === 0 && rejected.length === 0) return;
+    if (accepted.length === 0 && rejected.length === 0 && skipped.length === 0) return;
 
-    // Pre-populate the panel with one row per accepted file (pending) plus
-    // the client-side rejects (already failed). The accepted rows flip in
-    // place to success/failed via onItemDone; rejects show their reason
-    // immediately. Index of the i-th accepted file in `bulkEntries` is
-    // `rejected.length + i`.
+    // Pre-populate the panel with one row per file. Rejected and skipped
+    // rows are terminal and rendered immediately; accepted rows flip in
+    // place to success/failed via onItemDone. Index math for accepted in
+    // bulkEntries is: rejected.length + skipped.length + i.
     bulkEntries = [
       ...rejected.map<BulkUploadEntry>((r) => ({ filename: r.filename, status: 'failed', reason: r.reason })),
+      ...skipped.map<BulkUploadEntry>((s) => ({ filename: s.filename, status: 'skipped' })),
       ...accepted.map<BulkUploadEntry>((f) => ({ filename: f.name, status: 'pending' }))
     ];
     bulkPanelOpen = true;
+    if (accepted.length === 0) return; // nothing to upload — panel reflects the result
     bulkAborter = new AbortController();
     uploading = true;
-    const offset = rejected.length;
+    const offset = rejected.length + skipped.length;
     const result = await bulkUploadImageItems(
       studio.selectedPackId!,
       accepted,
@@ -160,7 +170,15 @@
         next[idx] = mapEvent(event);
         bulkEntries = next;
       },
-      bulkAborter.signal
+      bulkAborter.signal,
+      // Best-effort client-side compression. 800 KiB target keeps the body
+      // well under most upstream proxy caps (Pangolin / nginx-ingress
+      // default to 1 MiB and surface oversize as a generic 500). Long-edge
+      // 2400 px keeps a 4K phone shot above any reasonable display res while
+      // shaving 70-90 % of the bytes. compressImage falls back to the
+      // original file on any decode/encode error so nothing silently
+      // disappears.
+      (file) => compressImage(file, { maxBytes: 800 * 1024, maxDimension: 2400 })
     );
     uploading = false;
     bulkAborter = null;

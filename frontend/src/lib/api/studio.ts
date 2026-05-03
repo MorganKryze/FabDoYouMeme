@@ -471,7 +471,14 @@ export async function bulkUploadImageItems(
   files: File[],
   onProgress?: (done: number, total: number, currentName: string) => void,
   onItemDone?: (event: BulkUploadItemEvent) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  /**
+   * Optional per-file pre-processor. Runs on each chunk just before the
+   * network request — used by the studio caller to compress oversize
+   * images so they fit through tight upstream proxy body caps. Errors
+   * are non-fatal: a thrown prepare() falls back to the original file.
+   */
+  prepare?: (file: File) => Promise<File>
 ): Promise<BulkUploadOutcome> {
   const outcome: BulkUploadOutcome = { succeeded: [], failed: [] };
   for (let i = 0; i < files.length; i += BULK_UPLOAD_CHUNK_SIZE) {
@@ -485,15 +492,24 @@ export async function bulkUploadImageItems(
       }
       return outcome;
     }
-    const chunk = files.slice(i, i + BULK_UPLOAD_CHUNK_SIZE);
+    const rawChunk = files.slice(i, i + BULK_UPLOAD_CHUNK_SIZE);
+    const chunk = prepare
+      ? await Promise.all(
+          rawChunk.map(async (f) => {
+            try { return await prepare(f); } catch { return f; }
+          })
+        )
+      : rawChunk;
     onProgress?.(i, files.length, chunk[0]?.name ?? '');
     const res = await uploadOneBulkChunk(packId, chunk, signal);
     if ('error' in res) {
       // Whole-chunk failure (auth, network, rate-limit exhaustion, parse
       // error). Mark every file in the chunk as failed with the same
-      // reason so the caller's summary reflects reality.
-      for (let j = 0; j < chunk.length; j++) {
-        const f = chunk[j];
+      // reason so the caller's summary reflects reality. Use the original
+      // (rawChunk) filename so the panel row label stays stable even when
+      // prepare() renamed (e.g. compressing a .png into a .jpg).
+      for (let j = 0; j < rawChunk.length; j++) {
+        const f = rawChunk[j];
         outcome.failed.push({ filename: f.name, reason: res.error });
         onItemDone?.({ index: i + j, filename: f.name, ok: false, reason: res.error });
       }
@@ -501,7 +517,7 @@ export async function bulkUploadImageItems(
     }
     for (let j = 0; j < res.results.length; j++) {
       const r = res.results[j];
-      const sourceFile = chunk[j];
+      const sourceFile = rawChunk[j];
       if (r.ok && r.item) {
         outcome.succeeded.push(r.item);
         onItemDone?.({ index: i + j, filename: sourceFile?.name ?? r.filename, ok: true });

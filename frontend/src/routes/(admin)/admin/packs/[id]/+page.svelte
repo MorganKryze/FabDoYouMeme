@@ -3,6 +3,7 @@
   import { untrack } from 'svelte';
   import { toast } from '$lib/state/toast.svelte';
   import { bulkUploadImageItems, validateImageFile, BULK_ABORTED_REASON } from '$lib/api/studio';
+  import { compressImage } from '$lib/api/imageCompress';
   import { reveal } from '$lib/actions/reveal';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { hoverEffect } from '$lib/actions/hoverEffect';
@@ -65,21 +66,27 @@
     if (files.length === 0) return;
 
     const rejected: { filename: string; reason: string }[] = [];
+    const skipped: { filename: string }[] = [];
     const accepted: File[] = [];
+    const existingNames = new Set(items.map((i) => i.name));
+    const stripExt = (n: string) => n.replace(/\.[^.]+$/, '');
     for (const f of files) {
       const err = validateImageFile(f);
-      if (err) rejected.push({ filename: f.name, reason: err });
-      else accepted.push(f);
+      if (err) { rejected.push({ filename: f.name, reason: err }); continue; }
+      if (existingNames.has(stripExt(f.name))) { skipped.push({ filename: f.name }); continue; }
+      accepted.push(f);
     }
 
     bulkEntries = [
       ...rejected.map<BulkUploadEntry>((r) => ({ filename: r.filename, status: 'failed', reason: r.reason })),
+      ...skipped.map<BulkUploadEntry>((s) => ({ filename: s.filename, status: 'skipped' })),
       ...accepted.map<BulkUploadEntry>((f) => ({ filename: f.name, status: 'pending' }))
     ];
     bulkPanelOpen = true;
+    if (accepted.length === 0) return;
     bulkAborter = new AbortController();
     uploading = true;
-    const offset = rejected.length;
+    const offset = rejected.length + skipped.length;
     const result = await bulkUploadImageItems(
       data.pack.id,
       accepted,
@@ -90,7 +97,8 @@
         next[idx] = mapEvent(event);
         bulkEntries = next;
       },
-      bulkAborter.signal
+      bulkAborter.signal,
+      (file) => compressImage(file, { maxBytes: 800 * 1024, maxDimension: 2400 })
     );
     uploading = false;
     bulkAborter = null;
