@@ -174,6 +174,7 @@ All rate limits are enforced in-memory per backend process. This is correct for 
 | Variable                | Required | Default   | Description                        |
 | ----------------------- | -------- | --------- | ---------------------------------- |
 | `MAX_UPLOAD_SIZE_BYTES` | no       | `10485760` | Maximum upload size (default 10 MiB). Must match the frontend's client-side validator — see `frontend/src/lib/api/studio.ts`. |
+| `BODY_SIZE_LIMIT`       | no       | `268435456` | Frontend (SvelteKit adapter-node) request-body cap. Default sizes a 25-file bulk image batch at `MAX_UPLOAD_SIZE_BYTES=10 MiB`. Without this override, adapter-node's stock 512 KiB cap silently rejects every image >512 KiB at the SvelteKit hop and the studio toast just reads "Import failed". |
 
 ### Logging
 

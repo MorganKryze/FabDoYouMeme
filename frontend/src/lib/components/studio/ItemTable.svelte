@@ -127,7 +127,15 @@
     uploading = false;
 
     studio.items = [...studio.items, ...result.succeeded];
-    summarize(result.succeeded.length, [...rejected, ...result.failed].length);
+    const allFailed = [...rejected, ...result.failed];
+    if (allFailed.length > 0) {
+      // Console-log every failure so a developer or operator looking at
+      // devtools after a botched import can see the full per-file reasons,
+      // not just the summary toast. Useful when the cause is e.g. a SvelteKit
+      // body-size cap or a backend storage outage.
+      console.warn('[bulk import] failures:', allFailed);
+    }
+    summarize(result.succeeded.length, allFailed.length, allFailed[0]?.reason);
   }
 
   async function bulkImportTextJson(file: File) {
@@ -158,10 +166,17 @@
     uploading = false;
 
     studio.items = [...studio.items, ...result.succeeded];
-    summarize(result.succeeded.length, result.failed.length);
+    if (result.failed.length > 0) {
+      console.warn('[bulk import] failures:', result.failed);
+    }
+    summarize(result.succeeded.length, result.failed.length, result.failed[0]?.reason);
   }
 
-  function summarize(ok: number, ko: number) {
+  // `firstReason` is the reason string from the first failed entry, surfaced
+  // in the toast so a botched import is not just "Import failed" but
+  // "Import failed (83): Content-length of 25165824 exceeds limit of 524288 bytes"
+  // — the kind of detail an operator or maker can act on.
+  function summarize(ok: number, ko: number, firstReason?: string) {
     if (ok > 0 && ko === 0) {
       toast.show(
         ok === 1
@@ -170,12 +185,19 @@
         'success'
       );
     } else if (ok > 0 && ko > 0) {
-      toast.show(m.studio_toast_items_partial({ ok, ko }), 'warning');
+      toast.show(
+        firstReason
+          ? m.studio_toast_items_partial_with_reason({ ok, ko, reason: firstReason })
+          : m.studio_toast_items_partial({ ok, ko }),
+        'warning'
+      );
     } else if (ko > 0) {
       toast.show(
-        ko === 1
-          ? m.studio_toast_items_all_failed_one({ count: ko })
-          : m.studio_toast_items_all_failed_other({ count: ko }),
+        firstReason
+          ? m.studio_toast_items_all_failed_with_reason({ count: ko, reason: firstReason })
+          : ko === 1
+            ? m.studio_toast_items_all_failed_one({ count: ko })
+            : m.studio_toast_items_all_failed_other({ count: ko }),
         'error'
       );
     }

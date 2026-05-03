@@ -106,6 +106,13 @@ services:
       PUBLIC_OPERATOR_CONTACT_EMAIL: ${PUBLIC_OPERATOR_CONTACT_EMAIL}
       PUBLIC_OPERATOR_URL: ${PUBLIC_OPERATOR_URL:-${FRONTEND_URL}}
       PUBLIC_OPERATOR_SMTP_PROVIDER: ${PUBLIC_OPERATOR_SMTP_PROVIDER}
+      # adapter-node defaults to a 512 KiB request body cap. Without an
+      # override every image >512 KiB silently 413s at the SvelteKit proxy
+      # before the request reaches the backend, and the studio toast just
+      # says "Import failed" with no detail. Sized for the bulk image
+      # endpoint (MaxBulkUploadFiles=25 × MAX_UPLOAD_SIZE_BYTES=10 MiB +
+      # multipart slack), with operator override via env.
+      BODY_SIZE_LIMIT: ${BODY_SIZE_LIMIT:-268435456}
     expose:
       - 3000
     networks:

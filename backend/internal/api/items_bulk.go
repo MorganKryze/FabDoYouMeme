@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"path/filepath"
@@ -135,6 +136,14 @@ func (h *PackHandler) BulkCreateImageItems(w http.ResponseWriter, r *http.Reques
 		// failed bump must not flip the per-file result.
 		if results[i].OK && results[i].Item != nil {
 			bumpGroupEditor(r, h.db, pack, results[i].Item.ID, u)
+		}
+		// Per-file failures get logged so the operator can correlate a
+		// "Import failed" toast with a real cause (rate limit, S3 outage,
+		// MIME mismatch, etc.). Successful files stay silent — this is
+		// the studio's hot path and a bulk batch can be hundreds of files.
+		if !results[i].OK {
+			log.Printf("bulk_upload: pack=%s user=%s file=%q code=%s reason=%q",
+				packID, u.UserID, results[i].Filename, results[i].Code, results[i].Reason)
 		}
 	}
 

@@ -63,9 +63,11 @@
     const failed = [...rejected, ...result.failed];
     const ok = result.succeeded.length;
     const ko = failed.length;
+    const firstReason = failed[0]?.reason;
+    if (failed.length > 0) console.warn('[bulk import] failures:', failed);
     if (ok > 0 && ko === 0) toast.show(ok === 1 ? m.admin_pack_detail_toast_uploaded_one({ count: ok }) : m.admin_pack_detail_toast_uploaded_other({ count: ok }), 'success');
-    else if (ok > 0 && ko > 0) toast.show(m.admin_pack_detail_toast_uploaded_partial({ ok, ko }), 'warning');
-    else toast.show(m.admin_pack_detail_toast_upload_failed({ ko, total: ko }), 'error');
+    else if (ok > 0 && ko > 0) toast.show(firstReason ? m.admin_pack_detail_toast_uploaded_partial_with_reason({ ok, ko, reason: firstReason }) : m.admin_pack_detail_toast_uploaded_partial({ ok, ko }), 'warning');
+    else toast.show(firstReason ? m.admin_pack_detail_toast_upload_failed_with_reason({ ko, total: ko, reason: firstReason }) : m.admin_pack_detail_toast_upload_failed({ ko, total: ko }), 'error');
   }
 </script>
 

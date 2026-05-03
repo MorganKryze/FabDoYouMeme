@@ -4,6 +4,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 
@@ -109,6 +110,10 @@ func (h *PackHandler) BulkCreateTextItems(w http.ResponseWriter, r *http.Request
 		name := strings.TrimSpace(it.Name)
 		text := strings.TrimSpace(it.Text)
 		results[i] = h.processBulkTextItem(r, packID, pack, u, name, text)
+		if !results[i].OK {
+			log.Printf("bulk_text: pack=%s user=%s row=%q code=%s reason=%q",
+				packID, u.UserID, results[i].Filename, results[i].Code, results[i].Reason)
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"results": results})
