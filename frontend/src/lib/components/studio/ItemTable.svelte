@@ -171,14 +171,20 @@
         bulkEntries = next;
       },
       bulkAborter.signal,
-      // Best-effort client-side compression. 800 KiB target keeps the body
-      // well under most upstream proxy caps (Pangolin / nginx-ingress
-      // default to 1 MiB and surface oversize as a generic 500). Long-edge
-      // 2400 px keeps a 4K phone shot above any reasonable display res while
-      // shaving 70-90 % of the bytes. compressImage falls back to the
-      // original file on any decode/encode error so nothing silently
-      // disappears.
-      (file) => compressImage(file, { maxBytes: 800 * 1024, maxDimension: 2400 })
+      // Best-effort client-side compression. 256 KiB target keeps the body
+      // well under any conceivable upstream proxy cap (the previous 800 KiB
+      // target still tripped a 500 from the user's Pangolin/Traefik
+      // ingress, so we shrank it further). 1920 px long edge stays above
+      // any realistic display res while shaving 80-95 % of the bytes.
+      // Console-debug the before/after so a bug report includes concrete
+      // numbers — when an image still fails after compression, the dev
+      // tools console proves whether the prepare step ran and what size
+      // hit the wire.
+      async (file) => {
+        const compressed = await compressImage(file, { maxBytes: 256 * 1024, maxDimension: 1920 });
+        console.debug(`[bulk import] ${file.name}: ${file.size} → ${compressed.size} bytes`);
+        return compressed;
+      }
     );
     uploading = false;
     bulkAborter = null;

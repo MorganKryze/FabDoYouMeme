@@ -89,21 +89,13 @@ export async function compressImage(file: File, options: CompressOptions): Promi
   const minQuality = options.minQuality ?? 0.55;
   const step = 0.1;
 
-  // PNG is lossless — keep transparency intact, single pass.
-  if (file.type === 'image/png') {
-    try {
-      const blob = await canvasToBlob(canvas, 'image/png', 1);
-      // Only return the re-encoded version when it's actually smaller; some
-      // PNGs round-trip larger after a resize because the original used a
-      // tighter palette than the canvas reproduces.
-      if (blob.size < file.size) {
-        return new File([blob], file.name, { type: 'image/png' });
-      }
-      return file;
-    } catch {
-      return file;
-    }
-  }
+  // Always re-encode as JPEG, even for PNG inputs. Keeping PNGs lossless
+  // here meant a high-res screenshot would round-trip at multi-MiB and
+  // still trip the upstream proxy's body cap. Meme content rarely needs
+  // alpha, and the visible quality drop at q=0.85 is invisible compared
+  // to "import failed (500)". If alpha matters for a specific item the
+  // single-image flow is the right tool — bulk imports prioritise getting
+  // through the wire.
 
   let quality = startQuality;
   let best: Blob | null = null;
