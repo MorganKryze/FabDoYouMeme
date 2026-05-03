@@ -211,32 +211,40 @@ func main() {
 	r.Use(mw.Session(authHandler.SessionLookupFn, logger))
 	r.Use(mw.Metrics)
 
-	// /api/assets/media is mounted BEFORE globalLimiter so it bypasses the
-	// per-user request budget. Reason: every studio / room page fans out
-	// 1 GET per visible item (80+ thumbnails on a fully-loaded pack), all
-	// in parallel from the browser, against a default budget of 100/min.
-	// The render quickly exhausts the burst and the leftover thumbnails
-	// 429, leaving broken-image rows scattered through the grid — exactly
-	// the "some thumbnails work, some don't" symptom that triggered this
-	// whole investigation. The endpoint is cheap (one authz query + one
-	// S3 GET), idempotent, browser-cached for 1h via Cache-Control, and
-	// already runs its own per-fetch authorization (CanUserDownloadMedia /
-	// CanGuestDownloadMedia inside the handler), so a per-user request
-	// cap adds no defensive value here.
+	// /api/assets/media is mounted at the top-level mux without the global
+	// per-user limiter. Reason: every studio / room page fans out 1 GET per
+	// visible item (80+ thumbnails on a fully-loaded pack), all in parallel
+	// from the browser, against a default budget of 100/min. The render
+	// quickly exhausts the burst and the leftover thumbnails 429, leaving
+	// broken-image rows scattered through the grid — exactly the "some
+	// thumbnails work, some don't" symptom that triggered this whole
+	// investigation. The endpoint is cheap (one authz query + one S3 GET),
+	// idempotent, browser-cached for 1h via Cache-Control, and already runs
+	// its own per-fetch authorization (CanUserDownloadMedia /
+	// CanGuestDownloadMedia inside the handler), so a per-user request cap
+	// adds no defensive value here.
+	//
+	// Mounted via With(...) (an inline Group of one) rather than after a
+	// later r.Use(globalLimiter), because chi panics if Use is called once
+	// any route is registered on the same mux. Everything that *should* be
+	// rate-limited lives inside the limitedRoutes Group below.
 	r.Get("/api/assets/media", assetHandler.GetMedia)
 
-	// PerUserMiddleware (not Middleware) so authenticated traffic is keyed
-	// by user ID. Behind the prod reverse-proxy → SvelteKit → backend
-	// topology, every SSR-side fetch (proxyToBackend, hydrateSession,
-	// apiFetch) originates from the SvelteKit container's docker IP — so
-	// IP keying collapses every logged-in user into one shared bucket.
-	// Anonymous traffic falls back to the IP bucket (documented behaviour
-	// of PerUserMiddleware) so the gate can never be silently bypassed.
-	r.Use(globalLimiter.PerUserMiddleware)
+	// Group for everything else — the global per-user rate limiter applies
+	// inside this group only. PerUserMiddleware (not Middleware) so
+	// authenticated traffic is keyed by user ID. Behind the prod
+	// reverse-proxy → SvelteKit → backend topology, every SSR-side fetch
+	// (proxyToBackend, hydrateSession, apiFetch) originates from the
+	// SvelteKit container's docker IP — so IP keying collapses every
+	// logged-in user into one shared bucket. Anonymous traffic falls back
+	// to the IP bucket (documented behaviour of PerUserMiddleware) so the
+	// gate can never be silently bypassed.
+	r.Group(func(r chi.Router) {
+		r.Use(globalLimiter.PerUserMiddleware)
 
-	// Health (no auth)
-	r.Get("/api/health", healthHandler.Liveness)
-	r.Get("/api/health/deep", healthHandler.Readiness)
+		// Health (no auth)
+		r.Get("/api/health", healthHandler.Liveness)
+		r.Get("/api/health/deep", healthHandler.Readiness)
 
 	// /api/metrics — restricted to private IP ranges (loopback + RFC-1918).
 	// Never expose this endpoint to the public internet. RequirePrivateIP
@@ -490,10 +498,14 @@ func main() {
 			"scanned", rep.Scanned, "promoted", rep.Promoted, "no_candidate", rep.NoCandidate)
 	}
 
-	// WebSocket — intentionally not gated by RequireAuth. The handler resolves
-	// identity itself (session cookie OR guest_token query param) and rejects
-	// unauthenticated upgrades with a 401. See api.WSHandler.resolveIdentity.
-	r.Get("/api/ws/rooms/{code}", wsHandler.ServeHTTP)
+		// WebSocket — intentionally not gated by RequireAuth. The handler
+		// resolves identity itself (session cookie OR guest_token query
+		// param) and rejects unauthenticated upgrades with a 401. See
+		// api.WSHandler.resolveIdentity. The handshake itself stays under
+		// the global limiter; the connection's per-message budget lives in
+		// the hub (WSRateLimit).
+		r.Get("/api/ws/rooms/{code}", wsHandler.ServeHTTP)
+	}) // close globalLimiter Group
 
 	// ── Server lifecycle ──────────────────────────────────────────────────────
 	srv := &http.Server{
