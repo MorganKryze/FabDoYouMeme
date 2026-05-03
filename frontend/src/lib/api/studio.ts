@@ -393,7 +393,8 @@ interface BulkServerResult {
 // the rate limiter, before per-file processing began).
 async function uploadOneBulkChunk(
   packId: string,
-  files: File[]
+  files: File[],
+  signal?: AbortSignal
 ): Promise<{ results: BulkServerResult[] } | { error: string }> {
   const form = new FormData();
   for (const f of files) {
@@ -410,7 +411,8 @@ async function uploadOneBulkChunk(
       res = await fetch(`/api/packs/${packId}/items/bulk`, {
         method: 'POST',
         credentials: 'include',
-        body: form
+        body: form,
+        signal
       });
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
@@ -438,39 +440,76 @@ async function uploadOneBulkChunk(
   return { error: 'rate limited (429) — retried 4 times' };
 }
 
-// bulkUploadImageItems chunks an arbitrarily large set of files into
-// MaxBulkUploadFiles-sized batches and uploads each batch in a single
-// HTTP request. Pre-fix this function ran four sequential round-trips per
-// file; for an 83-image batch that meant 332 requests, which saturated
-// the per-user global rate limiter (default 100/min) within seconds and
-// silently dropped the rest. The bulk endpoint collapses each file to one
-// rate-limit token, so a 4-chunk batch costs four tokens total.
+// Per-item event emitted by the bulk uploaders for live-status UIs. Fires
+// once per file (or row) once its outcome is known. The index points back
+// into the original input list so a UI tracking pre-populated rows can
+// match without fuzzy filename comparison (filenames are not unique).
+export interface BulkUploadItemEvent {
+  index: number;
+  filename: string;
+  ok: boolean;
+  reason?: string;
+}
+
+// Sentinel reason emitted for every still-pending file when the caller
+// aborts mid-import. UIs render these as a distinct "cancelled" status
+// rather than a real failure so users don't think the system broke.
+export const BULK_ABORTED_REASON = '__bulk_aborted__';
+
+// bulkUploadImageItems chunks an arbitrarily large set of files and uploads
+// each chunk in a single HTTP request. Pre-fix this function ran four
+// sequential round-trips per file; for an 83-image batch that meant 332
+// requests, which saturated the per-user global rate limiter (default
+// 100/min) within seconds and silently dropped the rest. The bulk endpoint
+// collapses each file to one rate-limit token.
 //
-// onProgress is called once per completed chunk with the total number of
-// files attempted so far — matching the legacy progress-bar contract that
-// callers wired against (done/total counts, last-touched filename).
+// `onProgress` fires once per chunk with running done/total counts (legacy
+// contract). `onItemDone` fires once per file with its individual outcome,
+// so callers can render a live per-row status panel.
 export async function bulkUploadImageItems(
   packId: string,
   files: File[],
-  onProgress?: (done: number, total: number, currentName: string) => void
+  onProgress?: (done: number, total: number, currentName: string) => void,
+  onItemDone?: (event: BulkUploadItemEvent) => void,
+  signal?: AbortSignal
 ): Promise<BulkUploadOutcome> {
   const outcome: BulkUploadOutcome = { succeeded: [], failed: [] };
   for (let i = 0; i < files.length; i += BULK_UPLOAD_CHUNK_SIZE) {
+    if (signal?.aborted) {
+      // Mark every file from the current index onward as cancelled so the
+      // caller's UI can render the partial state truthfully.
+      for (let j = i; j < files.length; j++) {
+        const f = files[j];
+        outcome.failed.push({ filename: f.name, reason: BULK_ABORTED_REASON });
+        onItemDone?.({ index: j, filename: f.name, ok: false, reason: BULK_ABORTED_REASON });
+      }
+      return outcome;
+    }
     const chunk = files.slice(i, i + BULK_UPLOAD_CHUNK_SIZE);
     onProgress?.(i, files.length, chunk[0]?.name ?? '');
-    const res = await uploadOneBulkChunk(packId, chunk);
+    const res = await uploadOneBulkChunk(packId, chunk, signal);
     if ('error' in res) {
       // Whole-chunk failure (auth, network, rate-limit exhaustion, parse
       // error). Mark every file in the chunk as failed with the same
-      // reason so the caller's summary toast reflects reality.
-      for (const f of chunk) {
+      // reason so the caller's summary reflects reality.
+      for (let j = 0; j < chunk.length; j++) {
+        const f = chunk[j];
         outcome.failed.push({ filename: f.name, reason: res.error });
+        onItemDone?.({ index: i + j, filename: f.name, ok: false, reason: res.error });
       }
       continue;
     }
-    for (const r of res.results) {
-      if (r.ok && r.item) outcome.succeeded.push(r.item);
-      else outcome.failed.push({ filename: r.filename, reason: r.reason ?? r.code ?? 'upload failed' });
+    for (let j = 0; j < res.results.length; j++) {
+      const r = res.results[j];
+      const sourceFile = chunk[j];
+      if (r.ok && r.item) {
+        outcome.succeeded.push(r.item);
+        onItemDone?.({ index: i + j, filename: sourceFile?.name ?? r.filename, ok: true });
+      } else {
+        const reason = r.reason ?? r.code ?? 'upload failed';
+        outcome.failed.push({ filename: r.filename, reason });
+        onItemDone?.({ index: i + j, filename: sourceFile?.name ?? r.filename, ok: false, reason });
+      }
     }
     onProgress?.(Math.min(i + chunk.length, files.length), files.length, chunk[chunk.length - 1]?.name ?? '');
   }
@@ -539,7 +578,8 @@ interface BulkTextServerResult {
 // when the whole request was rate-limited before any work began.
 async function uploadOneTextChunk(
   packId: string,
-  items: ParsedTextItem[]
+  items: ParsedTextItem[],
+  signal?: AbortSignal
 ): Promise<{ results: BulkTextServerResult[] } | { error: string }> {
   const delays = [1000, 2000, 4000];
   for (let attempt = 0; attempt <= delays.length; attempt++) {
@@ -549,7 +589,8 @@ async function uploadOneTextChunk(
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items })
+        body: JSON.stringify({ items }),
+        signal
       });
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
@@ -582,22 +623,42 @@ async function uploadOneTextChunk(
 export async function bulkUploadTextItems(
   packId: string,
   items: ParsedTextItem[],
-  onProgress?: (done: number, total: number, currentName: string) => void
+  onProgress?: (done: number, total: number, currentName: string) => void,
+  onItemDone?: (event: BulkUploadItemEvent) => void,
+  signal?: AbortSignal
 ): Promise<BulkUploadOutcome> {
   const outcome: BulkUploadOutcome = { succeeded: [], failed: [] };
   for (let i = 0; i < items.length; i += BULK_TEXT_CHUNK_SIZE) {
+    if (signal?.aborted) {
+      for (let j = i; j < items.length; j++) {
+        const it = items[j];
+        outcome.failed.push({ filename: it.name, reason: BULK_ABORTED_REASON });
+        onItemDone?.({ index: j, filename: it.name, ok: false, reason: BULK_ABORTED_REASON });
+      }
+      return outcome;
+    }
     const chunk = items.slice(i, i + BULK_TEXT_CHUNK_SIZE);
     onProgress?.(i, items.length, chunk[0]?.name ?? '');
-    const res = await uploadOneTextChunk(packId, chunk);
+    const res = await uploadOneTextChunk(packId, chunk, signal);
     if ('error' in res) {
-      for (const it of chunk) {
+      for (let j = 0; j < chunk.length; j++) {
+        const it = chunk[j];
         outcome.failed.push({ filename: it.name, reason: res.error });
+        onItemDone?.({ index: i + j, filename: it.name, ok: false, reason: res.error });
       }
       continue;
     }
-    for (const r of res.results) {
-      if (r.ok && r.item) outcome.succeeded.push(r.item);
-      else outcome.failed.push({ filename: r.filename, reason: r.reason ?? r.code ?? 'import failed' });
+    for (let j = 0; j < res.results.length; j++) {
+      const r = res.results[j];
+      const sourceItem = chunk[j];
+      if (r.ok && r.item) {
+        outcome.succeeded.push(r.item);
+        onItemDone?.({ index: i + j, filename: sourceItem?.name ?? r.filename, ok: true });
+      } else {
+        const reason = r.reason ?? r.code ?? 'import failed';
+        outcome.failed.push({ filename: r.filename, reason });
+        onItemDone?.({ index: i + j, filename: sourceItem?.name ?? r.filename, ok: false, reason });
+      }
     }
     onProgress?.(Math.min(i + chunk.length, items.length), items.length, chunk[chunk.length - 1]?.name ?? '');
   }

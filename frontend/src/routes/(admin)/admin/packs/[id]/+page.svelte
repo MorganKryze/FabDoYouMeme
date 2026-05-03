@@ -2,7 +2,7 @@
   import { enhance } from '$app/forms';
   import { untrack } from 'svelte';
   import { toast } from '$lib/state/toast.svelte';
-  import { bulkUploadImageItems, validateImageFile } from '$lib/api/studio';
+  import { bulkUploadImageItems, validateImageFile, BULK_ABORTED_REASON } from '$lib/api/studio';
   import { reveal } from '$lib/actions/reveal';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { hoverEffect } from '$lib/actions/hoverEffect';
@@ -20,11 +20,28 @@
   import type { ActionData, PageData } from './$types';
   import type { GameItem } from '$lib/api/types';
   import * as m from '$lib/paraglide/messages';
+  import BulkUploadProgress, { type BulkUploadEntry } from '$lib/components/studio/BulkUploadProgress.svelte';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
   let items = $state<GameItem[]>(untrack(() => data.items));
   let uploading = $state(false);
   let modMenuOpen = $state(false);
+  let bulkEntries = $state<BulkUploadEntry[]>([]);
+  let bulkPanelOpen = $state(false);
+  let bulkAborter: AbortController | null = null;
+  function closeBulkPanel() {
+    if (uploading) return;
+    bulkPanelOpen = false;
+    bulkEntries = [];
+  }
+  function abortBulk() {
+    bulkAborter?.abort();
+  }
+  function mapEvent(event: { ok: boolean; reason?: string; filename: string }): BulkUploadEntry {
+    if (event.ok) return { filename: event.filename, status: 'success' };
+    if (event.reason === BULK_ABORTED_REASON) return { filename: event.filename, status: 'cancelled' };
+    return { filename: event.filename, status: 'failed', reason: event.reason };
+  }
 
   // `use:enhance` updates the `form` prop several times per submission
   // (pending → result → post-invalidate refetch), each update firing the
@@ -55,19 +72,30 @@
       else accepted.push(f);
     }
 
+    bulkEntries = [
+      ...rejected.map<BulkUploadEntry>((r) => ({ filename: r.filename, status: 'failed', reason: r.reason })),
+      ...accepted.map<BulkUploadEntry>((f) => ({ filename: f.name, status: 'pending' }))
+    ];
+    bulkPanelOpen = true;
+    bulkAborter = new AbortController();
     uploading = true;
-    const result = await bulkUploadImageItems(data.pack.id, accepted);
+    const offset = rejected.length;
+    const result = await bulkUploadImageItems(
+      data.pack.id,
+      accepted,
+      undefined,
+      (event) => {
+        const idx = offset + event.index;
+        const next = bulkEntries.slice();
+        next[idx] = mapEvent(event);
+        bulkEntries = next;
+      },
+      bulkAborter.signal
+    );
     uploading = false;
+    bulkAborter = null;
 
     items = [...items, ...result.succeeded];
-    const failed = [...rejected, ...result.failed];
-    const ok = result.succeeded.length;
-    const ko = failed.length;
-    const firstReason = failed[0]?.reason;
-    if (failed.length > 0) console.warn('[bulk import] failures:', failed);
-    if (ok > 0 && ko === 0) toast.show(ok === 1 ? m.admin_pack_detail_toast_uploaded_one({ count: ok }) : m.admin_pack_detail_toast_uploaded_other({ count: ok }), 'success');
-    else if (ok > 0 && ko > 0) toast.show(firstReason ? m.admin_pack_detail_toast_uploaded_partial_with_reason({ ok, ko, reason: firstReason }) : m.admin_pack_detail_toast_uploaded_partial({ ok, ko }), 'warning');
-    else toast.show(firstReason ? m.admin_pack_detail_toast_upload_failed_with_reason({ ko, total: ko, reason: firstReason }) : m.admin_pack_detail_toast_upload_failed({ ko, total: ko }), 'error');
   }
 </script>
 
@@ -268,3 +296,7 @@
     </table>
   </div>
 </div>
+
+{#if bulkPanelOpen}
+  <BulkUploadProgress entries={bulkEntries} running={uploading} onClose={closeBulkPanel} onAbort={abortBulk} />
+{/if}

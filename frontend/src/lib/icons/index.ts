@@ -68,6 +68,7 @@ export {
   Bell,
   XCircle,
   X,
+  Loader2,
   PartyPopper,
   IdCard,
   AlertTriangle,

@@ -9,17 +9,39 @@
     bulkUploadTextItems,
     parseTextItemsJson,
     validateImageFile,
-    listVersions
+    listVersions,
+    BULK_ABORTED_REASON
   } from '$lib/api/studio';
   import { reveal } from '$lib/actions/reveal';
   import { pressPhysics } from '$lib/actions/pressPhysics';
   import { Upload, Trash2, ImageIcon, FileText } from '$lib/icons';
   import type { GameItem } from '$lib/api/types';
   import * as m from '$lib/paraglide/messages';
+  import BulkUploadProgress, { type BulkUploadEntry } from './BulkUploadProgress.svelte';
 
   let dragOverZone = $state(false);
   let uploading = $state(false);
-  let uploadProgress = $state<{ name: string; done: number; total: number } | null>(null);
+  // Per-item live status for the bulk import. Pre-populated with `pending`
+  // entries before the upload starts; mutated in place as the studio API
+  // emits onItemDone events. Survives upload completion until the user
+  // dismisses the panel — that's how they review the 30-failure list.
+  let bulkEntries = $state<BulkUploadEntry[]>([]);
+  let bulkPanelOpen = $state(false);
+  // AbortController for the in-flight import. Reset for each new run; the
+  // panel's Stop button calls .abort(), which short-circuits the loop in
+  // bulkUploadImageItems / bulkUploadTextItems and marks every remaining
+  // entry as cancelled.
+  let bulkAborter: AbortController | null = null;
+
+  function mapEvent(event: { ok: boolean; reason?: string; filename: string }): BulkUploadEntry {
+    if (event.ok) return { filename: event.filename, status: 'success' };
+    if (event.reason === BULK_ABORTED_REASON) return { filename: event.filename, status: 'cancelled' };
+    return { filename: event.filename, status: 'failed', reason: event.reason };
+  }
+
+  function abortBulk() {
+    bulkAborter?.abort();
+  }
 
   import { user } from '$lib/state/user.svelte';
 
@@ -115,27 +137,35 @@
 
     if (accepted.length === 0 && rejected.length === 0) return;
 
+    // Pre-populate the panel with one row per accepted file (pending) plus
+    // the client-side rejects (already failed). The accepted rows flip in
+    // place to success/failed via onItemDone; rejects show their reason
+    // immediately. Index of the i-th accepted file in `bulkEntries` is
+    // `rejected.length + i`.
+    bulkEntries = [
+      ...rejected.map<BulkUploadEntry>((r) => ({ filename: r.filename, status: 'failed', reason: r.reason })),
+      ...accepted.map<BulkUploadEntry>((f) => ({ filename: f.name, status: 'pending' }))
+    ];
+    bulkPanelOpen = true;
+    bulkAborter = new AbortController();
     uploading = true;
+    const offset = rejected.length;
     const result = await bulkUploadImageItems(
       studio.selectedPackId!,
       accepted,
-      (done, total, name) => {
-        uploadProgress = { name, done, total };
-      }
+      undefined,
+      (event) => {
+        const idx = offset + event.index;
+        const next = bulkEntries.slice();
+        next[idx] = mapEvent(event);
+        bulkEntries = next;
+      },
+      bulkAborter.signal
     );
-    uploadProgress = null;
     uploading = false;
+    bulkAborter = null;
 
     studio.items = [...studio.items, ...result.succeeded];
-    const allFailed = [...rejected, ...result.failed];
-    if (allFailed.length > 0) {
-      // Console-log every failure so a developer or operator looking at
-      // devtools after a botched import can see the full per-file reasons,
-      // not just the summary toast. Useful when the cause is e.g. a SvelteKit
-      // body-size cap or a backend storage outage.
-      console.warn('[bulk import] failures:', allFailed);
-    }
-    summarize(result.succeeded.length, allFailed.length, allFailed[0]?.reason);
   }
 
   async function bulkImportTextJson(file: File) {
@@ -154,53 +184,31 @@
       return;
     }
 
+    bulkEntries = parsed.items.map<BulkUploadEntry>((it) => ({ filename: it.name, status: 'pending' }));
+    bulkPanelOpen = true;
+    bulkAborter = new AbortController();
     uploading = true;
     const result = await bulkUploadTextItems(
       studio.selectedPackId!,
       parsed.items,
-      (done, total, name) => {
-        uploadProgress = { name, done, total };
-      }
+      undefined,
+      (event) => {
+        const next = bulkEntries.slice();
+        next[event.index] = mapEvent(event);
+        bulkEntries = next;
+      },
+      bulkAborter.signal
     );
-    uploadProgress = null;
     uploading = false;
+    bulkAborter = null;
 
     studio.items = [...studio.items, ...result.succeeded];
-    if (result.failed.length > 0) {
-      console.warn('[bulk import] failures:', result.failed);
-    }
-    summarize(result.succeeded.length, result.failed.length, result.failed[0]?.reason);
   }
 
-  // `firstReason` is the reason string from the first failed entry, surfaced
-  // in the toast so a botched import is not just "Import failed" but
-  // "Import failed (83): Content-length of 25165824 exceeds limit of 524288 bytes"
-  // — the kind of detail an operator or maker can act on.
-  function summarize(ok: number, ko: number, firstReason?: string) {
-    if (ok > 0 && ko === 0) {
-      toast.show(
-        ok === 1
-          ? m.studio_toast_items_added_one({ count: ok })
-          : m.studio_toast_items_added_other({ count: ok }),
-        'success'
-      );
-    } else if (ok > 0 && ko > 0) {
-      toast.show(
-        firstReason
-          ? m.studio_toast_items_partial_with_reason({ ok, ko, reason: firstReason })
-          : m.studio_toast_items_partial({ ok, ko }),
-        'warning'
-      );
-    } else if (ko > 0) {
-      toast.show(
-        firstReason
-          ? m.studio_toast_items_all_failed_with_reason({ count: ko, reason: firstReason })
-          : ko === 1
-            ? m.studio_toast_items_all_failed_one({ count: ko })
-            : m.studio_toast_items_all_failed_other({ count: ko }),
-        'error'
-      );
-    }
+  function closeBulkPanel() {
+    if (uploading) return;
+    bulkPanelOpen = false;
+    bulkEntries = [];
   }
 
   function onDropZone(e: DragEvent) {
@@ -300,11 +308,10 @@
       </div>
     {/if}
 
-    {#if uploading && uploadProgress}
-      <div class="px-4 py-2 bg-muted/50 text-xs text-brand-text-muted border-b border-brand-border">
-        {m.studio_items_uploading_progress({ name: uploadProgress.name, done: uploadProgress.done + 1, total: uploadProgress.total })}
-      </div>
-    {/if}
+    <!-- Inline running progress is intentionally absent: the floating
+         BulkUploadProgress panel below handles both the running counter
+         and the final per-file outcome list, so a second indicator here
+         would just be noise. -->
 
     <!-- Item table -->
     {#if studio.items.length === 0}
@@ -376,3 +383,7 @@
     {/if}
   </div>
 </div>
+
+{#if bulkPanelOpen}
+  <BulkUploadProgress entries={bulkEntries} running={uploading} onClose={closeBulkPanel} onAbort={abortBulk} />
+{/if}
