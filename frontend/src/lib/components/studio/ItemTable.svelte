@@ -10,6 +10,7 @@
     parseTextItemsJson,
     validateImageFile,
     listVersions,
+    updatePack,
     BULK_ABORTED_REASON
   } from '$lib/api/studio';
   import { compressImage } from '$lib/api/imageCompress';
@@ -84,6 +85,37 @@
     // by others fall through to false.
     return selectedPack.owner_id === user.id;
   });
+
+  // Pack-metadata edits (rename, language) are gated to the same audience
+  // as item deletion: admin, personal owner, or group admin. The backend
+  // pins language to the stored value for group packs (see packs.go
+  // Update handler), so we hide the picker for group packs entirely
+  // rather than let the user click into a 400.
+  const canEditPackMeta = $derived.by(() => {
+    if (!selectedPack) return false;
+    if (selectedPack.is_system) return false;
+    if (selectedPack.group_id) return false;
+    if (user.role === 'admin') return true;
+    return selectedPack.owner_id === user.id;
+  });
+
+  async function changePackLanguage(e: Event) {
+    if (!selectedPack || !canEditPackMeta) return;
+    const target = e.target as HTMLSelectElement;
+    const next = target.value as 'en' | 'fr' | 'multi';
+    if (next === selectedPack.language) return;
+    const id = selectedPack.id;
+    const previous = selectedPack.language;
+    // Optimistic — flip the local state first so the selector reflects the
+    // new value while the request is in flight, roll back on failure.
+    studio.packs = studio.packs.map((p) => p.id === id ? { ...p, language: next } : p);
+    try {
+      await updatePack(id, { language: next });
+    } catch {
+      studio.packs = studio.packs.map((p) => p.id === id ? { ...p, language: previous } : p);
+      toast.show(m.studio_toast_pack_lang_change_failed(), 'error');
+    }
+  }
 
   function textSnippet(item: GameItem): string {
     const payload = item.payload;
@@ -276,6 +308,29 @@
         </span>
       {/if}
     </h2>
+
+    {#if selectedPack}
+      {#if canEditPackMeta}
+        <select
+          aria-label={m.studio_items_lang_aria()}
+          title={m.studio_items_lang_title()}
+          value={selectedPack.language}
+          onchange={changePackLanguage}
+          class="h-8 rounded-md border border-brand-border bg-brand-white px-2 text-[11px] font-semibold uppercase tracking-wider focus:outline-none focus:ring-1 focus:ring-ring"
+        >
+          <option value="en">{m.host_pack_lang_en()}</option>
+          <option value="fr">{m.host_pack_lang_fr()}</option>
+          <option value="multi">{m.host_pack_lang_multi()}</option>
+        </select>
+      {:else}
+        <span
+          class="text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted border border-brand-border rounded-full px-2 py-1"
+          title={m.studio_items_lang_title()}
+        >
+          {selectedPack.language === 'en' ? m.host_pack_lang_en() : selectedPack.language === 'fr' ? m.host_pack_lang_fr() : m.host_pack_lang_multi()}
+        </span>
+      {/if}
+    {/if}
 
     {#if isSystem}
       <span class="text-[10px] font-semibold uppercase tracking-wider text-brand-text-muted border border-brand-border rounded-full px-2 py-1" title={m.studio_items_readonly_title()}>

@@ -28,7 +28,7 @@ export async function createPack(body: {
 
 export async function updatePack(
   id: string,
-  body: Partial<Pick<Pack, 'name' | 'description' | 'status'>>
+  body: Partial<Pick<Pack, 'name' | 'description' | 'status' | 'language'>>
 ): Promise<Pack> {
   return api.patch<Pack>(`/api/packs/${id}`, body);
 }
