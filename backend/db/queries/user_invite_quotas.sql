@@ -33,3 +33,13 @@ UPDATE user_invite_quotas
 SET used = used + 1, updated_at = now()
 WHERE user_id = $1 AND used < allocated
 RETURNING *;
+
+-- name: ConsumeUserInviteQuotaN :one
+-- Multi-slot variant for multi-use platform+group invites. The mint debits
+-- max_uses slots upfront so the admin cannot mint a 50-use code from a
+-- 1-slot allowance. Same return-no-row contract as the single-slot version
+-- when the requested debit would exceed the user's cap.
+UPDATE user_invite_quotas
+SET used = used + sqlc.arg(amount)::int, updated_at = now()
+WHERE user_id = sqlc.arg(user_id)::uuid AND used + sqlc.arg(amount)::int <= allocated
+RETURNING *;

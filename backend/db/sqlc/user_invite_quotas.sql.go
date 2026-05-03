@@ -35,6 +35,34 @@ func (q *Queries) ConsumeUserInviteQuota(ctx context.Context, userID uuid.UUID) 
 	return i, err
 }
 
+const consumeUserInviteQuotaN = `-- name: ConsumeUserInviteQuotaN :one
+UPDATE user_invite_quotas
+SET used = used + $1::int, updated_at = now()
+WHERE user_id = $2::uuid AND used + $1::int <= allocated
+RETURNING user_id, allocated, used, updated_at
+`
+
+type ConsumeUserInviteQuotaNParams struct {
+	Amount int32     `json:"amount"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+// Multi-slot variant for multi-use platform+group invites. The mint debits
+// max_uses slots upfront so the admin cannot mint a 50-use code from a
+// 1-slot allowance. Same return-no-row contract as the single-slot version
+// when the requested debit would exceed the user's cap.
+func (q *Queries) ConsumeUserInviteQuotaN(ctx context.Context, arg ConsumeUserInviteQuotaNParams) (UserInviteQuota, error) {
+	row := q.db.QueryRow(ctx, consumeUserInviteQuotaN, arg.Amount, arg.UserID)
+	var i UserInviteQuota
+	err := row.Scan(
+		&i.UserID,
+		&i.Allocated,
+		&i.Used,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getUserInviteQuota = `-- name: GetUserInviteQuota :one
 SELECT user_id, allocated, used, updated_at FROM user_invite_quotas WHERE user_id = $1
 `

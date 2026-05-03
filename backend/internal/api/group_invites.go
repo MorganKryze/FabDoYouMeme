@@ -217,22 +217,26 @@ func (h *GroupInviteHandler) MintPlatformPlus(w http.ResponseWriter, r *http.Req
 	}
 	var req mintRequest
 	_ = json.NewDecoder(r.Body).Decode(&req)
-	// Platform+group codes are inherently single-redemption — they create a
-	// fresh account. Reject any caller-supplied max_uses > 1 to avoid the
-	// confusion of "one code, many accounts" semantics.
-	if req.MaxUses > 1 {
-		writeError(w, r, http.StatusBadRequest, "bad_request",
-			"platform+group invites are single-use; omit max_uses or set it to 1")
-		return
-	}
-	req.MaxUses = 1
 	maxUses, expires, restricted, ok := h.resolveMintParams(w, r, req)
 	if !ok {
 		return
 	}
+	// Restricted-email codes only ever produce one account — the email is
+	// unique on users.email, so subsequent redemptions of the same code by
+	// the same address would be silently no-op'd at registration. Reject
+	// the combination at mint time so the admin doesn't quietly burn the
+	// extra quota slots they thought they were allocating.
+	if restricted != nil && maxUses > 1 {
+		writeError(w, r, http.StatusBadRequest, "bad_request",
+			"restricted_email codes are inherently single-use; omit max_uses or set it to 1")
+		return
+	}
 
 	// Quota debit + invite insert in one transaction so a failed insert does
-	// not consume a slot the admin couldn't actually use.
+	// not consume slots the admin couldn't actually use. Multi-use codes
+	// debit max_uses slots upfront — we cannot defer per-redemption because
+	// the redemption flow lives in /auth/register and must be cheap on the
+	// hot path.
 	tx, err := h.pool.Begin(r.Context())
 	if err != nil {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to start transaction")
@@ -241,10 +245,13 @@ func (h *GroupInviteHandler) MintPlatformPlus(w http.ResponseWriter, r *http.Req
 	defer tx.Rollback(r.Context()) //nolint:errcheck
 	qtx := h.db.WithTx(tx)
 
-	if _, err := qtx.ConsumeUserInviteQuota(r.Context(), actorID); err != nil {
+	if _, err := qtx.ConsumeUserInviteQuotaN(r.Context(), db.ConsumeUserInviteQuotaNParams{
+		UserID: actorID,
+		Amount: maxUses,
+	}); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeError(w, r, http.StatusConflict, "platform_plus_quota_exhausted",
-				"You have no remaining platform-registration invite slots. Ask the platform admin to allocate more.")
+				"You do not have enough remaining platform-registration invite slots for this many uses. Ask the platform admin to allocate more.")
 			return
 		}
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Failed to consume invite quota")

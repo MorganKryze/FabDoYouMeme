@@ -42,7 +42,7 @@
     busy = 'mint';
     try {
       const body = {
-        max_uses: kind === 'platform_plus_group' ? 1 : Math.max(1, maxUses),
+        max_uses: Math.max(1, maxUses),
         ttl_seconds: Math.max(60, Math.round(ttlDays * 86400)),
         restricted_email: restrictedEmail.trim() || undefined
       };
@@ -160,20 +160,22 @@
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {#if kind === 'group_join'}
-          <label class="flex flex-col gap-1">
-            <span class="text-[0.6rem] font-bold uppercase tracking-[0.15em] text-brand-text-muted">
-              {m.groups_invite_max_uses_label()}
-            </span>
-            <input
-              type="number"
-              bind:value={maxUses}
-              min={1}
-              max={1000}
-              class="h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors"
-            />
-          </label>
-        {/if}
+        <label class="flex flex-col gap-1">
+          <span class="text-[0.6rem] font-bold uppercase tracking-[0.15em] text-brand-text-muted">
+            {m.groups_invite_max_uses_label()}
+          </span>
+          <input
+            type="number"
+            bind:value={maxUses}
+            min={1}
+            max={1000}
+            disabled={Boolean(restrictedEmail.trim())}
+            class="h-11 rounded-full border-[2.5px] border-brand-border-heavy bg-brand-white px-4 text-sm font-semibold focus:outline-none focus:border-brand-text transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          />
+          {#if kind === 'platform_plus_group'}
+            <span class="text-xs text-brand-text-muted">{m.groups_invite_max_uses_hint_platform_plus()}</span>
+          {/if}
+        </label>
         <label class="flex flex-col gap-1">
           <span class="text-[0.6rem] font-bold uppercase tracking-[0.15em] text-brand-text-muted">
             {m.groups_invite_ttl_label()}

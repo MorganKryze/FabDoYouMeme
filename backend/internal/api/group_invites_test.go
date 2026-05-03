@@ -316,21 +316,81 @@ func TestMintPlatformPlus_WithQuotaSucceeds(t *testing.T) {
 	}
 }
 
-func TestMintPlatformPlus_MaxUsesGreaterThanOneRejected(t *testing.T) {
+// TestMintPlatformPlus_MultiUseDebitsNSlots: max_uses N debits N quota slots
+// upfront so the admin cannot mint a 50-use code from a 1-slot allowance.
+func TestMintPlatformPlus_MultiUseDebitsNSlots(t *testing.T) {
 	h, q := newGroupInviteHandler(t)
-	a, g := seedGroupWithAdmin(t, q, "mpp_mu")
+	a, g := seedGroupWithAdmin(t, q, "mpp_mu_multi")
 	if _, err := q.UpsertUserInviteQuota(context.Background(), db.UpsertUserInviteQuotaParams{
 		UserID: a.ID, Allocated: 5,
 	}); err != nil {
 		t.Fatalf("seed quota: %v", err)
 	}
-	body, _ := json.Marshal(map[string]any{"max_uses": 2})
+	body, _ := json.Marshal(map[string]any{"max_uses": 3})
+	applyCtx := newChiCtx("id", g.ID.String())
+	req := applyCtx(httptest.NewRequest(http.MethodPost, "/api/groups/"+g.ID.String()+"/invites/platform_plus", bytes.NewBuffer(body)))
+	req = withUser(req, a.ID.String(), a.Username, a.Email, a.Role)
+	rec := httptest.NewRecorder()
+	h.MintPlatformPlus(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("want 201, got %d — body: %s", rec.Code, rec.Body.String())
+	}
+	row, err := q.GetUserInviteQuota(context.Background(), a.ID)
+	if err != nil {
+		t.Fatalf("read quota: %v", err)
+	}
+	if row.Used != 3 {
+		t.Fatalf("want used=3 after multi-use mint, got %d", row.Used)
+	}
+}
+
+// TestMintPlatformPlus_MultiUseExceedsQuotaRejected: requested max_uses
+// beyond remaining quota → 409, no debit, no row inserted.
+func TestMintPlatformPlus_MultiUseExceedsQuotaRejected(t *testing.T) {
+	h, q := newGroupInviteHandler(t)
+	a, g := seedGroupWithAdmin(t, q, "mpp_mu_over")
+	if _, err := q.UpsertUserInviteQuota(context.Background(), db.UpsertUserInviteQuotaParams{
+		UserID: a.ID, Allocated: 2,
+	}); err != nil {
+		t.Fatalf("seed quota: %v", err)
+	}
+	body, _ := json.Marshal(map[string]any{"max_uses": 5})
+	applyCtx := newChiCtx("id", g.ID.String())
+	req := applyCtx(httptest.NewRequest(http.MethodPost, "/api/groups/"+g.ID.String()+"/invites/platform_plus", bytes.NewBuffer(body)))
+	req = withUser(req, a.ID.String(), a.Username, a.Email, a.Role)
+	rec := httptest.NewRecorder()
+	h.MintPlatformPlus(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("want 409, got %d — body: %s", rec.Code, rec.Body.String())
+	}
+	row, err := q.GetUserInviteQuota(context.Background(), a.ID)
+	if err != nil {
+		t.Fatalf("read quota: %v", err)
+	}
+	if row.Used != 0 {
+		t.Fatalf("want quota untouched (used=0), got %d", row.Used)
+	}
+}
+
+// TestMintPlatformPlus_RestrictedEmailMultiUseRejected: a code locked to one
+// email can only ever produce one account, so accepting max_uses>1 alongside
+// restricted_email would silently burn quota for redemptions that can never
+// succeed (the email is unique on users.email).
+func TestMintPlatformPlus_RestrictedEmailMultiUseRejected(t *testing.T) {
+	h, q := newGroupInviteHandler(t)
+	a, g := seedGroupWithAdmin(t, q, "mpp_re_multi")
+	if _, err := q.UpsertUserInviteQuota(context.Background(), db.UpsertUserInviteQuotaParams{
+		UserID: a.ID, Allocated: 5,
+	}); err != nil {
+		t.Fatalf("seed quota: %v", err)
+	}
+	body, _ := json.Marshal(map[string]any{"max_uses": 2, "restricted_email": "x@y.test"})
 	applyCtx := newChiCtx("id", g.ID.String())
 	req := applyCtx(httptest.NewRequest(http.MethodPost, "/api/groups/"+g.ID.String()+"/invites/platform_plus", bytes.NewBuffer(body)))
 	req = withUser(req, a.ID.String(), a.Username, a.Email, a.Role)
 	rec := httptest.NewRecorder()
 	h.MintPlatformPlus(rec, req)
 	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("want 400, got %d", rec.Code)
+		t.Fatalf("want 400, got %d — body: %s", rec.Code, rec.Body.String())
 	}
 }
