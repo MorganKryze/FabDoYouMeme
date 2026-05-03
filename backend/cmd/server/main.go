@@ -78,6 +78,19 @@ func main() {
 		logger.Info("startup cleanup", "event", "room.abandoned",
 			"count", result.RowsAffected())
 	}
+	// Defence-in-depth for the bulk-upload pipeline: sweep items whose
+	// version chain never completed (created over an hour ago, no
+	// current_version_id, not soft-deleted). The bulk endpoint now wraps
+	// create+upload+version+promote in a single transaction so new orphans
+	// are impossible, but historical rows from the pre-bulk per-image flow
+	// would otherwise render forever as broken thumbnails. Idempotent — once
+	// every row is healed the query is a zero-cost no-op.
+	if result, err := queries.SweepOrphanItems(context.Background()); err != nil {
+		logger.Error("startup: sweep orphan items", "error", err)
+	} else {
+		logger.Info("startup cleanup", "event", "items.orphan_sweep",
+			"count", result.RowsAffected())
+	}
 
 	// ── Email ────────────────────────────────────────────────────────────────
 	emailSvc, err := email.NewService(cfg)
@@ -306,6 +319,17 @@ func main() {
 		// Items
 		r.Get("/{id}/items", packHandler.ListItems)
 		r.Post("/{id}/items", packHandler.CreateItem)
+		// Bulk image import — collapses what used to be 4 round-trips per
+		// file into one request, so an 83-image batch costs one upload-rate
+		// token instead of 332 global-rate tokens. See items_bulk.go for
+		// the per-file transactional pipeline.
+		r.With(uploadLimiter.PerUserMiddleware).Post("/{id}/items/bulk", packHandler.BulkCreateImageItems)
+		// Bulk text import — same pattern as the image bulk endpoint, used
+		// by the studio JSON-import flow. Three round-trips per item used
+		// to be 393 requests for a 131-item file; this endpoint folds them
+		// into one. Shares the upload limiter — text imports are still
+		// "uploads" of user content, just without an S3 step.
+		r.With(uploadLimiter.PerUserMiddleware).Post("/{id}/items/bulk-text", packHandler.BulkCreateTextItems)
 		r.Patch("/{id}/items/reorder", packHandler.ReorderItems)
 		r.Patch("/{id}/items/{item_id}", packHandler.UpdateItem)
 		r.Delete("/{id}/items/{item_id}", packHandler.DeleteItem)

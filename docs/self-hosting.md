@@ -173,7 +173,7 @@ All rate limits are enforced in-memory per backend process. This is correct for 
 
 | Variable                | Required | Default   | Description                        |
 | ----------------------- | -------- | --------- | ---------------------------------- |
-| `MAX_UPLOAD_SIZE_BYTES` | no       | `2097152` | Maximum upload size (default 2 MB) |
+| `MAX_UPLOAD_SIZE_BYTES` | no       | `10485760` | Maximum upload size (default 10 MiB). Must match the frontend's client-side validator — see `frontend/src/lib/api/studio.ts`. |
 
 ### Logging
 

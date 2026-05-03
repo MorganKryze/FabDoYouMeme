@@ -157,7 +157,13 @@ func Load() (*Config, error) {
 	if cfg.WSReadLimitBytes, err = getEnvInt64("WS_READ_LIMIT_BYTES", 4096); err != nil {
 		return nil, fmt.Errorf("WS_READ_LIMIT_BYTES: %w", err)
 	}
-	if cfg.MaxUploadSizeBytes, err = getEnvInt64("MAX_UPLOAD_SIZE_BYTES", 2097152); err != nil {
+	// Default 10 MiB matches the client-side validator in
+	// frontend/src/lib/api/studio.ts (MAX_FILE_SIZE). Pre-fix the server
+	// default was 2 MiB while the client allowed 10 MiB, so any image
+	// between 2 and 10 MiB silently 413'd mid-upload and left an orphan
+	// item row. Operators that want to tighten the cap still can via the
+	// env var; the only requirement is that client and server agree.
+	if cfg.MaxUploadSizeBytes, err = getEnvInt64("MAX_UPLOAD_SIZE_BYTES", 10*1024*1024); err != nil {
 		return nil, fmt.Errorf("MAX_UPLOAD_SIZE_BYTES: %w", err)
 	}
 	if cfg.RateLimitAuthRPM, err = getEnvInt("RATE_LIMIT_AUTH_RPM", 10); err != nil {

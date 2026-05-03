@@ -69,8 +69,10 @@ Requires session (read); owner or admin (write).
 | `GET`    | `/api/packs/:id`                                      | Get pack details                                |
 | `PATCH`  | `/api/packs/:id`                                      | Update name, description, visibility, or `language` (`en`\|`fr`)        |
 | `DELETE` | `/api/packs/:id`                                      | Soft-delete a pack                              |
-| `GET`    | `/api/packs/:id/items`                                | List items in a pack                            |
+| `GET`    | `/api/packs/:id/items`                                | List items in a pack — paginated; clients should follow `next_cursor` until empty |
 | `POST`   | `/api/packs/:id/items`                                | Add an item                                     |
+| `POST`   | `/api/packs/:id/items/bulk`                           | Bulk-create image items in one transactional pass per file (multipart `file` repeated up to 25× per request, optional matching `name` fields). Returns `{ results: [{ ok, filename, item?, reason?, code? }, …] }`. Per-file failures are reported in the body; the request itself returns 200 unless authz/parsing failed. |
+| `POST`   | `/api/packs/:id/items/bulk-text`                      | Bulk-create text items (payload_version 2) in one transactional pass per row. Body: `{ "items": [{ "name": "...", "text": "..." }, …] }`, capped at 100 items per request. Returns the same `{ results: [...] }` shape as `/items/bulk`. |
 | `PATCH`  | `/api/packs/:id/items/:item_id`                       | Edit item metadata or payload                   |
 | `DELETE` | `/api/packs/:id/items/:item_id`                       | Remove an item                                  |
 | `PATCH`  | `/api/packs/:id/items/reorder`                        | Bulk reorder — full position map required       |

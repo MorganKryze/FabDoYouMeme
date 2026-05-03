@@ -39,11 +39,26 @@ export async function deletePack(id: string): Promise<void> {
 
 // ── Items ─────────────────────────────────────────────────────────────────
 
+// Walks the cursor until the server signals "no more pages". The backend
+// caps a single page at 100 rows (parsePagination in backend/internal/api/
+// packs.go) and used to silently truncate the studio view to the default
+// page size; this loop ensures packs with hundreds of items render in full.
+// The hard cap of 50 iterations defends against a runaway server that
+// keeps returning a non-empty cursor — at 100 rows per page that's 5,000
+// items, far above any realistic pack size.
 export async function listItems(packId: string): Promise<GameItem[]> {
-  const body = await api.get<{ data: GameItem[] }>(
-    `/api/packs/${packId}/items`
-  );
-  return body.data ?? [];
+  const all: GameItem[] = [];
+  let cursor: string | null = null;
+  for (let i = 0; i < 50; i++) {
+    const qs: string = `?limit=100${cursor ? `&after=${encodeURIComponent(cursor)}` : ''}`;
+    const body: { data: GameItem[]; next_cursor?: string | null } = await api.get(
+      `/api/packs/${packId}/items${qs}`
+    );
+    if (body.data?.length) all.push(...body.data);
+    cursor = body.next_cursor ?? null;
+    if (!cursor) return all;
+  }
+  return all;
 }
 
 export async function createItem(
@@ -344,22 +359,103 @@ export async function uploadPromptItem(
   }
 }
 
+// Must match the backend MaxBulkUploadFiles cap in
+// backend/internal/api/items_bulk.go. The server rejects requests above this
+// with 413 too_many_files; the chunker keeps each request inside the cap.
+const BULK_UPLOAD_CHUNK_SIZE = 25;
+
+// Server response shape from POST /api/packs/{id}/items/bulk.
+interface BulkServerResult {
+  ok: boolean;
+  filename: string;
+  item?: GameItem;
+  reason?: string;
+  code?: string;
+}
+
+// uploadOneBulkChunk POSTs N files in a single multipart request, with a
+// bounded exponential-backoff retry on 429 responses so a transient
+// rate-limit hit doesn't lose the whole batch. The endpoint is idempotent
+// per file (each file lives in its own DB transaction), so a retried
+// request that previously partially succeeded would create duplicates —
+// we therefore only retry when the *whole* request was rejected (429 from
+// the rate limiter, before per-file processing began).
+async function uploadOneBulkChunk(
+  packId: string,
+  files: File[]
+): Promise<{ results: BulkServerResult[] } | { error: string }> {
+  const form = new FormData();
+  for (const f of files) {
+    form.append('file', f, f.name);
+    form.append('name', f.name.replace(/\.[^.]+$/, ''));
+  }
+
+  // Backoff: 1s, 2s, 4s — well under the per-user upload bucket refill
+  // window. 4 attempts max so a chronically-throttled user fails fast.
+  const delays = [1000, 2000, 4000];
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(`/api/packs/${packId}/items/bulk`, {
+        method: 'POST',
+        credentials: 'include',
+        body: form
+      });
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+    if (res.status === 429 && attempt < delays.length) {
+      await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+      continue;
+    }
+    if (!res.ok) {
+      let message = res.statusText;
+      try {
+        const body = await res.json();
+        message = body.error ?? message;
+      } catch {}
+      return { error: message };
+    }
+    return (await res.json()) as { results: BulkServerResult[] };
+  }
+  return { error: 'rate limited (429) — retried 4 times' };
+}
+
+// bulkUploadImageItems chunks an arbitrarily large set of files into
+// MaxBulkUploadFiles-sized batches and uploads each batch in a single
+// HTTP request. Pre-fix this function ran four sequential round-trips per
+// file; for an 83-image batch that meant 332 requests, which saturated
+// the per-user global rate limiter (default 100/min) within seconds and
+// silently dropped the rest. The bulk endpoint collapses each file to one
+// rate-limit token, so a 4-chunk batch costs four tokens total.
+//
+// onProgress is called once per completed chunk with the total number of
+// files attempted so far — matching the legacy progress-bar contract that
+// callers wired against (done/total counts, last-touched filename).
 export async function bulkUploadImageItems(
   packId: string,
   files: File[],
   onProgress?: (done: number, total: number, currentName: string) => void
 ): Promise<BulkUploadOutcome> {
   const outcome: BulkUploadOutcome = { succeeded: [], failed: [] };
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    onProgress?.(i, files.length, file.name);
-    const result = await uploadImageItem(
-      packId,
-      file.name.replace(/\.[^.]+$/, ''),
-      file
-    );
-    if (result.ok) outcome.succeeded.push(result.item);
-    else outcome.failed.push({ filename: result.filename, reason: result.error });
+  for (let i = 0; i < files.length; i += BULK_UPLOAD_CHUNK_SIZE) {
+    const chunk = files.slice(i, i + BULK_UPLOAD_CHUNK_SIZE);
+    onProgress?.(i, files.length, chunk[0]?.name ?? '');
+    const res = await uploadOneBulkChunk(packId, chunk);
+    if ('error' in res) {
+      // Whole-chunk failure (auth, network, rate-limit exhaustion, parse
+      // error). Mark every file in the chunk as failed with the same
+      // reason so the caller's summary toast reflects reality.
+      for (const f of chunk) {
+        outcome.failed.push({ filename: f.name, reason: res.error });
+      }
+      continue;
+    }
+    for (const r of res.results) {
+      if (r.ok && r.item) outcome.succeeded.push(r.item);
+      else outcome.failed.push({ filename: r.filename, reason: r.reason ?? r.code ?? 'upload failed' });
+    }
+    onProgress?.(Math.min(i + chunk.length, files.length), files.length, chunk[chunk.length - 1]?.name ?? '');
   }
   return outcome;
 }
@@ -406,18 +502,86 @@ export function parseTextItemsJson(raw: string): ParsedTextItems {
   return { ok: true, items };
 }
 
+// Must match the backend MaxBulkTextItems cap in
+// backend/internal/api/items_bulk_text.go. The server rejects requests above
+// this with 413 too_many_items; the chunker keeps each request inside the cap.
+const BULK_TEXT_CHUNK_SIZE = 100;
+
+interface BulkTextServerResult {
+  ok: boolean;
+  filename: string; // server reuses the bulk shape — for text items this is the row name
+  item?: GameItem;
+  reason?: string;
+  code?: string;
+}
+
+// uploadOneTextChunk POSTs a JSON array of {name, text} rows in one request,
+// with bounded exponential-backoff retry on 429 — mirroring the image-bulk
+// chunk uploader. The endpoint is per-item-transactional, so a partial
+// per-item failure cannot leak orphan rows; retries therefore only fire
+// when the whole request was rate-limited before any work began.
+async function uploadOneTextChunk(
+  packId: string,
+  items: ParsedTextItem[]
+): Promise<{ results: BulkTextServerResult[] } | { error: string }> {
+  const delays = [1000, 2000, 4000];
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(`/api/packs/${packId}/items/bulk-text`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items })
+      });
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+    if (res.status === 429 && attempt < delays.length) {
+      await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+      continue;
+    }
+    if (!res.ok) {
+      let message = res.statusText;
+      try {
+        const body = await res.json();
+        message = body.error ?? message;
+      } catch {}
+      return { error: message };
+    }
+    return (await res.json()) as { results: BulkTextServerResult[] };
+  }
+  return { error: 'rate limited (429) — retried 4 times' };
+}
+
+// bulkUploadTextItems chunks an arbitrarily large parsed JSON list into
+// MaxBulkTextItems-sized batches and uploads each batch in a single HTTP
+// request. Pre-fix this function ran three sequential round-trips per item;
+// for a 131-item bulk import that meant 393 requests, which saturated the
+// per-user global rate limiter (default 100/min) within seconds and
+// silently dropped the rest. The bulk-text endpoint collapses each item to
+// one rate-limit token, so a 2-chunk batch costs two tokens total.
 export async function bulkUploadTextItems(
   packId: string,
   items: ParsedTextItem[],
   onProgress?: (done: number, total: number, currentName: string) => void
 ): Promise<BulkUploadOutcome> {
   const outcome: BulkUploadOutcome = { succeeded: [], failed: [] };
-  for (let i = 0; i < items.length; i++) {
-    const it = items[i];
-    onProgress?.(i, items.length, it.name);
-    const result = await uploadTextItem(packId, it.name, it.text);
-    if (result.ok) outcome.succeeded.push(result.item);
-    else outcome.failed.push({ filename: result.filename, reason: result.error });
+  for (let i = 0; i < items.length; i += BULK_TEXT_CHUNK_SIZE) {
+    const chunk = items.slice(i, i + BULK_TEXT_CHUNK_SIZE);
+    onProgress?.(i, items.length, chunk[0]?.name ?? '');
+    const res = await uploadOneTextChunk(packId, chunk);
+    if ('error' in res) {
+      for (const it of chunk) {
+        outcome.failed.push({ filename: it.name, reason: res.error });
+      }
+      continue;
+    }
+    for (const r of res.results) {
+      if (r.ok && r.item) outcome.succeeded.push(r.item);
+      else outcome.failed.push({ filename: r.filename, reason: r.reason ?? r.code ?? 'import failed' });
+    }
+    onProgress?.(Math.min(i + chunk.length, items.length), items.length, chunk[chunk.length - 1]?.name ?? '');
   }
   return outcome;
 }

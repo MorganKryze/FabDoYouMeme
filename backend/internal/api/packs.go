@@ -25,6 +25,7 @@ import (
 // PackHandler handles all /api/packs/* routes.
 type PackHandler struct {
 	db       *db.Queries
+	pool     *pgxpool.Pool
 	cfg      *config.Config
 	storage  storage.Storage
 	registry *game.Registry
@@ -35,7 +36,7 @@ type PackHandler struct {
 // List handler degrades to its unfiltered behaviour when the registry is nil
 // or the requested game type isn't registered.
 func NewPackHandler(pool *pgxpool.Pool, cfg *config.Config, store storage.Storage, registry *game.Registry) *PackHandler {
-	return &PackHandler{db: db.New(pool), cfg: cfg, storage: store, registry: registry}
+	return &PackHandler{db: db.New(pool), pool: pool, cfg: cfg, storage: store, registry: registry}
 }
 
 // ensureNotSystem writes a 403 system_pack_readonly response and returns false

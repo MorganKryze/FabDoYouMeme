@@ -9,7 +9,17 @@ RETURNING *;
 SELECT * FROM game_items WHERE id = $1;
 
 -- name: ListItemsForPack :many
-SELECT gi.*, giv.media_key, giv.payload, giv.version_number
+-- COALESCE on `payload` is what makes sqlc emit json.RawMessage instead of
+-- []byte for this column. With the bare LEFT JOIN sqlc treats `giv.payload`
+-- as nullable and falls back from the jsonb→RawMessage override declared in
+-- sqlc.yaml, which silently base64-encoded the payload field in the JSON
+-- response and broke the studio's text-snippet rendering for every text
+-- item. The fallback to '{}' has no semantic effect — items without a
+-- current version (orphans) carry an empty payload either way.
+SELECT gi.*,
+       giv.media_key,
+       COALESCE(giv.payload, '{}'::jsonb)::jsonb AS payload,
+       giv.version_number
 FROM game_items gi
 LEFT JOIN game_item_versions giv ON gi.current_version_id = giv.id
 WHERE gi.pack_id = $1 AND gi.deleted_at IS NULL
@@ -18,6 +28,21 @@ LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 
 -- name: SoftDeleteItem :exec
 UPDATE game_items SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL;
+
+-- name: SweepOrphanItems :execresult
+-- Hard-delete items that never reached a confirmed version. The pre-bulk
+-- upload pipeline could leave such rows behind when a mid-chain step (S3
+-- upload, version insert, promote) failed and the client-side cleanup DELETE
+-- was itself rate-limited. The bulk endpoint now wraps the chain in a
+-- transaction so new orphans are impossible, but a startup sweep is the
+-- defence-in-depth that cleans historical rows. The 1-hour grace window
+-- keeps in-flight uploads safe from being eaten between the CreateItem call
+-- and the SetCurrentVersion call (worst case a few seconds, even on a slow
+-- network).
+DELETE FROM game_items
+WHERE current_version_id IS NULL
+  AND deleted_at IS NULL
+  AND created_at < now() - interval '1 hour';
 
 -- name: SetCurrentVersion :one
 UPDATE game_items SET current_version_id = $2 WHERE id = $1 RETURNING *;

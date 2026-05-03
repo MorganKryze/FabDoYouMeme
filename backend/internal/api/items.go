@@ -67,7 +67,14 @@ func (h *PackHandler) ListItems(w http.ResponseWriter, r *http.Request) {
 		}
 		enriched = append(enriched, ei)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"data": enriched})
+	// next_cursor is non-empty when the page was full — the client follows
+	// it to fetch the next page. Without this the studio used to render at
+	// most the default page size (50) even on packs with hundreds of items;
+	// the client now loops until next_cursor is empty.
+	writeJSON(w, http.StatusOK, map[string]any{
+		"data":        enriched,
+		"next_cursor": nextCursor(len(items), limit, offset),
+	})
 }
 
 // CreateItem handles POST /api/packs/{id}/items.
