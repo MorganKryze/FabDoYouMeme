@@ -5,7 +5,7 @@
   import { toast } from '$lib/state/toast.svelte';
   import { reveal } from '$lib/actions/reveal';
   import { hoverEffect } from '$lib/actions/hoverEffect';
-  import { Search, Shield, UserX, Gamepad2, Clock } from '$lib/icons';
+  import { Search, Shield, UserX, Mail, Gamepad2, Clock } from '$lib/icons';
   import type { ActionData, PageData } from './$types';
   import * as m from '$lib/paraglide/messages';
 
@@ -16,6 +16,7 @@
   let searchTerm = $state(untrack(() => data.q ?? ''));
   let searchTimeout: ReturnType<typeof setTimeout>;
   let confirmDeleteId = $state<string | null>(null);
+  let confirmSendLinkId = $state<string | null>(null);
 
   // `use:enhance` updates the `form` prop several times per submission
   // (pending → result → post-invalidate refetch), each update firing the
@@ -56,7 +57,14 @@
     lastForm = form;
     if (form?.error) toast.show(form.error, 'error');
     if (form?.success) toast.show(m.admin_users_toast_updated(), 'success');
-    if (form?.deleted) toast.show(m.admin_users_toast_deleted(), 'success');
+    if (form?.deleted) {
+      toast.show(m.admin_users_toast_deleted(), 'success');
+      confirmDeleteId = null;
+    }
+    if (form?.link_sent) {
+      toast.show(m.admin_users_toast_link_sent(), 'success');
+      confirmSendLinkId = null;
+    }
   });
 </script>
 
@@ -190,30 +198,48 @@
               {formatRelative(u.last_login_at)}
             </td>
             <td class="px-4 py-3 text-right">
-              {#if u.is_protected}
-                <!-- Delete intentionally absent for protected rows; the Shield
-                     next to the username already signals the locked state. -->
-              {:else if confirmDeleteId === u.id}
-                <div class="flex gap-1 justify-end">
+              <div class="flex gap-1 justify-end items-center">
+                {#if confirmSendLinkId === u.id}
+                  <form method="POST" action="?/sendMagicLink" use:enhance>
+                    <input type="hidden" name="user_id" value={u.id} />
+                    <button type="submit" class="text-xs text-brand-text underline hover:text-brand-text">
+                      {m.admin_users_send_link_confirm()}
+                    </button>
+                  </form>
+                  <button type="button" onclick={() => (confirmSendLinkId = null)}
+                    class="text-xs text-brand-text-muted underline">
+                    {m.admin_users_cancel()}
+                  </button>
+                {:else if confirmDeleteId === u.id}
                   <form method="POST" action="?/deleteUser" use:enhance>
                     <input type="hidden" name="user_id" value={u.id} />
                     <button type="submit" class="text-xs text-red-600 underline hover:text-red-800">
                       {m.admin_users_confirm_delete()}
                     </button>
                   </form>
-                  <button type="button" onclick={() => confirmDeleteId = null}
+                  <button type="button" onclick={() => (confirmDeleteId = null)}
                     class="text-xs text-brand-text-muted underline">
                     {m.admin_users_cancel()}
                   </button>
-                </div>
-              {:else}
-                <button type="button" onclick={() => confirmDeleteId = u.id}
-                  use:hoverEffect={'swap'}
-                  class="text-brand-text-muted hover:text-red-600 transition-colors inline-flex items-center p-1 rounded-full"
-                  aria-label={m.admin_users_delete_aria()}>
-                  <UserX size={16} strokeWidth={2.5} />
-                </button>
-              {/if}
+                {:else}
+                  <button type="button"
+                    onclick={() => { confirmDeleteId = null; confirmSendLinkId = u.id; }}
+                    use:hoverEffect={'swap'}
+                    class="text-brand-text-muted hover:text-brand-text transition-colors inline-flex items-center p-1 rounded-full"
+                    aria-label={m.admin_users_send_link_aria()}>
+                    <Mail size={16} strokeWidth={2.5} />
+                  </button>
+                  {#if !u.is_protected}
+                    <button type="button"
+                      onclick={() => { confirmSendLinkId = null; confirmDeleteId = u.id; }}
+                      use:hoverEffect={'swap'}
+                      class="text-brand-text-muted hover:text-red-600 transition-colors inline-flex items-center p-1 rounded-full"
+                      aria-label={m.admin_users_delete_aria()}>
+                      <UserX size={16} strokeWidth={2.5} />
+                    </button>
+                  {/if}
+                {/if}
+              </div>
             </td>
           </tr>
         {/each}

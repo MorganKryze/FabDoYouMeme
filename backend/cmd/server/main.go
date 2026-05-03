@@ -283,6 +283,7 @@ func main() {
 		r.Get("/users", adminHTTPHandler.ListUsers)
 		r.Patch("/users/{id}", adminHTTPHandler.UpdateUser)
 		r.Delete("/users/{id}", authHandler.DeleteUser)
+		r.Post("/users/{id}/magic-link", authHandler.SendMagicLink)
 		r.Get("/invites", adminHTTPHandler.ListInvites)
 		r.Post("/invites", adminHTTPHandler.CreateInvite)
 		r.Delete("/invites/{id}", adminHTTPHandler.DeleteInvite)

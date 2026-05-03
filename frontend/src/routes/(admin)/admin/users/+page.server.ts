@@ -74,5 +74,35 @@ export const actions: Actions = {
     const res = await fetch(`/api/admin/users/${userId}`, { method: 'DELETE' });
     if (!res.ok) return fail(res.status, { error: 'Failed to delete user.' });
     return { deleted: userId };
+  },
+
+  sendMagicLink: async ({ request, fetch }) => {
+    const data = await request.formData();
+    const userId = data.get('user_id') as string;
+
+    const res = await fetch(`/api/admin/users/${userId}/magic-link`, {
+      method: 'POST'
+    });
+
+    if (res.status === 204) {
+      return { link_sent: userId };
+    }
+
+    let code = 'error';
+    let retryAfter = 0;
+    try {
+      const b = await res.json();
+      code = b.code ?? code;
+      if (typeof b.retry_after === 'number') retryAfter = b.retry_after;
+    } catch {
+      /**/
+    }
+
+    let error = 'Failed to send magic link.';
+    if (code === 'cooldown_active') error = `Please wait ${retryAfter}s before resending.`;
+    else if (code === 'user_inactive') error = 'Cannot send to a deactivated account.';
+    else if (code === 'user_not_found') error = 'User not found.';
+
+    return fail(res.status, { error });
   }
 };
