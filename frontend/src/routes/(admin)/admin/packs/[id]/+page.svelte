@@ -98,11 +98,7 @@
         bulkEntries = next;
       },
       bulkAborter.signal,
-      async (file) => {
-        const compressed = await compressImage(file, { maxBytes: 256 * 1024, maxDimension: 1920 });
-        console.debug(`[bulk import] ${file.name}: ${file.size} → ${compressed.size} bytes`);
-        return compressed;
-      }
+      (file) => compressImage(file, { maxBytes: 256 * 1024, maxDimension: 1920 })
     );
     uploading = false;
     bulkAborter = null;

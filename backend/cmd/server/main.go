@@ -210,6 +210,21 @@ func main() {
 	r.Use(mw.Logger(logger))
 	r.Use(mw.Session(authHandler.SessionLookupFn, logger))
 	r.Use(mw.Metrics)
+
+	// /api/assets/media is mounted BEFORE globalLimiter so it bypasses the
+	// per-user request budget. Reason: every studio / room page fans out
+	// 1 GET per visible item (80+ thumbnails on a fully-loaded pack), all
+	// in parallel from the browser, against a default budget of 100/min.
+	// The render quickly exhausts the burst and the leftover thumbnails
+	// 429, leaving broken-image rows scattered through the grid — exactly
+	// the "some thumbnails work, some don't" symptom that triggered this
+	// whole investigation. The endpoint is cheap (one authz query + one
+	// S3 GET), idempotent, browser-cached for 1h via Cache-Control, and
+	// already runs its own per-fetch authorization (CanUserDownloadMedia /
+	// CanGuestDownloadMedia inside the handler), so a per-user request
+	// cap adds no defensive value here.
+	r.Get("/api/assets/media", assetHandler.GetMedia)
+
 	// PerUserMiddleware (not Middleware) so authenticated traffic is keyed
 	// by user ID. Behind the prod reverse-proxy → SvelteKit → backend
 	// topology, every SSR-side fetch (proxyToBackend, hydrateSession,
@@ -347,14 +362,15 @@ func main() {
 	})
 
 	// Assets
+	//
+	// GET /media is mounted at the router root above (before globalLimiter)
+	// because the studio fans out one fetch per thumbnail and a fully-
+	// loaded pack would otherwise exhaust the per-user burst. Authz lives
+	// in the handler itself (CanUserDownloadMedia / CanGuestDownloadMedia)
+	// so there is no security regression from the limiter bypass. The
+	// remaining /api/assets/* routes are auth-gated mutations (uploads,
+	// presigned URLs) and stay inside the limited group below.
 	r.Route("/api/assets", func(r chi.Router) {
-		// GET /media is intentionally *not* gated by RequireAuth. The handler
-		// resolves identity itself (session cookie OR ?guest_token=) so that
-		// in-game <img> tags work for guests — who have no session — while
-		// still enforcing the per-identity authz predicate. See
-		// AssetHandler.GetMedia for the rule set.
-		r.Get("/media", assetHandler.GetMedia)
-
 		r.Group(func(r chi.Router) {
 			r.Use(mw.RequireAuth)
 			// Per-user keying: SSR-side asset uploads originate from the
