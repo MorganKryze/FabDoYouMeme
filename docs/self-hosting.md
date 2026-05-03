@@ -174,7 +174,9 @@ All rate limits are enforced in-memory per backend process. This is correct for 
 | Variable                | Required | Default   | Description                        |
 | ----------------------- | -------- | --------- | ---------------------------------- |
 | `MAX_UPLOAD_SIZE_BYTES` | no       | `10485760` | Maximum upload size (default 10 MiB). Must match the frontend's client-side validator — see `frontend/src/lib/api/studio.ts`. |
-| `BODY_SIZE_LIMIT`       | no       | `268435456` | Frontend (SvelteKit adapter-node) request-body cap. Default sizes a 25-file bulk image batch at `MAX_UPLOAD_SIZE_BYTES=10 MiB`. Without this override, adapter-node's stock 512 KiB cap silently rejects every image >512 KiB at the SvelteKit hop and the studio toast just reads "Import failed". |
+| `BODY_SIZE_LIMIT`       | no       | `268435456` | Frontend (SvelteKit adapter-node) request-body cap. Sized at 256 MiB (well above the per-request maximum any path produces) so a single oversized image is rejected by `MAX_UPLOAD_SIZE_BYTES` rather than silently 413'd at the SvelteKit hop. Without this override, adapter-node's stock 512 KiB cap rejects every image >512 KiB and the studio toast just reads "Import failed". |
+
+> **Bulk uploads send one file per request** (`BULK_UPLOAD_CHUNK_SIZE = 1` in `frontend/src/lib/api/studio.ts`) so each request body is bounded by `MAX_UPLOAD_SIZE_BYTES` (10 MiB by default). Vanilla Traefik / Pangolin / Cloudflare deployments forward 10 MiB without any ingress tuning. If you bump `MAX_UPLOAD_SIZE_BYTES` above your ingress's body cap (e.g. nginx-ingress's 1 MiB default), expect imports to fail at the proxy with no useful error in the studio toast — match the ingress cap or raise it.
 
 ### Logging
 

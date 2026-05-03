@@ -319,17 +319,21 @@ func main() {
 		// Items
 		r.Get("/{id}/items", packHandler.ListItems)
 		r.Post("/{id}/items", packHandler.CreateItem)
-		// Bulk image import — collapses what used to be 4 round-trips per
-		// file into one request, so an 83-image batch costs one upload-rate
-		// token instead of 332 global-rate tokens. See items_bulk.go for
-		// the per-file transactional pipeline.
-		r.With(uploadLimiter.PerUserMiddleware).Post("/{id}/items/bulk", packHandler.BulkCreateImageItems)
-		// Bulk text import — same pattern as the image bulk endpoint, used
-		// by the studio JSON-import flow. Three round-trips per item used
-		// to be 393 requests for a 131-item file; this endpoint folds them
-		// into one. Shares the upload limiter — text imports are still
-		// "uploads" of user content, just without an S3 step.
-		r.With(uploadLimiter.PerUserMiddleware).Post("/{id}/items/bulk-text", packHandler.BulkCreateTextItems)
+		// Bulk image / text import — folds what used to be 3-4 round-trips
+		// per item into one transactional request. See items_bulk.go and
+		// items_bulk_text.go.
+		//
+		// Intentionally NOT layered with uploadLimiter: the studio chunks
+		// large image batches at one file per request to fit through tight
+		// upstream ingress body caps without operator config (see
+		// BULK_UPLOAD_CHUNK_SIZE in frontend/src/lib/api/studio.ts), so an
+		// 83-image import would burn 83 upload-rate tokens against the
+		// default 50/h burst and fail the second half. The root globalLimiter
+		// (100/min burst per user) is the only gate; the per-user-per-minute
+		// budget covers a typical bulk import even with the page's ambient
+		// API chatter.
+		r.Post("/{id}/items/bulk", packHandler.BulkCreateImageItems)
+		r.Post("/{id}/items/bulk-text", packHandler.BulkCreateTextItems)
 		r.Patch("/{id}/items/reorder", packHandler.ReorderItems)
 		r.Patch("/{id}/items/{item_id}", packHandler.UpdateItem)
 		r.Delete("/{id}/items/{item_id}", packHandler.DeleteItem)

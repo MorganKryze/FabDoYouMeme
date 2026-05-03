@@ -359,10 +359,21 @@ export async function uploadPromptItem(
   }
 }
 
-// Must match the backend MaxBulkUploadFiles cap in
-// backend/internal/api/items_bulk.go. The server rejects requests above this
-// with 413 too_many_files; the chunker keeps each request inside the cap.
-const BULK_UPLOAD_CHUNK_SIZE = 25;
+// Files per chunk for the bulk image uploader.
+//
+// Pinned to 1 so each request body is bounded by exactly one file —
+// MAX_UPLOAD_SIZE_BYTES (10 MiB) at most. This is the largest payload that
+// can pass through *any* upstream proxy without operator-side config: a
+// vanilla Traefik/Pangolin/Cloudflare deployment all happily forward
+// ≤10 MiB without tuning. Larger chunks tripped a generic 500 at the
+// public ingress on the original report.
+//
+// We retain the bulk endpoint anyway because it's still load-bearing:
+// each file's create+upload+version+promote runs in one transaction so
+// no orphan rows can leak (which the legacy 4-call client flow could not
+// guarantee), and one request per file is still 4× cheaper in rate-limit
+// tokens than the legacy path.
+const BULK_UPLOAD_CHUNK_SIZE = 1;
 
 // Server response shape from POST /api/packs/{id}/items/bulk.
 interface BulkServerResult {
