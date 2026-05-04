@@ -247,7 +247,7 @@ jobs:
       # with `gh attestation verify <image>` — gives self-hosters cryptographic
       # proof the image came from this exact workflow run on this repo.
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ steps.image.outputs.ref }}
           subject-digest: ${{ steps.digest.outputs.value }}
